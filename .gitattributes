@@ -1,2 +1,11 @@
-# Auto detect text files and perform LF normalization
+# Normalize line endings to LF in the repo; checkouts use the platform default.
 * text=auto
+
+# Files executed inside Linux containers must stay LF even on Windows checkouts.
+*.sh text eol=lf
+Dockerfile* text eol=lf
+compose.yaml text eol=lf
+
+# Lockfiles: never merge by hand; regenerate with `uv lock` / `npm install`.
+uv.lock linguist-generated=true -diff
+fe/package-lock.json linguist-generated=true -diff

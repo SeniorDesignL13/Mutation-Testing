@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# uv / venvs
+.venv/
+venv/
+
+# Node / frontend (fe/ also carries its own .gitignore)
+node_modules/
+.nuxt/
+.output/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Docker
+docker/.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Tool caches
+.deepeval/
+.claude/settings.local.json
+
+# Personal experiments (see docs/DEVELOPER.md)
+scratch/

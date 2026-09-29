@@ -1,0 +1,103 @@
+# Local development stack. From the repo root:
+#
+#   docker compose up --build
+#
+# Starts Postgres, the FastAPI backend (http://localhost:8000), and the Nuxt
+# frontend (http://localhost:3000). Source is bind-mounted, so edits hot-reload.
+#
+# Local model serving (Ollama, vLLM) is opt-in:
+#
+#   docker compose --profile models up --build
+
+name: mtlj
+
+x-env-file: &env-file
+  # .env is optional; every value below has a working default.
+  - path: .env
+    required: false
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mtlj}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mtlj}
+      POSTGRES_DB: ${POSTGRES_DB:-mtlj}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+      target: dev
+    env_file: *env-file
+    environment:
+      # .env points at localhost for native dev; inside compose, Postgres is "db".
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mtlj}:${POSTGRES_PASSWORD:-mtlj}@db:5432/${POSTGRES_DB:-mtlj}
+      # Bind-mount file events don't reach the container on Windows/macOS; poll instead.
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      # The venv lives at /opt/venv inside the image, so mounting the repo
+      # over /app never clobbers installed dependencies.
+      - .:/app
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  fe:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    env_file: *env-file
+    environment:
+      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-http://localhost:8000}
+      DEV_POLLING: "true"
+    volumes:
+      - ./fe:/app
+      # Keep the container's Linux node_modules and Nuxt build dirs separate
+      # from anything on the host.
+      - fe_node_modules:/app/node_modules
+      - /app/.nuxt
+    ports:
+      - "${FE_PORT:-3000}:3000"
+    depends_on:
+      - api
+
+  # --- "models" profile only: local model serving for audit runs ---
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["models"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["models"]
+    ports:
+      - "8001:8000"
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+
+volumes:
+  db_data:
+  fe_node_modules:
+  ollama_data:
+  vllm_cache:

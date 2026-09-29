@@ -1,0 +1,28 @@
+{
+  // Opens VS Code inside the `api` container from compose.yaml, with the
+  // whole stack (db, fe) started alongside it.
+  "name": "mtlj",
+  "dockerComposeFile": ["../compose.yaml"],
+  "service": "api",
+  "runServices": ["db", "api", "fe"],
+  "workspaceFolder": "/app",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+        }
+      },
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "Vue.volar",
+        "editorconfig.editorconfig"
+      ]
+    }
+  }
+}

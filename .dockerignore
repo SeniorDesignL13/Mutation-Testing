@@ -1,0 +1,24 @@
+# Keep the build context small and free of host-specific artifacts
+# (a Windows .venv or node_modules must never end up in a Linux image).
+.git
+.github
+.claude
+.deepeval
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.env
+.env.*
+!.env.example
+docs
+
+fe/node_modules
+fe/.nuxt
+fe/.output
+fe/.data
+fe/.cache
+fe/dist
