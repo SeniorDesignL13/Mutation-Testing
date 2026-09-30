@@ -73,3 +73,6 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# importlib mode lets test folders mirror src/ without __init__.py files.
+addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not integration"]
+markers = ["integration: needs a real LLM or network; opt in with `-m integration`"]

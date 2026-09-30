@@ -1,18 +1,31 @@
-# Weekly, grouped dependency update PRs. CI validates each one, so upgrades
-# land in small reviewed steps instead of one painful catch-up.
+# Dependabot opens update PRs; CI tests each one, and a human merges it.
+#
+# Minor/patch updates arrive as one grouped PR per ecosystem. Major updates
+# get their own PR, so one breaking upgrade never blocks the routine ones.
+#
+# Some upgrades are never proposed, because they're done on purpose:
+#   - Python / Node / Postgres versions: must change in every place at once
+#     (Dockerfiles, CI, .python-version), and Postgres needs a data migration.
+#   - uv: pinned in the Dockerfile, CI, and pyproject.toml together.
+#   - PrimeVue family: later majors need a paid license.
 version: 2
 updates:
   - package-ecosystem: uv
     directory: /
     schedule: { interval: weekly }
+    commit-message: { prefix: build, include: scope }
     groups:
-      python: { patterns: ["*"] }
+      python-minor-patch:
+        update-types: [minor, patch]
 
   - package-ecosystem: npm
     directory: /fe
     schedule: { interval: weekly }
+    commit-message: { prefix: build, include: scope }
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
     ignore:
-      # Later majors switched from MIT to a paid license; see docs/DEVELOPER.md.
       - dependency-name: "primevue"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@primevue/*"
@@ -21,17 +34,31 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "primeicons"
         update-types: ["version-update:semver-major"]
-    groups:
-      frontend: { patterns: ["*"] }
 
   - package-ecosystem: docker
     directory: /docker
     schedule: { interval: monthly }
+    commit-message: { prefix: build, include: scope }
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "astral-sh/uv"
+      - dependency-name: "ghcr.io/astral-sh/uv"
 
   - package-ecosystem: docker-compose
     directory: /
     schedule: { interval: monthly }
+    commit-message: { prefix: build, include: scope }
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    commit-message: { prefix: ci }
+    groups:
+      actions:
+        patterns: ["*"]

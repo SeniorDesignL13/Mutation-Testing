@@ -21,6 +21,7 @@
         "ms-python.python",
         "charliermarsh.ruff",
         "Vue.volar",
+        "dbaeumer.vscode-eslint",
         "editorconfig.editorconfig"
       ]
     }
