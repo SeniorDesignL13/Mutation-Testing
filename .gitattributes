@@ -1,11 +1,11 @@
-# Normalize line endings to LF in the repo; checkouts use the platform default.
-* text=auto
+# Store and check out every text file with LF endings, on every OS.
+# Files are shared with Linux containers, so CRLF would only cause trouble.
+* text=auto eol=lf
 
-# Files executed inside Linux containers must stay LF even on Windows checkouts.
-*.sh text eol=lf
-Dockerfile* text eol=lf
-compose.yaml text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
 
-# Lockfiles: never merge by hand; regenerate with `uv lock` / `npm install`.
-uv.lock linguist-generated=true -diff
-fe/package-lock.json linguist-generated=true -diff
+# Lockfiles are generated: collapse them in GitHub diffs.
+uv.lock linguist-generated=true
+fe/package-lock.json linguist-generated=true

@@ -34,7 +34,8 @@ export function useConnectionChecks() {
       row.latencyMs = Math.round(performance.now() - start)
       row.status = res.ok && body.ok !== false ? 'ok' : 'error'
       row.detail = body.detail ?? JSON.stringify(body)
-    } catch (e) {
+    }
+    catch (e) {
       row.httpStatus = null
       row.latencyMs = null
       row.status = 'error'
@@ -49,7 +50,7 @@ export function useConnectionChecks() {
       const res = await fetch(`${apiBase}/testing`)
       if (!res.ok) throw new Error(`GET /testing returned HTTP ${res.status}`)
       const routes: RouteInfo[] = await res.json()
-      rows.value = routes.map((route) => ({
+      rows.value = routes.map(route => ({
         ...route,
         status: 'pending',
         httpStatus: null,
@@ -57,10 +58,12 @@ export function useConnectionChecks() {
         detail: '',
       }))
       await Promise.all(rows.value.map(runCheck))
-    } catch (e) {
+    }
+    catch (e) {
       rows.value = []
       error.value = `Could not reach the API at ${apiBase}: ${(e as Error).message}`
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }

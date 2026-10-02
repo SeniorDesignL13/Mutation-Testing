@@ -32,31 +32,60 @@ onMounted(runAll)
         Frontend → API at <code>{{ apiBase }}</code> → Postgres / external services
       </template>
       <template #content>
-        <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+        <Message
+          v-if="error"
+          severity="error"
+          :closable="false"
+        >
+          {{ error }}
+        </Message>
 
-        <DataTable :value="rows" :loading="loading && rows.length === 0" data-key="path">
-          <Column header="Status" style="width: 7rem">
+        <DataTable
+          :value="rows"
+          :loading="loading && rows.length === 0"
+          data-key="path"
+        >
+          <Column
+            header="Status"
+            style="width: 7rem"
+          >
             <template #body="{ data }">
-              <Tag :value="data.status" :severity="severity[data.status as CheckStatus]" />
+              <Tag
+                :value="data.status"
+                :severity="severity[data.status as CheckStatus]"
+              />
             </template>
           </Column>
-          <Column field="name" header="Check" />
+          <Column
+            field="name"
+            header="Check"
+          />
           <Column header="Route">
             <template #body="{ data }">
               <code>{{ data.method }} {{ data.path }}</code>
             </template>
           </Column>
-          <Column header="HTTP" style="width: 5rem">
-            <template #body="{ data }">{{ data.httpStatus ?? '—' }}</template>
+          <Column
+            header="HTTP"
+            style="width: 5rem"
+          >
+            <template #body="{ data }">
+              {{ data.httpStatus ?? '—' }}
+            </template>
           </Column>
-          <Column header="Latency" style="width: 6rem">
+          <Column
+            header="Latency"
+            style="width: 6rem"
+          >
             <template #body="{ data }">
               {{ data.latencyMs === null ? '—' : `${data.latencyMs} ms` }}
             </template>
           </Column>
           <Column header="Detail">
             <template #body="{ data }">
-              <div class="detail">{{ data.detail || data.description }}</div>
+              <div class="detail">
+                {{ data.detail || data.description }}
+              </div>
             </template>
           </Column>
           <Column style="width: 3.5rem">

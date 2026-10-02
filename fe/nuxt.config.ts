@@ -2,17 +2,10 @@
 import Aura from '@primeuix/themes/aura'
 
 export default defineNuxtConfig({
-  compatibilityDate: '2025-07-15',
+
+  modules: ['@nuxt/eslint', '@primevue/nuxt-module'],
   devtools: { enabled: true },
-
-  modules: ['@primevue/nuxt-module'],
   css: ['primeicons/primeicons.css'],
-
-  primevue: {
-    options: {
-      theme: { preset: Aura },
-    },
-  },
 
   runtimeConfig: {
     public: {
@@ -20,11 +13,27 @@ export default defineNuxtConfig({
       apiBase: 'http://localhost:8000',
     },
   },
+  compatibilityDate: '2025-07-15',
 
   vite: {
     server: {
       // Bind-mount file events don't reach Docker on Windows/macOS; poll instead.
       watch: process.env.DEV_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
+    },
+  },
+
+  typescript: {
+    strict: true,
+  },
+
+  // Formatting rules live in ESLint (no Prettier), so `npm run lint:fix` formats too.
+  eslint: {
+    config: { stylistic: true },
+  },
+
+  primevue: {
+    options: {
+      theme: { preset: Aura },
     },
   },
 })
