@@ -74,5 +74,15 @@ quote-style = "double"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 # importlib mode lets test folders mirror src/ without __init__.py files.
-addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not integration"]
+# -rfEs prints why tests failed or were skipped.
+# DeepEval's pytest plugin is switched off: it clutters the output of normal test runs.
+addopts = [
+    "--import-mode=importlib",
+    "--strict-markers",
+    "-rfEs",
+    "-m",
+    "not integration",
+    "-p",
+    "no:deepeval",
+]
 markers = ["integration: needs a real LLM or network; opt in with `-m integration`"]

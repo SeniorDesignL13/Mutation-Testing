@@ -24,7 +24,10 @@ node_modules/
 docker/.env
 
 # Editors / OS
-.vscode/
+# Shared VS Code settings are committed; anything else there is personal.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 .DS_Store
 Thumbs.db

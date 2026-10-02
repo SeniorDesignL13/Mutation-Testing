@@ -6,16 +6,18 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Read-only: CI only reads the code. Jobs ask for more if they ever need it.
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A new push to a PR cancels the old run. Runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   python:
-    name: Python (lint, migrations, tests)
+    name: Python (lint, format, tests)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -34,9 +36,11 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://mtlj:mtlj@localhost:5432/mtlj
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.15"
           enable-cache: true
@@ -44,7 +48,7 @@ jobs:
       - name: Check uv.lock is up to date
         run: |
           uv lock --check || {
-            echo "::error::uv.lock is out of date with pyproject.toml. Run 'docker compose exec api uv lock' and commit uv.lock."
+            echo "::error::uv.lock doesn't match pyproject.toml. Run 'uv lock' and commit uv.lock."
             exit 1
           }
 
@@ -52,17 +56,16 @@ jobs:
         run: uv sync --frozen
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run ruff check --output-format=github .
 
       - name: Format
-        run: uv run ruff format --check .
+        run: |
+          uv run ruff format --check --diff . || {
+            echo "::error::Some files aren't formatted. Run 'uv run python scripts/check.py' and commit the result."
+            exit 1
+          }
 
-      - name: Apply migrations
-        run: uv run alembic upgrade head
-
-      - name: Check models match migrations
-        run: uv run alembic check
-
+      # Includes the database tests and the models-vs-migrations check.
       - name: Test
         run: uv run pytest
 
@@ -74,9 +77,11 @@ jobs:
       run:
         working-directory: fe
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -95,27 +100,30 @@ jobs:
         run: npm run build
 
   docker:
-    name: Docker stack boots
+    name: docker compose up works
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Build and start
-        run: docker compose up --build --detach --wait
+      - name: Start the stack
+        run: docker compose up --detach --wait
 
-      - name: API responds
+      - name: API and database respond
         run: curl --fail --silent --show-error http://localhost:8000/testing/database
 
-      - name: Frontend responds
+      - name: Website responds
         run: |
           for i in $(seq 1 30); do
             curl --fail --silent --output /dev/null http://localhost:3000 && exit 0
             sleep 3
           done
+          echo "::error::The website didn't respond on http://localhost:3000"
           exit 1
 
-      - name: Logs
+      - name: Show logs
         if: failure()
         run: docker compose logs
 
@@ -123,14 +131,19 @@ jobs:
         if: always()
         run: docker compose down --volumes
 
-  # The single required status check for merging into main.
+  # The one CI check that branch protection requires before merging into main.
   ci-passed:
     name: CI passed
     if: always()
     needs: [python, frontend, docker]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: All jobs succeeded
+        env:
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
         run: |
-          echo '${{ toJSON(needs) }}'
-          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "false"
+          if [ "$FAILED" = "true" ]; then
+            echo "::error::A CI job above failed. Open it to see why."
+            exit 1
+          fi

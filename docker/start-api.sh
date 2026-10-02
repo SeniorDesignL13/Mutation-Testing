@@ -2,9 +2,8 @@
 # Startup for the api container (see compose.yaml).
 set -e
 
-# Install anything uv.lock has that the image doesn't yet (e.g. after a
-# `git pull`). Installs exactly what the lockfile says, without re-resolving,
-# so it's instant when nothing changed and works offline.
+# Install the project, plus anything uv.lock gained since the image was built.
+# Instant when nothing changed.
 uv sync --frozen --quiet
 
 # Bring the database schema up to date.

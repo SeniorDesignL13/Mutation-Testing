@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Backend dev image: Python 3.12 + every dependency group from uv.lock.
+# API dev image: Python 3.12 + every dependency in uv.lock.
+# The code itself isn't copied in; compose.yaml mounts the repo at /app.
 FROM python:3.12-slim-bookworm
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.15 /uv /uvx /bin/
@@ -15,17 +16,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Dependencies first, so this layer is cached until uv.lock changes.
-# --frozen installs exactly what uv.lock says. (CI separately checks that
-# uv.lock is up to date with pyproject.toml.)
+# Cached until uv.lock changes. --frozen installs exactly what uv.lock says.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-install-project
-
-COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
 
 EXPOSE 8000
 CMD ["sh", "docker/start-api.sh"]

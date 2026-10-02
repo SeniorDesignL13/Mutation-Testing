@@ -1,36 +1,73 @@
-# Rules
+# Rules for contributing
 
 Short on purpose. If a rule is wrong or missing, change it in a PR.
 
-## Branches
+## The basics
 
-Never commit to `main`. Everything goes through a pull request (PR).
+- **Never commit straight to `main`.** Every change goes through a pull request (PR).
+- **A PR needs** green CI ✅ and **1 approval** from a teammate. Then click **Squash and merge**.
+- **Keep PRs small**, ideally under ~400 changed lines. Split big features into several PRs.
+- **Review teammates' PRs within a day.** Start optional suggestions with `nit:`.
 
-Name branches `type/short-description`:
+## Git step by step
+
+```bash
+# 1. Start from the latest main
+git switch main
+git pull
+
+# 2. Make a branch for your change
+git switch -c feat/entity-swap-operator
+
+# 3. ...write code, then check it (see DEVELOPER.md)...
+
+# 4. Save your work in a commit (do this as often as you like)
+git add .
+git commit -m "add entity swap operator"
+
+# 5. Upload it
+git push -u origin HEAD
+```
+
+Then open GitHub. It shows a **Compare & pull request** button. Click it, fill
+in the title and description, and create the PR.
+
+To change a PR, commit and `git push` again. The PR updates by itself.
+
+## Names for branches and PR titles
+
+Start with what kind of change it is:
 
 | Type | For |
 |---|---|
-| `feat` | New features |
-| `fix` | Bug fixes |
-| `docs` | Documentation |
+| `feat` | Something new |
+| `fix` | A bug fix |
+| `docs` | Documentation only |
 | `test` | Tests only |
-| `refactor` | Restructuring without changing behavior |
-| `perf` | Speed-ups |
-| `build` | Dependencies, Docker |
+| `refactor` | Tidying code without changing what it does |
+| `build` | Packages, Docker |
 | `ci` | GitHub Actions |
 | `chore` | Anything else |
 
-Example: `feat/entity-swap-operator`, `fix/health-timeout`.
+- **Branch:** `type/short-description`, e.g. `feat/entity-swap-operator`.
+- **PR title:** `type: summary in lowercase`, e.g. `feat: add entity swap operator`.
+  A bot checks the title, because it becomes the commit message on `main`.
+  You can add a scope if you like: `feat(operators): add entity swap`.
 
-## Pull requests
+## Code style
 
-- **Title** = `type(scope): summary`, lowercase, e.g. `feat(operators): add entity swap`.
-  A bot checks this. Scope is optional: `operators`, `judges`, `stats`, `service`, `cli`, `fe`, `db`.
-- **Keep PRs small**, ideally under ~400 changed lines. Big features → several PRs.
-- **To merge**, you need green CI and **1 approval** from someone else. Then click
-  **Squash and merge**. The branch deletes itself.
-- **Reviewing:** review within a day. Prefix optional suggestions with `nit:`.
-- The repo owner can merge without a review. Everyone else can't.
+Formatting is automatic. `scripts/check.py` and `npm run check` fix it for you.
+Beyond that:
+
+1. **Type hints on every Python function.** Write `list[str]` and `X | None`, not `List` / `Optional`.
+2. **A docstring on every public function and class** saying what it does and why.
+3. **Nothing heavy at import time.** Load models (like spaCy) inside a function, cached with `@lru_cache`.
+4. **Engine code** (`operators/`, `judges/`, `stats/`) **never imports** from `service/` or `cli/`.
+5. **API routes stay thin.** They call engine functions, and the logic lives in the engine.
+6. **Randomness takes a `seed`**, so results can be reproduced.
+7. **No secrets in code.** Keys go in `.env`.
+8. **Use `logging`, not `print`**, except for CLI output.
+9. **Database changes are migrations.** Never edit a merged migration. Add a new one.
 
 ## Naming
 
@@ -40,34 +77,17 @@ Example: `feat/entity-swap-operator`, `fix/health-timeout`.
 | Python classes | `PascalCase` | `EntitySwapOperator` |
 | Constants | `UPPER_SNAKE_CASE` | `MAX_RETRIES` |
 | Operators / judges | `<Name>Operator` / `<Framework>Judge` | `EntitySwapOperator`, `RagasJudge` |
-| API schemas | `<Thing><Action>` | `RunCreate`, `RunRead` |
 | Database tables | plural `snake_case` | `mutation_runs` |
-| Database model classes | singular `PascalCase` | `MutationRun` |
 | API paths | plural, kebab-case | `/mutation-runs/{run_id}` |
 | Vue components | `PascalCase.vue`, 2+ words | `RunSummaryCard.vue` |
 | Vue pages | `kebab-case.vue` | `pages/mutation-runs.vue` |
-| Composables | `useThing.ts` | `useMutationRuns.ts` |
-| Tests | `test_<what_it_does>` | `test_swap_replaces_first_place` |
+| Tests | `test_<what_it_checks>` | `test_swap_replaces_first_place` |
 
 Put units in names: `timeout_s`, `latency_ms`.
 
-## Code
-
-The linters (`ruff`, `eslint`) handle formatting. The check commands fix it for you.
-Beyond that:
-
-1. **Type hints on every Python function.** Use `list[str]` and `X | None`, not `List` and `Optional`.
-2. **A docstring on every public function and class.** Explain what it does and why, not how.
-3. **Nothing runs at import time.** Load models lazily, e.g. with an `@lru_cache` getter function.
-4. **Engine code** (`operators/`, `judges/`, `stats/`) **never imports** from `service/` or `cli/`.
-5. **API routes stay thin.** They call engine functions; the logic lives in the engine.
-6. **Randomness takes a `seed`** so results can be reproduced.
-7. **No secrets in code.** Settings come from `.env` through `src/mtlj/service/config.py`.
-8. **Use `logging`, not `print`**, except in CLI output.
-9. **Database changes are migrations.** Don't edit a migration after it's merged; add a new one.
-
 ## Tests
 
-- Test files mirror the source: `src/mtlj/stats/power.py` → `tests/stats/test_power.py`.
-- New code comes with tests. Bug fixes come with a test that would have caught the bug.
-- Tests never call real LLMs. Mock them, or mark real-LLM tests `@pytest.mark.integration`.
+- Tests mirror the code: `src/mtlj/stats/power.py` → `tests/stats/test_power.py`.
+- New code comes with tests. A bug fix comes with a test that would have caught the bug.
+- Tests never call real LLMs. Fake the response, or mark the test
+  `@pytest.mark.integration` (those only run with `pytest -m integration`).

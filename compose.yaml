@@ -1,13 +1,13 @@
-# Local development stack. From the repo root:
+# The whole app, for development. From the repo root run:
 #
-#   docker compose up --build
+#   docker compose up
 #
-#   http://localhost:3000   frontend (Nuxt)
-#   http://localhost:8000   API (FastAPI), docs at /docs
-#   localhost:5432          Postgres (user/password/db: mtlj)
+#   http://localhost:3000   website (Nuxt)
+#   http://localhost:8000   API (FastAPI); try it at /docs
+#   localhost:5432          database (Postgres; user, password and db are all "mtlj")
 #
-# Code is mounted into the containers, so edits reload automatically.
-# Optional local LLMs: docker compose --profile models up --build
+# Your code is shared with the containers, so saving a file reloads the app.
+# Optional local LLMs: docker compose --profile models up
 
 name: mtlj
 
@@ -37,10 +37,15 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.service
+    # Rebuild on every `up`, so nobody has to remember `--build`. The image
+    # holds only dependencies, so this is instant unless uv.lock changed.
+    pull_policy: build
     env_file: *env-file
     environment:
       # Inside Docker, Postgres is reachable as "db", not localhost.
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mtlj}:${POSTGRES_PASSWORD:-mtlj}@db:5432/${POSTGRES_DB:-mtlj}
+      # Let the website call the API, whatever port it's on.
+      CORS_ORIGINS: '["http://localhost:${FE_PORT:-3000}"]'
       # File-change events don't cross Windows/macOS mounts; poll instead.
       WATCHFILES_FORCE_POLLING: "true"
     volumes:
@@ -56,15 +61,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   fe:
     build:
       context: .
       dockerfile: docker/Dockerfile.dashboard
+    pull_policy: build
     env_file: *env-file
     environment:
-      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-http://localhost:8000}
+      # The browser calls the API at its port on your machine.
+      NUXT_PUBLIC_API_BASE: http://localhost:${API_PORT:-8000}
       DEV_POLLING: "true"
     volumes:
       - ./fe:/app
@@ -76,7 +83,7 @@ services:
     depends_on:
       - api
 
-  # Only started with `--profile models`. Pull a model once with:
+  # Only started with `--profile models`. Download a model once with:
   #   docker compose exec ollama ollama pull llama3.2
   ollama:
     image: ollama/ollama:0.35.0

@@ -1,9 +1,9 @@
 name: PR title
 
-# PRs are squash-merged, so the title becomes the commit message on main.
-# It must follow Conventional Commits, e.g. "feat(operators): add entity swap".
+# PRs are squash-merged, so the PR title becomes the commit message on main.
+# It must look like "type: summary", e.g. "feat: add entity swap operator".
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
@@ -13,8 +13,9 @@ jobs:
   check:
     name: PR title
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: amannn/action-semantic-pull-request@v6
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -29,4 +30,4 @@ jobs:
             ci
             chore
           subjectPattern: ^(?![A-Z]).+$
-          subjectPatternError: Start the summary with a lowercase letter, e.g. "feat: add entity swap".
+          subjectPatternError: 'Start the summary with a lowercase letter, e.g. "feat: add entity swap operator".'

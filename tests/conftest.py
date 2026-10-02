@@ -1,12 +1,42 @@
 """Shared pytest fixtures."""
 
+import os
+import socket
 from collections.abc import AsyncIterator
 
 import httpx
 import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy.engine import make_url
 
+from mtlj.service.config import get_settings
 from mtlj.service.db import engine
 from mtlj.service.main import app
+
+
+def _postgres_is_reachable() -> bool:
+    url = make_url(get_settings().database_url)
+    try:
+        with socket.create_connection((url.host or "localhost", url.port or 5432), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+@pytest.fixture(scope="session")
+def database() -> None:
+    """Make sure Postgres is up and migrated, or skip the test if it isn't running.
+
+    In CI (where ``CI`` is set) a missing database fails instead, so tests are
+    never skipped by accident.
+    """
+    if not _postgres_is_reachable():
+        message = "Postgres isn't running. Start it with: docker compose up -d db"
+        if os.environ.get("CI"):
+            pytest.fail(message)
+        pytest.skip(message)
+    command.upgrade(Config("alembic.ini"), "head")
 
 
 @pytest.fixture

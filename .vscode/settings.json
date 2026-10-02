@@ -1,0 +1,11 @@
+{
+  // Shared editor settings. Personal ones go in your user settings.
+  "python.testing.pytestEnabled": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  },
+  "eslint.workingDirectories": ["fe"],
+  "files.eol": "\n"
+}
