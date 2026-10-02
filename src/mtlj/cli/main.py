@@ -1,7 +1,6 @@
-"""Entry point for the ``mtlj`` console script.
+"""The ``mtlj`` command-line tool.
 
-This is a shell: it wires up the CLI so the package installs and runs
-correctly, but no mutation-testing commands are implemented yet.
+Run inside the stack with ``docker compose exec api mtlj --help``.
 """
 
 import typer
