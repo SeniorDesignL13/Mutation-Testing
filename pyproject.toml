@@ -7,10 +7,25 @@ authors = [
     { name = "Benjamin Duffaut", email = "ben.duffaut@gmail.com" }
 ]
 requires-python = ">=3.12"
+# Add packages with `uv add <name>`; it keeps this list sorted and updates uv.lock.
 dependencies = [
+    "alembic>=1.20.0",
+    "asyncpg>=0.31.0",
+    "deepeval>=2.0.0",
+    "en-core-web-sm",
+    "fastapi>=0.141.1",
     "httpx>=0.28.1",
+    "nltk>=3.10.3",
+    "numpy>=2.5.3",
     "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "ragas>=0.2.0",
+    "scipy>=1.18.1",
+    "spacy>=3.8.16,<3.9",
+    "sqlalchemy[asyncio]>=2.0.54",
+    "statsmodels>=0.15.0",
     "typer>=0.27.2",
+    "uvicorn[standard]>=0.34.0",
 ]
 
 [project.scripts]
@@ -20,59 +35,60 @@ mtlj = "mtlj.cli.main:app"
 requires = ["uv_build>=0.12.15,<0.13.0"]
 build-backend = "uv_build"
 
+# Tools for developing (not needed to run mtlj). Add with `uv add --dev <name>`.
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.0.0",
     "ruff>=0.16.8",
 ]
-operators = [
-    "en-core-web-sm",
-    "nltk>=3.10.3",
-    "spacy>=3.8.16,<3.9",
-]
-service = [
-    "alembic>=1.20.0",
-    "asyncpg>=0.31.0",
-    "fastapi>=0.141.1",
-    "pydantic-settings>=2.15.0",
-    "sqlalchemy[asyncio]>=2.0.54",
-    "uvicorn[standard]>=0.34.0",
-]
-stats = [
-    "numpy>=2.5.3",
-    "scipy>=1.18.1",
-    "statsmodels>=0.15.0",
-]
-judges = [
-    "deepeval>=2.0.0",
-    "ragas>=0.2.0",
-]
 
 [tool.uv]
-# Every group is installed by default so local, Docker, and CI envs are identical.
-default-groups = "all"
+required-version = ">=0.12.15"
 
 [tool.uv.sources]
 # spaCy models aren't on PyPI; pin the wheel so it's captured in uv.lock.
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 
 [tool.ruff]
-target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
 
-extend-exclude = ["alembic/versions"]
-
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
-
-[tool.ruff.format]
-quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 # importlib mode lets test folders mirror src/ without __init__.py files.
-addopts = ["--import-mode=importlib", "--strict-markers", "-m", "not integration"]
+# -rfEs prints why tests failed or were skipped.
+# DeepEval's pytest plugin is switched off: it clutters the output of normal test runs.
+addopts = [
+    "--import-mode=importlib",
+    "--strict-markers",
+    "-rfEs",
+    "-m",
+    "not integration",
+    "-p",
+    "no:deepeval",
+]
 markers = ["integration: needs a real LLM or network; opt in with `-m integration`"]
+
+# Database migrations. The connection comes from DATABASE_URL (see migrations/env.py).
+[tool.alembic]
+script_location = "%(here)s/migrations"
+file_template = "%%(year)d_%%(month).2d_%%(day).2d_%%(hour).2d%%(minute).2d-%%(rev)s_%%(slug)s"
+prepend_sys_path = ["."]
+
+# Tidy every new migration file with ruff.
+[[tool.alembic.post_write_hooks]]
+name = "ruff_format"
+type = "module"
+module = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff_fix"
+type = "module"
+module = "ruff"
+options = "check --fix --exit-zero REVISION_SCRIPT_FILENAME"

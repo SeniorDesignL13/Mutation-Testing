@@ -1,13 +1,13 @@
 """Tests for the ``/testing`` diagnostic routes.
 
-The Postgres and database checks need a migrated database: run them inside
-the Docker stack (``docker compose exec api pytest``) or in CI.
+The Postgres and database checks use the ``database`` fixture, so they skip
+when Postgres isn't running (start it with ``docker compose up -d db``).
 """
 
 import httpx
 import pytest
 
-from mtlj.service.config import get_settings
+from mtlj.api.config import get_settings
 
 
 async def test_list_routes_includes_every_check(client: httpx.AsyncClient) -> None:
@@ -18,6 +18,7 @@ async def test_list_routes_includes_every_check(client: httpx.AsyncClient) -> No
     assert paths == {"/health", "/testing/postgres", "/testing/database", "/testing/external-api"}
 
 
+@pytest.mark.usefixtures("database")
 async def test_postgres_check_succeeds(client: httpx.AsyncClient) -> None:
     response = await client.get("/testing/postgres")
 
@@ -27,6 +28,7 @@ async def test_postgres_check_succeeds(client: httpx.AsyncClient) -> None:
     assert body["detail"].startswith("PostgreSQL")
 
 
+@pytest.mark.usefixtures("database")
 async def test_database_check_writes_and_reads_a_row(client: httpx.AsyncClient) -> None:
     first = (await client.get("/testing/database")).json()
     second = (await client.get("/testing/database")).json()

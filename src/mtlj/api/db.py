@@ -7,7 +7,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from mtlj.service.config import get_settings
+from mtlj.api.config import get_settings
 
 
 class Base(DeclarativeBase):

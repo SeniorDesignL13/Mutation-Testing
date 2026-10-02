@@ -8,4 +8,4 @@
 
 # Lockfiles are generated: collapse them in GitHub diffs.
 uv.lock linguist-generated=true
-fe/package-lock.json linguist-generated=true
+frontend/package-lock.json linguist-generated=true

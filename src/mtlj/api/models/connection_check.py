@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from mtlj.service.db import Base
+from mtlj.api.db import Base
 
 
 class ConnectionCheck(Base):

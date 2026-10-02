@@ -1,0 +1,10 @@
+{
+  // VS Code offers to install these when you open the repo.
+  "recommendations": [
+    "ms-python.python",
+    "charliermarsh.ruff",
+    "Vue.volar",
+    "dbaeumer.vscode-eslint",
+    "editorconfig.editorconfig"
+  ]
+}

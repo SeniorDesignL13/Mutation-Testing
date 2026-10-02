@@ -1,6 +1,6 @@
 """The ``mtlj`` command-line tool.
 
-Run inside the stack with ``docker compose exec api mtlj --help``.
+Try it with ``uv run mtlj --help`` (or ``docker compose exec api mtlj --help``).
 """
 
 import typer
@@ -23,7 +23,3 @@ def main() -> None:
 def version() -> None:
     """Print the installed mtlj version."""
     typer.echo(__version__)
-
-
-if __name__ == "__main__":
-    app()
