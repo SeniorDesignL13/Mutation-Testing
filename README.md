@@ -8,7 +8,7 @@ change the score, then use statistics to check whether the judge notices.
 
 1. Install **[Docker Desktop](https://docs.docker.com/get-started/get-docker/)** and **[Git](https://git-scm.com/downloads)**.
 2. Open Docker Desktop and leave it running.
-3. In a terminal:
+3. In a terminal (on Windows, use a short folder like `C:\code`. Some packages have very long file paths):
    ```bash
    git clone https://github.com/bduffaut/Mutation-Testing.git
    cd Mutation-Testing
