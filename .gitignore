@@ -1,30 +1,29 @@
 # Python
 __pycache__/
 *.py[cod]
-*.egg-info/
+.venv/
 .pytest_cache/
 .ruff_cache/
-.mypy_cache/
 
-# uv / venvs
-.venv/
-venv/
-
-# Node / frontend (fe/ also carries its own .gitignore)
+# Frontend
 node_modules/
 .nuxt/
 .output/
+.nitro/
+.data/
+.cache/
+dist/
 
-# Env files
+# Secrets: copy .env.example to .env
 .env
 .env.*
 !.env.example
 
-# Docker
-docker/.env
+# Your playground: everything in scratch/ stays on your machine
+scratch/*
+!scratch/README.md
 
-# Editors / OS
-# Shared VS Code settings are committed; anything else there is personal.
+# Editors and OS. Shared VS Code settings are committed; the rest is personal.
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
@@ -32,12 +31,7 @@ docker/.env
 .DS_Store
 Thumbs.db
 
-# Logs
+# Tool output
 *.log
-
-# Tool caches
 .deepeval/
 .claude/settings.local.json
-
-# Personal experiments (see docs/DEVELOPER.md)
-scratch/

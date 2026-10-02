@@ -7,7 +7,7 @@ when Postgres isn't running (start it with ``docker compose up -d db``).
 import httpx
 import pytest
 
-from mtlj.service.config import get_settings
+from mtlj.api.config import get_settings
 
 
 async def test_list_routes_includes_every_check(client: httpx.AsyncClient) -> None:

@@ -33,9 +33,34 @@ Stop with **Ctrl+C**.
 | http://localhost:3000 | The website |
 | http://localhost:8000/docs | The API. Click any route, then **Try it out** |
 
+## What's where
+
+```
+src/mtlj/              The Python code
+├── operators/           Mutations: changes made to answers  ← most work starts here
+│   ├── degrading/         ...that should LOWER a judge's score
+│   └── preserving/        ...that should NOT change it
+├── judges/              Connects to the judges we test (DeepEval, Ragas, ...)
+├── stats/               Statistics on the results
+├── cli/                 The `mtlj` command
+└── api/                 The web API the website calls
+tests/                 Tests, laid out the same way as src/mtlj/
+frontend/              The website (Nuxt + PrimeVue)
+scratch/               Your playground. Never committed
+docs/                  How to develop, and the team rules
+migrations/            Database changes (generated for you)
+docker/                How Docker builds the app (rarely touched)
+scripts/check.py       Run before every pull request
+compose.yaml           What `docker compose up` starts
+pyproject.toml         Python packages and tool settings
+```
+
+You can ignore the rest: `uv.lock` and `frontend/package-lock.json` are
+generated, `.github/` runs the automatic checks, and the dotfiles configure tools.
+
 ## Next
 
-- **[How to develop](docs/DEVELOPER.md)**: running Python on your machine, where code goes, how-tos, fixing problems
+- **[How to develop](docs/DEVELOPER.md)**: running Python on your machine, how-tos, fixing problems
 - **[Rules for contributing](docs/CONTRIBUTING.md)**: Git step by step, pull requests, code style
 
 ## Tech stack

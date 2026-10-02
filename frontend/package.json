@@ -1,5 +1,5 @@
 {
-  "name": "fe",
+  "name": "frontend",
   "type": "module",
   "private": true,
   "scripts": {

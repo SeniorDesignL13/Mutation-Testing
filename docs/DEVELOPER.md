@@ -2,43 +2,44 @@
 
 New here? Do the [README](../README.md) setup first.
 
-## What's in the box
+## How it fits together
 
 ```
-Browser ──▶ website (fe/, :3000) ──▶ API (src/mtlj/service/, :8000) ──▶ database (Postgres, :5432)
-                                          │
-                                          ▼
-                          the engine: operators / judges / stats
-                     (plain Python in src/mtlj/, also used by the CLI and tests)
+Browser ──▶ frontend/ (:3000) ──▶ src/mtlj/api/ (:8000) ──▶ database (Postgres, :5432)
+                                        │
+                                        ▼
+                    the engine: src/mtlj/operators, judges, stats
+                    (plain Python, also used by the CLI and tests)
 ```
 
 Most of the work is **the engine**: mutation operators, judge adapters and
-statistics. It's a plain Python library. You run it from a test, a script, or
-the CLI. When something is ready for the website, an API route calls it.
+statistics. It's a plain Python library. You run it from a test, a script in
+`scratch/`, or the CLI. When something is ready for the website, an API route calls it.
 
 ## Two ways to run Python
 
-| | **In Docker** | **On your machine** |
+| | **On your machine** | **In Docker** |
 |---|---|---|
-| Good for | The website and API | Engine work (operators, judges, stats), faster tests, editor autocomplete |
-| Install | Nothing extra | [uv](https://docs.astral.sh/uv/getting-started/installation/), then `uv sync` once |
-| Put this before a Python command | `docker compose exec api` | `uv run` |
+| Good for | Engine work, fast tests, editor autocomplete | The website and API |
+| Install | [uv](https://docs.astral.sh/uv/getting-started/installation/), then run `uv sync` once | Nothing extra |
+| Put this before a Python command | `uv run` | `docker compose exec api` |
 
 **Every Python command works both ways. Only the start changes:**
 
-| To... | On your machine | In Docker (with `docker compose up` running) |
+| To... | On your machine | In Docker (while `docker compose up` runs) |
 |---|---|---|
 | Run the tests | `uv run pytest` | `docker compose exec api pytest` |
 | Check everything before a PR | `uv run python scripts/check.py` | `docker compose exec api python scripts/check.py` |
 | Run a script | `uv run python scratch/try_it.py` | `docker compose exec api python scratch/try_it.py` |
 | Use the CLI | `uv run mtlj --help` | `docker compose exec api mtlj --help` |
 
-On your machine, tests that need the database are **skipped** and tell you
-so. To include them, start just the database with `docker compose up -d db`.
+On your machine, tests that need the database are **skipped**, and pytest
+says why. To include them, start just the database with `docker compose up -d db`.
 Stop it later with `docker compose down`.
 
-**VS Code:** open the repo folder and accept the suggested extensions. After `uv sync`,
-VS Code uses the `.venv` folder, and Python files are formatted when you save.
+**VS Code:** open the repo folder and accept the suggested extensions. After
+`uv sync`, VS Code finds the `.venv` folder by itself, and Python files are
+formatted when you save.
 
 ## Your routine
 
@@ -52,8 +53,8 @@ VS Code uses the `.venv` folder, and Python files are formatted when you save.
 3. **Write code and tests.** Save, and it reloads.
 4. **Check your work.** This fixes formatting for you and runs the tests:
    ```bash
-   uv run python scripts/check.py      # Python
-   docker compose exec fe npm run check  # website (only if you changed fe/)
+   uv run python scripts/check.py              # Python
+   docker compose exec frontend npm run check  # website (only if you changed frontend/)
    ```
 5. **Commit, push, open a pull request.** See [CONTRIBUTING](CONTRIBUTING.md#git-step-by-step).
 
@@ -65,54 +66,77 @@ VS Code uses the `.venv` folder, and Python files are formatted when you save.
 | A judge adapter | `src/mtlj/judges/` | `tests/judges/` |
 | Statistics | `src/mtlj/stats/` | `tests/stats/` |
 | A CLI command | `src/mtlj/cli/main.py` | `tests/cli/` |
-| An API route | `src/mtlj/service/routers/` | `tests/service/` |
-| A database table | `src/mtlj/service/models/` | `tests/service/` |
-| A web page | `fe/app/pages/` | Try it in the browser |
-| A quick experiment | `scratch/` (git ignores it, so it's never committed) | — |
+| An API route | `src/mtlj/api/routers/` | `tests/api/` |
+| A database table | `src/mtlj/api/models/` | `tests/api/` |
+| A web page | `frontend/app/pages/` | Try it in the browser |
+| A quick experiment | `scratch/` (never committed) | — |
+
+Make a folder under `tests/` the first time you need it. Tests don't need `__init__.py` files.
+
+### Example: an operator and its test
+
+```python
+# src/mtlj/operators/degrading/negation.py
+def negate(text: str) -> str:
+    """Flip the first "is" to "is not", which should make a correct answer wrong."""
+    return text.replace(" is ", " is not ", 1)
+```
+
+```python
+# tests/operators/degrading/test_negation.py
+from mtlj.operators.degrading.negation import negate
+
+
+def test_negate_flips_the_first_is() -> None:
+    assert negate("Paris is in France.") == "Paris is not in France."
+```
+
+Run it with `uv run pytest tests/operators`.
 
 ## How to...
 
 ### Add a Python package
 
 ```bash
-uv add --group operators some-package
+uv add some-package          # used by the code
+uv add --dev some-package    # only a tool for developing (like pytest)
 ```
 
-Pick the group the package is for: `operators`, `judges`, `stats`, `service` or `dev`.
-Commit `pyproject.toml` and `uv.lock` together. Docker installs it next time
-anyone runs `docker compose up`.
+Commit `pyproject.toml` and `uv.lock` together. Docker installs it the next
+time anyone runs `docker compose up`.
 
 ### Add a website package
 
 ```bash
-docker compose exec fe npm install some-package
+docker compose exec frontend npm install some-package
 ```
 
-Commit `fe/package.json` and `fe/package-lock.json` together.
+Commit `frontend/package.json` and `frontend/package-lock.json` together.
 
 ### Add a database table
 
-1. Create the model in `src/mtlj/service/models/` (copy `connection_check.py`).
-2. Import it in `src/mtlj/service/models/__init__.py`.
-3. Create a migration (the script that changes the database) and **read it**:
+1. Create the model in `src/mtlj/api/models/` (copy `connection_check.py`).
+2. Import it in `src/mtlj/api/models/__init__.py`.
+3. Generate a migration (the file that changes the database), then **read it**:
    ```bash
    docker compose exec api alembic revision --autogenerate -m "add runs table"
    ```
-4. Restart the API to apply it: `docker compose restart api`. Teammates get it
-   applied automatically.
+   It appears in `migrations/versions/`.
+4. Restart the API to apply it: `docker compose restart api`. Teammates' databases
+   update the next time they start the app.
 
 If you forget step 3, the tests tell you.
 
 ### Add an API route
 
-1. Create a router in `src/mtlj/service/routers/` (copy `testing.py`).
-2. Register it in `src/mtlj/service/main.py` with `app.include_router(...)`.
+1. Create a router in `src/mtlj/api/routers/` (copy `testing.py`).
+2. Register it in `src/mtlj/api/main.py` with `app.include_router(...)`.
 3. Try it at http://localhost:8000/docs.
 
 ### Add a web page
 
-Create `fe/app/pages/my-page.vue`. It appears at http://localhost:3000/my-page.
-Put API calls in `fe/app/composables/` (copy `useConnectionChecks.ts`).
+Create `frontend/app/pages/my-page.vue`. It appears at http://localhost:3000/my-page.
+Put API calls in `frontend/app/composables/` (copy `useConnectionChecks.ts`).
 Components come from [PrimeVue 4](https://v4.primevue.org/) and need no imports.
 
 ### Use an LLM or spaCy
@@ -130,18 +154,21 @@ Components come from [PrimeVue 4](https://v4.primevue.org/) and need no imports.
 | Problem | Fix |
 |---|---|
 | `failed to connect to the docker API` or `Cannot connect to the Docker daemon` | Docker Desktop isn't running. Open it and wait for it to start |
-| `port is already allocated` | `cp .env.example .env` and change `API_PORT`, `FE_PORT` or `POSTGRES_PORT` |
+| `port is already allocated` | `cp .env.example .env` and change `API_PORT`, `FRONTEND_PORT` or `POSTGRES_PORT` |
 | A row on http://localhost:3000 is red | Read its **Detail** column |
 | CI says "uv.lock doesn't match" | Run `uv lock`, then commit `uv.lock` |
 | CI says files "aren't formatted" | Run `uv run python scripts/check.py`, then commit |
 | The database is in a weird state | `docker compose down -v` (**deletes** its data), then `docker compose up` |
 | Anything else | `docker compose down -v`, `docker compose build --no-cache`, `docker compose up` |
 
-See what a container is doing: `docker compose logs -f api` (or `fe`, `db`).
+See what a container is doing: `docker compose logs -f api` (or `frontend`, `db`).
 
 ## Good to know
 
 - **Dependabot** opens PRs that update packages. If CI is green, merge them.
 - **We stay on PrimeVue 4** because version 5 and later need a paid license.
-- **Python, Node and Postgres versions** are set in the Dockerfiles, CI and
-  `.python-version`. Upgrade them in one PR that changes every place.
+- **Upgrading Python, Node or Postgres** means changing every place the version is set,
+  in one PR:
+  - Python: `.python-version`, `docker/Dockerfile.api`
+  - Node: `docker/Dockerfile.frontend`, `.github/workflows/ci.yml`, `frontend/package.json`
+  - Postgres: `compose.yaml` (CI uses the same file)

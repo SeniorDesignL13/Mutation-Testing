@@ -1,5 +1,5 @@
 #!/bin/sh
-# Startup for the fe container (see compose.yaml).
+# Startup for the frontend container (see compose.yaml).
 set -e
 
 # node_modules lives in a Docker volume that outlives rebuilds, so reinstall

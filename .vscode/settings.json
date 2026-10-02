@@ -6,6 +6,6 @@
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
   },
-  "eslint.workingDirectories": ["fe"],
+  "eslint.workingDirectories": ["frontend"],
   "files.eol": "\n"
 }

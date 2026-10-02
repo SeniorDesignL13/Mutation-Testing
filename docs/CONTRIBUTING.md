@@ -62,7 +62,7 @@ Beyond that:
 1. **Type hints on every Python function.** Write `list[str]` and `X | None`, not `List` / `Optional`.
 2. **A docstring on every public function and class** saying what it does and why.
 3. **Nothing heavy at import time.** Load models (like spaCy) inside a function, cached with `@lru_cache`.
-4. **Engine code** (`operators/`, `judges/`, `stats/`) **never imports** from `service/` or `cli/`.
+4. **Engine code** (`operators/`, `judges/`, `stats/`) **never imports** from `api/` or `cli/`.
 5. **API routes stay thin.** They call engine functions, and the logic lives in the engine.
 6. **Randomness takes a `seed`**, so results can be reproduced.
 7. **No secrets in code.** Keys go in `.env`.

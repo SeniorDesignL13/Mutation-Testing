@@ -10,9 +10,9 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import make_url
 
-from mtlj.service.config import get_settings
-from mtlj.service.db import engine
-from mtlj.service.main import app
+from mtlj.api.config import get_settings
+from mtlj.api.db import engine
+from mtlj.api.main import app
 
 
 def _postgres_is_reachable() -> bool:
@@ -36,7 +36,7 @@ def database() -> None:
         if os.environ.get("CI"):
             pytest.fail(message)
         pytest.skip(message)
-    command.upgrade(Config("alembic.ini"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
 
 
 @pytest.fixture

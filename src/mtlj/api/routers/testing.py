@@ -11,10 +11,10 @@ import httpx
 from fastapi import APIRouter, Response, status
 from sqlalchemy import func, select, text
 
-from mtlj.service.config import get_settings
-from mtlj.service.db import SessionDep, engine
-from mtlj.service.models import ConnectionCheck
-from mtlj.service.schemas.testing import CheckResult, RouteInfo
+from mtlj.api.config import get_settings
+from mtlj.api.db import SessionDep, engine
+from mtlj.api.models import ConnectionCheck
+from mtlj.api.schemas.testing import CheckResult, RouteInfo
 
 router = APIRouter(prefix="/testing", tags=["testing"])
 
@@ -23,13 +23,13 @@ ROUTES = [
         name="API health",
         method="GET",
         path="/health",
-        description="The FastAPI service is up and reachable from the browser.",
+        description="The API is up and reachable from the browser.",
     ),
     RouteInfo(
         name="Postgres",
         method="GET",
         path="/testing/postgres",
-        description="The service can open a connection to the Postgres server.",
+        description="The API can open a connection to the Postgres server.",
     ),
     RouteInfo(
         name="App database",
@@ -41,7 +41,7 @@ ROUTES = [
         name="External API",
         method="GET",
         path="/testing/external-api",
-        description="The service can make outbound HTTPS calls (e.g. to LLM providers).",
+        description="The API can make outbound HTTPS calls (e.g. to LLM providers).",
     ),
 ]
 
