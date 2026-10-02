@@ -48,6 +48,8 @@ services:
       CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-3000}"]'
       # File-change events don't cross Windows/macOS mounts; poll instead.
       WATCHFILES_FORCE_POLLING: "true"
+      # Keep Python's cache files inside the container, not in your repo folder.
+      PYTHONPYCACHEPREFIX: /tmp/pycache
     volumes:
       # Dependencies live in /opt/venv, so mounting the repo never hides them.
       - .:/app

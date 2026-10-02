@@ -154,6 +154,7 @@ Components come from [PrimeVue 4](https://v4.primevue.org/) and need no imports.
 | Problem | Fix |
 |---|---|
 | `failed to connect to the docker API` or `Cannot connect to the Docker daemon` | Docker Desktop isn't running. Open it and wait for it to start |
+| Windows: `ModuleNotFoundError` for a package that is installed | The repo folder's path is too long for Windows. Move it somewhere short like `C:\code\Mutation-Testing`, delete `.venv`, run `uv sync` |
 | `port is already allocated` | `cp .env.example .env` and change `API_PORT`, `FRONTEND_PORT` or `POSTGRES_PORT` |
 | A row on http://localhost:3000 is red | Read its **Detail** column |
 | CI says "uv.lock doesn't match" | Run `uv lock`, then commit `uv.lock` |
