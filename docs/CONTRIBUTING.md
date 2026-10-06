@@ -16,8 +16,8 @@ Short on purpose. If a rule is wrong or missing, change it in a PR.
 git switch main
 git pull
 
-# 2. Make a branch for your change
-git switch -c feat/entity-swap-operator
+# 2. Create the branch from the Jira issue, then switch to it
+git switch <branch-name-from-jira>
 
 # 3. ...write code, then check it (see DEVELOPER.md)...
 
@@ -34,25 +34,10 @@ in the title and description, and create the PR.
 
 To change a PR, commit and `git push` again. The PR updates by itself.
 
-## Names for branches and PR titles
+## Branch names
 
-Start with what kind of change it is:
-
-| Type | For |
-|---|---|
-| `feat` | Something new |
-| `fix` | A bug fix |
-| `docs` | Documentation only |
-| `test` | Tests only |
-| `refactor` | Tidying code without changing what it does |
-| `build` | Packages, Docker |
-| `ci` | GitHub Actions |
-| `chore` | Anything else |
-
-- **Branch:** `type/short-description`, e.g. `feat/entity-swap-operator`.
-- **PR title:** `type: summary in lowercase`, e.g. `feat: add entity swap operator`.
-  A bot checks the title, because it becomes the commit message on `main`.
-  You can add a scope if you like: `feat(operators): add entity swap`.
+Branches are created from Jira issues, so their names come from Jira. That name
+is what links the branch and its PR to the issue, so don't rename the branch.
 
 ## Code style
 
