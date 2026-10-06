@@ -43,7 +43,8 @@ formatted when you save.
 
 ## Your routine
 
-1. **Get the latest code and switch to your branch** (created from the Jira issue)
+1. **Move your Jira task to In Progress**, which creates your branch. Then get
+   the latest code and switch to it:
    ```bash
    git switch main
    git pull
@@ -56,7 +57,7 @@ formatted when you save.
    uv run python scripts/check.py              # Python
    docker compose exec frontend npm run check  # website (only if you changed frontend/)
    ```
-5. **Commit, push, open a pull request.** See [CONTRIBUTING](CONTRIBUTING.md#git-step-by-step).
+5. **Commit, push, open a pull request.** Jira moves your task along by itself. See [CONTRIBUTING](CONTRIBUTING.md#jira-and-github).
 
 ## Where code goes
 

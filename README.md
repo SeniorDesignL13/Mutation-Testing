@@ -61,7 +61,7 @@ generated, `.github/` runs the automatic checks, and the dotfiles configure tool
 ## Next
 
 - **[How to develop](docs/DEVELOPER.md)**: running Python on your machine, how-tos, fixing problems
-- **[Rules for contributing](docs/CONTRIBUTING.md)**: Git step by step, pull requests, code style
+- **[Rules for contributing](docs/CONTRIBUTING.md)**: how Jira and GitHub work together, Git step by step, pull requests, code style
 
 ## Tech stack
 
