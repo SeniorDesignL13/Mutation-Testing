@@ -43,11 +43,11 @@ formatted when you save.
 
 ## Your routine
 
-1. **Get the latest code and make a branch**
+1. **Get the latest code and switch to your branch** (created from the Jira issue)
    ```bash
    git switch main
    git pull
-   git switch -c feat/my-change
+   git switch <branch-name-from-jira>
    ```
 2. **Start the app** (if you need the website or API): `docker compose up`
 3. **Write code and tests.** Save, and it reloads.
