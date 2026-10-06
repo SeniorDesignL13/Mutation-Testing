@@ -9,14 +9,29 @@ Short on purpose. If a rule is wrong or missing, change it in a PR.
 - **Keep PRs small**, ideally under ~400 changed lines. Split big features into several PRs.
 - **Review teammates' PRs within a day.** Start optional suggestions with `nit:`.
 
+## Jira and GitHub
+
+Every change starts as a Jira task. Jira and GitHub are connected, so the task
+moves across the board by itself as you work:
+
+| You do this | Jira does this |
+|---|---|
+| Move the task from **To Do** to **In Progress** | Creates a branch for it on GitHub |
+| Open a PR from that branch | Moves the task to **Under Review** |
+| Merge the PR | Moves the task to **Done** |
+
+So don't drag tasks to Under Review or Done yourself, and don't make branches
+by hand. The branch name links everything back to the task, so don't rename it.
+You'll find it on the Jira task, under **Development**.
+
 ## Git step by step
 
 ```bash
-# 1. Start from the latest main
+# 1. In Jira, move your task to In Progress. That creates your branch.
+
+# 2. Get the latest code and switch to your branch
 git switch main
 git pull
-
-# 2. Create the branch from the Jira issue, then switch to it
 git switch <branch-name-from-jira>
 
 # 3. ...write code, then check it (see DEVELOPER.md)...
@@ -30,14 +45,12 @@ git push -u origin HEAD
 ```
 
 Then open GitHub. It shows a **Compare & pull request** button. Click it, fill
-in the title and description, and create the PR.
+in the title and description, and create the PR. The Jira task moves to
+Under Review.
 
 To change a PR, commit and `git push` again. The PR updates by itself.
 
-## Branch names
-
-Branches are created from Jira issues, so their names come from Jira. That name
-is what links the branch and its PR to the issue, so don't rename the branch.
+Once it's approved and green, click **Squash and merge**. The Jira task moves to Done.
 
 ## Code style
 
