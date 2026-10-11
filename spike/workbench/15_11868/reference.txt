@@ -1,0 +1,20 @@
+RECORD 15/20  id=11868
+
+QUESTION
+safely clean your computer screen
+
+CONTEXT
+[P1] Remember, the less you touch your screen the better. Lightly wipe the screen with a dry and clean microfiber cloth. Microfiber is a miracle of modern technology; put it to good use. No paper towels, no kitchen towels, no household rags; only microfiber should touch your screen.ow to Safely Clean Your Screen. Now that we’ve made you terrified of Windex and rags (as, on behalf of your beautiful widescreen monitor, you should be), it’s time to get down to the business of properly cleaning your screens.
+
+[P2] Instructions. Add 1 part isopropyl alcohol and 1 part distilled water to an empty spray bottle. Close the bottle and shake it to combine the ingredients. Turn off the laptop. It&#039;s easier to see the dust and smudges when the screen is dark. Spray a lint-free cloth with the homemade cleaning solution or LCD cleaner.Wipe the laptop screen thoroughly with the cloth to remove any dust or fingerprints. Clean in one direction to prevent streaks.lose the bottle and shake it to combine the ingredients. Turn off the laptop. It&#039;s easier to see the dust and smudges when the screen is dark. Spray a lint-free cloth with the homemade cleaning solution or LCD cleaner.
+
+[P3] 1 The microfiber clothes are washable, soft and safe to use on your screens. 2  To clean the edges of your LCD screen use a clean cotton ball or swab. 3  ALWAYS clean your screen powered off! ( 4 I know I said this above, but it is important enough to reiterate.). DO NOT touch your LCD screen, because it will shorten the lifespan of your screen. 2  NEVER use a window or abrasive cleaner on your TV screen as it can cause the screen to yellow and also damage it. 3  If a spot does not come off, do NOT rub harder, because you can kill some of your pixels and ruin your screen.
+
+ORIGINAL ANSWER
+To clean your computer screen safely, first make sure the screen is powered off as it's easier to see dust and smudges on a dark screen. Use a clean and dry microfiber cloth, which is safe for your screens, to lightly wipe the screen. Avoid touching the LCD screen as it can shorten the lifespan. If there are stubborn spots, do not rub harder as this could damage the screen. For a deeper clean, you can make a solution of 1 part isopropyl alcohol and 1 part distilled water, spray it on a lint-free cloth, and use it to wipe the screen. Always clean in one direction to prevent streaks. Never use window or abrasive cleaners as they can damage and yellow the screen. Clean the edges of your LCD screen with a clean cotton ball or swab.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+    ORDINAL      first
+  * ORG          LCD
+  * CARDINAL     1
+  * CARDINAL     1

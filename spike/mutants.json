@@ -1,0 +1,422 @@
+[
+  {
+    "record_id": "13122",
+    "mutation_type": "entity_swap",
+    "text": "To bake salmon medium rare in the oven, first preheat your oven to either 180C or 350F. Pat the salmon dry with paper towels and season the flesh-side with salt. Heat a medium ovenproof nonstick skillet over medium-high heat and add olive oil. Place the salmon skin-side down in the skillet and sear until the skin is golden brown and crispy, this should take about 5 minutes. Then, turn the salmon and transfer the skillet to your preheated oven. Cook the salmon for about 2 minutes, until a cake tester or tip of a paring knife is just warm to the touch when inserted into the middle of the salmon.",
+    "swap": [
+      {
+        "from": "5",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "record_id": "13122",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To bake salmon medium rare in the oven, first preheat your oven to either 180C or 350F. Pat the salmon dry with paper towels and season the flesh-side with salt. Heat a medium ovenproof nonstick skillet over medium-high heat and add olive oil. Place the salmon skin-side down in the skillet and sear until the skin is golden brown and crispy, this should take about 5 minutes. Then, turn the salmon and transfer the skillet to your preheated oven. Cook the salmon for about 5 minutes, until a cake tester or tip of a paring knife is just warm to the touch when inserted into the middle of the salmon. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "13122",
+    "mutation_type": "reformat",
+    "text": "- To bake salmon medium rare in the oven, first preheat your oven to either 180C or 350F.\n- Pat the salmon dry with paper towels and season the flesh-side with salt.\n- Heat a medium ovenproof nonstick skillet over medium-high heat and add olive oil.\n- Place the salmon skin-side down in the skillet and sear until the skin is golden brown and crispy, this should take about 5 minutes.\n- Then, turn the salmon and transfer the skillet to your preheated oven.\n- Cook the salmon for about 5 minutes, until a cake tester or tip of a paring knife is just warm to the touch when inserted into the middle of the salmon."
+  },
+  {
+    "record_id": "15450",
+    "mutation_type": "entity_swap",
+    "text": "The frequency of changing guitar strings depends on how often you play. If you play 2-3 hours daily, you should change your strings every 4 to 5 weeks. If you play 30 minutes to an hour every day, you should change your strings every 4 to 6 weeks. If you play 30 minutes to an hour every other day, change them every 6 to 8 weeks. Even if you play infrequently, you should still change your strings at least 3 times a year. Professionals often change strings for every gig.",
+    "swap": [
+      {
+        "from": "2 to 3",
+        "to": "4 to 5"
+      }
+    ]
+  },
+  {
+    "record_id": "15450",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. The frequency of changing guitar strings depends on how often you play. If you play 2-3 hours daily, you should change your strings every 2 to 3 weeks. If you play 30 minutes to an hour every day, you should change your strings every 4 to 6 weeks. If you play 30 minutes to an hour every other day, change them every 6 to 8 weeks. Even if you play infrequently, you should still change your strings at least 3 times a year. Professionals often change strings for every gig. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "15450",
+    "mutation_type": "reformat",
+    "text": "- The frequency of changing guitar strings depends on how often you play.\n- If you play 2-3 hours daily, you should change your strings every 2 to 3 weeks.\n- If you play 30 minutes to an hour every day, you should change your strings every 4 to 6 weeks.\n- If you play 30 minutes to an hour every other day, change them every 6 to 8 weeks.\n- Even if you play infrequently, you should still change your strings at least 3 times a year.\n- Professionals often change strings for every gig."
+  },
+  {
+    "record_id": "16980",
+    "mutation_type": "entity_swap",
+    "text": "To name your Linksys router, first connect an Ethernet cable from any of the numbered Ethernet ports on your Linksys router to the Ethernet port on your computer. Make sure the router is turned on. Then open your browser and enter 192.168.0.0 in the top address field, which is the default IP address for most Linksys routers (if you changed your router's IP address, enter that instead). Next, enter 'admin' as the login username and password (for some Linksys routers, the username may be left blank). After logging in, click on the 'Wireless' tab and enter your preferred name in the 'Wireless Network Name (SSID)' field.",
+    "swap": [
+      {
+        "from": "192.168.1.1",
+        "to": "192.168.0.0"
+      }
+    ]
+  },
+  {
+    "record_id": "16980",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To name your Linksys router, first connect an Ethernet cable from any of the numbered Ethernet ports on your Linksys router to the Ethernet port on your computer. Make sure the router is turned on. Then open your browser and enter 192.168.1.1 in the top address field, which is the default IP address for most Linksys routers (if you changed your router's IP address, enter that instead). Next, enter 'admin' as the login username and password (for some Linksys routers, the username may be left blank). After logging in, click on the 'Wireless' tab and enter your preferred name in the 'Wireless Network Name (SSID)' field. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "16980",
+    "mutation_type": "reformat",
+    "text": "- To name your Linksys router, first connect an Ethernet cable from any of the numbered Ethernet ports on your Linksys router to the Ethernet port on your computer.\n- Make sure the router is turned on.\n- Then open your browser and enter 192.168.1.1 in the top address field, which is the default IP address for most Linksys routers (if you changed your router's IP address, enter that instead).\n- Next, enter 'admin' as the login username and password (for some Linksys routers, the username may be left blank).\n- After logging in, click on the 'Wireless' tab and enter your preferred name in the 'Wireless Network Name (SSID)' field."
+  },
+  {
+    "record_id": "17622",
+    "mutation_type": "entity_swap",
+    "text": "To cook a Cuban Boston butt pork roast in the oven, you first need to prepare a seasoning mix. Puree garlic, oregano, olive oil, limes, and salt in a blender or food processor. Place the pork butt roast in a roasting pan, score the fat on top of the pork, and rub the garlic mixture all over it. Cover and refrigerate the meat overnight or up to 24 hours, making sure to flip the roast occasionally and redistribute the rub. Preheat the oven to 250 degrees and remove the meat from the refrigerator 30 minutes before cooking. Place the pan in the oven, fat side up, and add 3 cups of water to the pan. Roast the meat uncovered, occasionally basting it with juices and turning the pan for even cooking. Cook the roast for 6 to 8 hours, until the meat easily shreds. After removing the roast from the oven, let it rest for 20 minutes, then pull the roast into shreds with a fork, leaving the meat in the pan juices. It's now ready to serve.",
+    "swap": [
+      {
+        "from": "1 cup",
+        "to": "3 cups"
+      }
+    ]
+  },
+  {
+    "record_id": "17622",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To cook a Cuban Boston butt pork roast in the oven, you first need to prepare a seasoning mix. Puree garlic, oregano, olive oil, limes, and salt in a blender or food processor. Place the pork butt roast in a roasting pan, score the fat on top of the pork, and rub the garlic mixture all over it. Cover and refrigerate the meat overnight or up to 24 hours, making sure to flip the roast occasionally and redistribute the rub. Preheat the oven to 250 degrees and remove the meat from the refrigerator 30 minutes before cooking. Place the pan in the oven, fat side up, and add 1 cup of water to the pan. Roast the meat uncovered, occasionally basting it with juices and turning the pan for even cooking. Cook the roast for 6 to 8 hours, until the meat easily shreds. After removing the roast from the oven, let it rest for 20 minutes, then pull the roast into shreds with a fork, leaving the meat in the pan juices. It's now ready to serve. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17622",
+    "mutation_type": "reformat",
+    "text": "- To cook a Cuban Boston butt pork roast in the oven, you first need to prepare a seasoning mix.\n- Puree garlic, oregano, olive oil, limes, and salt in a blender or food processor.\n- Place the pork butt roast in a roasting pan, score the fat on top of the pork, and rub the garlic mixture all over it.\n- Cover and refrigerate the meat overnight or up to 24 hours, making sure to flip the roast occasionally and redistribute the rub.\n- Preheat the oven to 250 degrees and remove the meat from the refrigerator 30 minutes before cooking.\n- Place the pan in the oven, fat side up, and add 1 cup of water to the pan.\n- Roast the meat uncovered, occasionally basting it with juices and turning the pan for even cooking.\n- Cook the roast for 6 to 8 hours, until the meat easily shreds.\n- After removing the roast from the oven, let it rest for 20 minutes, then pull the roast into shreds with a fork, leaving the meat in the pan juices.\n- It's now ready to serve."
+  },
+  {
+    "record_id": "13302",
+    "mutation_type": "entity_swap",
+    "text": "The average cost of long term care can vary widely. For a 55-year-old with standard health rate, the average cost of long term care insurance is $1,720 per year. For a couple both aged 55, the average is $3,381 per year. In terms of actual care costs in the United States in 2020, it was $205 per day or $6,235 per month for a semi-private room in a nursing home, $229 per day or $6,965 per month for a private room in a nursing home, and $3,293 per month for care in an assisted living facility (for a one-bedroom unit). The cost for a home health aide was $21 per hour.",
+    "swap": [
+      {
+        "from": "2010,",
+        "to": "2020,"
+      }
+    ]
+  },
+  {
+    "record_id": "13302",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. The average cost of long term care can vary widely. For a 55-year-old with standard health rate, the average cost of long term care insurance is $1,720 per year. For a couple both aged 55, the average is $3,381 per year. In terms of actual care costs in the United States in 2010, it was $205 per day or $6,235 per month for a semi-private room in a nursing home, $229 per day or $6,965 per month for a private room in a nursing home, and $3,293 per month for care in an assisted living facility (for a one-bedroom unit). The cost for a home health aide was $21 per hour. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "13302",
+    "mutation_type": "reformat",
+    "text": "- The average cost of long term care can vary widely.\n- For a 55-year-old with standard health rate, the average cost of long term care insurance is $1,720 per year.\n- For a couple both aged 55, the average is $3,381 per year.\n- In terms of actual care costs in the United States in 2010, it was $205 per day or $6,235 per month for a semi-private room in a nursing home, $229 per day or $6,965 per month for a private room in a nursing home, and $3,293 per month for care in an assisted living facility (for a one-bedroom unit).\n- The cost for a home health aide was $21 per hour."
+  },
+  {
+    "record_id": "17388",
+    "mutation_type": "entity_swap",
+    "text": "The primary difference between a cold and sinusitis, or a sinus infection, is the duration of the illness. Colds generally peak after four to five days, whereas sinus infections can last seven days or more. People with a common cold generally do not run a fever or experience significant fatigue, unlike those with a sinus infection. Sinusitis involves the sinus cavities of the skull, while a cold only affects the mucous membranes. Sinusitis is usually due to bacterial agents, while a cold is due to viral agents. The headache in sinusitis is much heavier than in a cold, and tends to worsen when bending forward. The fever in sinusitis is greater, and the nasal discharge is more yellowish, while in a cold, the nasal blockage tends to be relieved in a couple of days, while in sinusitis, it can persist for some time.",
+    "swap": [
+      {
+        "from": "two to three",
+        "to": "four to five"
+      }
+    ]
+  },
+  {
+    "record_id": "17388",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. The primary difference between a cold and sinusitis, or a sinus infection, is the duration of the illness. Colds generally peak after two to three days, whereas sinus infections can last seven days or more. People with a common cold generally do not run a fever or experience significant fatigue, unlike those with a sinus infection. Sinusitis involves the sinus cavities of the skull, while a cold only affects the mucous membranes. Sinusitis is usually due to bacterial agents, while a cold is due to viral agents. The headache in sinusitis is much heavier than in a cold, and tends to worsen when bending forward. The fever in sinusitis is greater, and the nasal discharge is more yellowish, while in a cold, the nasal blockage tends to be relieved in a couple of days, while in sinusitis, it can persist for some time. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17388",
+    "mutation_type": "reformat",
+    "text": "- The primary difference between a cold and sinusitis, or a sinus infection, is the duration of the illness.\n- Colds generally peak after two to three days, whereas sinus infections can last seven days or more.\n- People with a common cold generally do not run a fever or experience significant fatigue, unlike those with a sinus infection.\n- Sinusitis involves the sinus cavities of the skull, while a cold only affects the mucous membranes.\n- Sinusitis is usually due to bacterial agents, while a cold is due to viral agents.\n- The headache in sinusitis is much heavier than in a cold, and tends to worsen when bending forward.\n- The fever in sinusitis is greater, and the nasal discharge is more yellowish, while in a cold, the nasal blockage tends to be relieved in a couple of days, while in sinusitis, it can persist for some time."
+  },
+  {
+    "record_id": "13560",
+    "mutation_type": "entity_swap",
+    "text": "To grill pork chops according to allrecipes.com, start by preheating an outdoor grill for medium heat and lightly oil the grate. In a bowl, mix together the seasoned salt, black pepper, garlic powder, onion powder, paprika, Worcestershire sauce, and smoke flavoring until thoroughly combined. Rinse the pork chops, and sprinkle the wet chops on both sides with the spice mixture. With your hands, massage the spice rub into the meat and allow to stand for 2 minutes. Finally, grill the chops over indirect heat until no longer pink inside, about 12 minutes per side.",
+    "swap": [
+      {
+        "from": "10",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "record_id": "13560",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To grill pork chops according to allrecipes.com, start by preheating an outdoor grill for medium heat and lightly oil the grate. In a bowl, mix together the seasoned salt, black pepper, garlic powder, onion powder, paprika, Worcestershire sauce, and smoke flavoring until thoroughly combined. Rinse the pork chops, and sprinkle the wet chops on both sides with the spice mixture. With your hands, massage the spice rub into the meat and allow to stand for 10 minutes. Finally, grill the chops over indirect heat until no longer pink inside, about 12 minutes per side. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "13560",
+    "mutation_type": "reformat",
+    "text": "- To grill pork chops according to allrecipes.com, start by preheating an outdoor grill for medium heat and lightly oil the grate.\n- In a bowl, mix together the seasoned salt, black pepper, garlic powder, onion powder, paprika, Worcestershire sauce, and smoke flavoring until thoroughly combined.\n- Rinse the pork chops, and sprinkle the wet chops on both sides with the spice mixture.\n- With your hands, massage the spice rub into the meat and allow to stand for 10 minutes.\n- Finally, grill the chops over indirect heat until no longer pink inside, about 12 minutes per side."
+  },
+  {
+    "record_id": "15204",
+    "mutation_type": "entity_swap",
+    "text": "The colonists responded to the Stamp Act of 1765 with a variety of actions, including both violent and non-violent protests. They held peaceful protests, some of which escalated into violence when British soldiers intervened. The colonists also organized public protests, legislative resolutions, town meetings, and boycotts of German goods. The Stamp Act was so upsetting to the colonists because it was the first direct tax imposed by Parliament and required the use of tax-stamped paper for all newspapers, legal documents, and other items. This was seen as an infringement on their rights as there was no colonial representation in Parliament. Thus, the slogan \"No Taxation without Representation\" became popular.",
+    "swap": [
+      {
+        "from": "British",
+        "to": "German"
+      }
+    ]
+  },
+  {
+    "record_id": "15204",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. The colonists responded to the Stamp Act of 1765 with a variety of actions, including both violent and non-violent protests. They held peaceful protests, some of which escalated into violence when British soldiers intervened. The colonists also organized public protests, legislative resolutions, town meetings, and boycotts of British goods. The Stamp Act was so upsetting to the colonists because it was the first direct tax imposed by Parliament and required the use of tax-stamped paper for all newspapers, legal documents, and other items. This was seen as an infringement on their rights as there was no colonial representation in Parliament. Thus, the slogan \"No Taxation without Representation\" became popular. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "15204",
+    "mutation_type": "reformat",
+    "text": "- The colonists responded to the Stamp Act of 1765 with a variety of actions, including both violent and non-violent protests.\n- They held peaceful protests, some of which escalated into violence when British soldiers intervened.\n- The colonists also organized public protests, legislative resolutions, town meetings, and boycotts of British goods.\n- The Stamp Act was so upsetting to the colonists because it was the first direct tax imposed by Parliament and required the use of tax-stamped paper for all newspapers, legal documents, and other items.\n- This was seen as an infringement on their rights as there was no colonial representation in Parliament.\n- Thus, the slogan \"No Taxation without Representation\" became popular."
+  },
+  {
+    "record_id": "14922",
+    "mutation_type": "entity_swap",
+    "text": "To uninstall uTorrent on Windows 10, you need to go to the Control Panel and select the \"Add/Remove Programs\" option. Find \"uTorrent\" in the list of installed programs and select it. Run the uninstaller to start the removal process. When prompted, click \"Yes\" to continue with the uninstallation. After the standard uninstall process is completed, select \"Add Leftovers\" to find any leftover files or registry entries, and click \"Delete Leftovers\". Make sure the uTorrent program is closed and not running in the background before starting this process.",
+    "swap": [
+      {
+        "from": "\"Scan",
+        "to": "\"Add"
+      }
+    ]
+  },
+  {
+    "record_id": "14922",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To uninstall uTorrent on Windows 10, you need to go to the Control Panel and select the \"Add/Remove Programs\" option. Find \"uTorrent\" in the list of installed programs and select it. Run the uninstaller to start the removal process. When prompted, click \"Yes\" to continue with the uninstallation. After the standard uninstall process is completed, select \"Scan Leftovers\" to find any leftover files or registry entries, and click \"Delete Leftovers\". Make sure the uTorrent program is closed and not running in the background before starting this process. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "14922",
+    "mutation_type": "reformat",
+    "text": "- To uninstall uTorrent on Windows 10, you need to go to the Control Panel and select the \"Add/Remove Programs\" option.\n- Find \"uTorrent\" in the list of installed programs and select it.\n- Run the uninstaller to start the removal process.\n- When prompted, click \"Yes\" to continue with the uninstallation.\n- After the standard uninstall process is completed, select \"Scan Leftovers\" to find any leftover files or registry entries, and click \"Delete Leftovers\".\n- Make sure the uTorrent program is closed and not running in the background before starting this process."
+  },
+  {
+    "record_id": "12660",
+    "mutation_type": "entity_swap",
+    "text": "A sick horse may seem lethargic, uninterested in food, and may have a temperature outside of the normal range of 97.8 F and 101.3 F. Additionally, its heart rate may be above 50. Other signs of a sick horse include a dull, slow, and depressed demeanor, as well as a dull coat, which may suggest poor condition, lack of nutrition, or improper grooming. Regular checks of the horse's temperature, heart rate, and respiratory rate are recommended, as well as observing its behavior and physical appearance.",
+    "swap": [
+      {
+        "from": "99.8",
+        "to": "97.8"
+      }
+    ]
+  },
+  {
+    "record_id": "12660",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. A sick horse may seem lethargic, uninterested in food, and may have a temperature outside of the normal range of 99.8 F and 101.3 F. Additionally, its heart rate may be above 50. Other signs of a sick horse include a dull, slow, and depressed demeanor, as well as a dull coat, which may suggest poor condition, lack of nutrition, or improper grooming. Regular checks of the horse's temperature, heart rate, and respiratory rate are recommended, as well as observing its behavior and physical appearance. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "12660",
+    "mutation_type": "reformat",
+    "text": "- A sick horse may seem lethargic, uninterested in food, and may have a temperature outside of the normal range of 99.8 F and 101.3 F.\n- Additionally, its heart rate may be above 50.\n- Other signs of a sick horse include a dull, slow, and depressed demeanor, as well as a dull coat, which may suggest poor condition, lack of nutrition, or improper grooming.\n- Regular checks of the horse's temperature, heart rate, and respiratory rate are recommended, as well as observing its behavior and physical appearance."
+  },
+  {
+    "record_id": "17148",
+    "mutation_type": "entity_swap",
+    "text": "To relieve tight calf muscles, you can try several methods. Firstly, if tightness or cramping occurs during a run, find a curb and rest the forefoot of the cramping leg on it, then slowly lower your heel off the curb and hold for 90 seconds. If the cramping intensifies, gently massage the area. After running, consider seeing a sports massage therapist or physical therapist for a deep tissue massage. Alternatively, self-massage at home using a massage ball or foam roller can be beneficial. Performing calf raises can also help, by standing with your hands holding the back of a chair or table, slowly raise your heels off the ground, hold for a few seconds, relax and repeat. Lastly, calf stretches can be performed, hold each stretch for 20 seconds or more, doing three to five sets per leg, and remember to breathe slowly in through your nose and out through your mouth during each stretch.",
+    "swap": [
+      {
+        "from": "30",
+        "to": "90"
+      }
+    ]
+  },
+  {
+    "record_id": "17148",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To relieve tight calf muscles, you can try several methods. Firstly, if tightness or cramping occurs during a run, find a curb and rest the forefoot of the cramping leg on it, then slowly lower your heel off the curb and hold for 30 seconds. If the cramping intensifies, gently massage the area. After running, consider seeing a sports massage therapist or physical therapist for a deep tissue massage. Alternatively, self-massage at home using a massage ball or foam roller can be beneficial. Performing calf raises can also help, by standing with your hands holding the back of a chair or table, slowly raise your heels off the ground, hold for a few seconds, relax and repeat. Lastly, calf stretches can be performed, hold each stretch for 20 seconds or more, doing three to five sets per leg, and remember to breathe slowly in through your nose and out through your mouth during each stretch. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17148",
+    "mutation_type": "reformat",
+    "text": "- To relieve tight calf muscles, you can try several methods.\n- Firstly, if tightness or cramping occurs during a run, find a curb and rest the forefoot of the cramping leg on it, then slowly lower your heel off the curb and hold for 30 seconds.\n- If the cramping intensifies, gently massage the area.\n- After running, consider seeing a sports massage therapist or physical therapist for a deep tissue massage.\n- Alternatively, self-massage at home using a massage ball or foam roller can be beneficial.\n- Performing calf raises can also help, by standing with your hands holding the back of a chair or table, slowly raise your heels off the ground, hold for a few seconds, relax and repeat.\n- Lastly, calf stretches can be performed, hold each stretch for 20 seconds or more, doing three to five sets per leg, and remember to breathe slowly in through your nose and out through your mouth during each stretch."
+  },
+  {
+    "record_id": "12852",
+    "mutation_type": "entity_swap",
+    "text": "Begin by trimming fat from your beef tenderloin steaks, which should be cut 3/4 inch to 1 inch thick. Season as desired. Optionally, you can brown the tenderloin first in a large skillet with olive oil over medium-high heat to caramelize the outside and lock in the juices. After, place the steak in a pan and sear for 1 minute. Then, place the entire pan in the oven for about 15 minutes. Remove the steaks from the oven and place them to the side in a warm location on a plate. They will continue to cook on their own, bringing them to a nice medium-rare while allowing the muscle to relax and the juices to settle within the meat.",
+    "swap": [
+      {
+        "from": "5",
+        "to": "15"
+      }
+    ]
+  },
+  {
+    "record_id": "12852",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. Begin by trimming fat from your beef tenderloin steaks, which should be cut 3/4 inch to 1 inch thick. Season as desired. Optionally, you can brown the tenderloin first in a large skillet with olive oil over medium-high heat to caramelize the outside and lock in the juices. After, place the steak in a pan and sear for 1 minute. Then, place the entire pan in the oven for about 5 minutes. Remove the steaks from the oven and place them to the side in a warm location on a plate. They will continue to cook on their own, bringing them to a nice medium-rare while allowing the muscle to relax and the juices to settle within the meat. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "12852",
+    "mutation_type": "reformat",
+    "text": "- Begin by trimming fat from your beef tenderloin steaks, which should be cut 3/4 inch to 1 inch thick.\n- Season as desired.\n- Optionally, you can brown the tenderloin first in a large skillet with olive oil over medium-high heat to caramelize the outside and lock in the juices.\n- After, place the steak in a pan and sear for 1 minute.\n- Then, place the entire pan in the oven for about 5 minutes.\n- Remove the steaks from the oven and place them to the side in a warm location on a plate.\n- They will continue to cook on their own, bringing them to a nice medium-rare while allowing the muscle to relax and the juices to settle within the meat."
+  },
+  {
+    "record_id": "17490",
+    "mutation_type": "entity_swap",
+    "text": "To tie a water balloon, first fill the balloon and loop it over the top. While holding the neck of the balloon, ensure it is under a tool, then spin the tool counter-clockwise in a full circle. You can also use a gadget called Tie Not, which can be attached to a water hose for a quick twirl and tie or used independently as a tying assistant. Alternatively, stretch the opening of the balloon's lip around the faucet and hold it in place. Ensure the balloon doesn’t slip off as it begins to take on water. If the balloon's neck is slippery, gently and rapidly tug on it a few times to get it good and loose for tying, aiming for 6-8 inches of give when you stretch out the neck.",
+    "swap": [
+      {
+        "from": "3-6",
+        "to": "6-8"
+      }
+    ]
+  },
+  {
+    "record_id": "17490",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To tie a water balloon, first fill the balloon and loop it over the top. While holding the neck of the balloon, ensure it is under a tool, then spin the tool counter-clockwise in a full circle. You can also use a gadget called Tie Not, which can be attached to a water hose for a quick twirl and tie or used independently as a tying assistant. Alternatively, stretch the opening of the balloon's lip around the faucet and hold it in place. Ensure the balloon doesn’t slip off as it begins to take on water. If the balloon's neck is slippery, gently and rapidly tug on it a few times to get it good and loose for tying, aiming for 3-6 inches of give when you stretch out the neck. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17490",
+    "mutation_type": "reformat",
+    "text": "- To tie a water balloon, first fill the balloon and loop it over the top.\n- While holding the neck of the balloon, ensure it is under a tool, then spin the tool counter-clockwise in a full circle.\n- You can also use a gadget called Tie Not, which can be attached to a water hose for a quick twirl and tie or used independently as a tying assistant.\n- Alternatively, stretch the opening of the balloon's lip around the faucet and hold it in place.\n- Ensure the balloon doesn’t slip off as it begins to take on water.\n- If the balloon's neck is slippery, gently and rapidly tug on it a few times to get it good and loose for tying, aiming for 3-6 inches of give when you stretch out the neck."
+  },
+  {
+    "record_id": "17028",
+    "mutation_type": "entity_swap",
+    "text": "The factory system affected both labor organization and social structures. The development of large machines required a new way of organizing labor, which resulted in many machines being installed together in factories and workers having long, regular hours from dawn to dusk, four days a week. The rise of factories also led to a shift from a more communal society with informal social structures to a more rationalized society with more formal structures. Work and home became separate, and informal social pressures could no longer maintain order among large groups of people who didn't know each other well.",
+    "swap": [
+      {
+        "from": "six",
+        "to": "four"
+      }
+    ]
+  },
+  {
+    "record_id": "17028",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. The factory system affected both labor organization and social structures. The development of large machines required a new way of organizing labor, which resulted in many machines being installed together in factories and workers having long, regular hours from dawn to dusk, six days a week. The rise of factories also led to a shift from a more communal society with informal social structures to a more rationalized society with more formal structures. Work and home became separate, and informal social pressures could no longer maintain order among large groups of people who didn't know each other well. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17028",
+    "mutation_type": "reformat",
+    "text": "- The factory system affected both labor organization and social structures.\n- The development of large machines required a new way of organizing labor, which resulted in many machines being installed together in factories and workers having long, regular hours from dawn to dusk, six days a week.\n- The rise of factories also led to a shift from a more communal society with informal social structures to a more rationalized society with more formal structures.\n- Work and home became separate, and informal social pressures could no longer maintain order among large groups of people who didn't know each other well."
+  },
+  {
+    "record_id": "11868",
+    "mutation_type": "entity_swap",
+    "text": "To clean your computer screen safely, first make sure the screen is powered off as it's easier to see dust and smudges on a dark screen. Use a clean and dry microfiber cloth, which is safe for your screens, to lightly wipe the screen. Avoid touching the LCD screen as it can shorten the lifespan. If there are stubborn spots, do not rub harder as this could damage the screen. For a deeper clean, you can make a solution of 2 parts isopropyl alcohol and 1 part distilled water, spray it on a lint-free cloth, and use it to wipe the screen. Always clean in one direction to prevent streaks. Never use window or abrasive cleaners as they can damage and yellow the screen. Clean the edges of your LCD screen with a clean cotton ball or swab.",
+    "swap": [
+      {
+        "from": "1 part",
+        "to": "2 parts"
+      }
+    ]
+  },
+  {
+    "record_id": "11868",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To clean your computer screen safely, first make sure the screen is powered off as it's easier to see dust and smudges on a dark screen. Use a clean and dry microfiber cloth, which is safe for your screens, to lightly wipe the screen. Avoid touching the LCD screen as it can shorten the lifespan. If there are stubborn spots, do not rub harder as this could damage the screen. For a deeper clean, you can make a solution of 1 part isopropyl alcohol and 1 part distilled water, spray it on a lint-free cloth, and use it to wipe the screen. Always clean in one direction to prevent streaks. Never use window or abrasive cleaners as they can damage and yellow the screen. Clean the edges of your LCD screen with a clean cotton ball or swab. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "11868",
+    "mutation_type": "reformat",
+    "text": "- To clean your computer screen safely, first make sure the screen is powered off as it's easier to see dust and smudges on a dark screen.\n- Use a clean and dry microfiber cloth, which is safe for your screens, to lightly wipe the screen.\n- Avoid touching the LCD screen as it can shorten the lifespan.\n- If there are stubborn spots, do not rub harder as this could damage the screen.\n- For a deeper clean, you can make a solution of 1 part isopropyl alcohol and 1 part distilled water, spray it on a lint-free cloth, and use it to wipe the screen.\n- Always clean in one direction to prevent streaks.\n- Never use window or abrasive cleaners as they can damage and yellow the screen.\n- Clean the edges of your LCD screen with a clean cotton ball or swab."
+  },
+  {
+    "record_id": "17592",
+    "mutation_type": "entity_swap",
+    "text": "\"The Hobbit\" and \"The Lord of the Rings\" differ in several ways. \"The Hobbit\" is primarily a children's book, while \"The Lord of the Rings\" is not aimed at children. The characters also differ, with the dwarves in \"The Hobbit\" bringing a unique energy and disdain for anything politically correct. In contrast, the characters in \"The Lord of the Rings\" are described as more dynamic. Additionally, \"The Hobbit\" is a single novel and serves as a prelude to \"The Lord of the Rings,\" which is a trilogy. The protagonist of \"The Hobbit\" is Frodo Baggins, and the story revolves around his journey to the Lonely Mountain with the dwarves and their battle with Smaug the dragon. Meanwhile, \"The Lord of the Rings\" mostly focuses on the adventures of Frodo Baggins, Bilbo’s nephew.",
+    "swap": [
+      {
+        "from": "Bilbo",
+        "to": "Frodo"
+      }
+    ]
+  },
+  {
+    "record_id": "17592",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. \"The Hobbit\" and \"The Lord of the Rings\" differ in several ways. \"The Hobbit\" is primarily a children's book, while \"The Lord of the Rings\" is not aimed at children. The characters also differ, with the dwarves in \"The Hobbit\" bringing a unique energy and disdain for anything politically correct. In contrast, the characters in \"The Lord of the Rings\" are described as more dynamic. Additionally, \"The Hobbit\" is a single novel and serves as a prelude to \"The Lord of the Rings,\" which is a trilogy. The protagonist of \"The Hobbit\" is Bilbo Baggins, and the story revolves around his journey to the Lonely Mountain with the dwarves and their battle with Smaug the dragon. Meanwhile, \"The Lord of the Rings\" mostly focuses on the adventures of Frodo Baggins, Bilbo’s nephew. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17592",
+    "mutation_type": "reformat",
+    "text": "- \"The Hobbit\" and \"The Lord of the Rings\" differ in several ways.\n- \"The Hobbit\" is primarily a children's book, while \"The Lord of the Rings\" is not aimed at children.\n- The characters also differ, with the dwarves in \"The Hobbit\" bringing a unique energy and disdain for anything politically correct.\n- In contrast, the characters in \"The Lord of the Rings\" are described as more dynamic.\n- Additionally, \"The Hobbit\" is a single novel and serves as a prelude to \"The Lord of the Rings,\" which is a trilogy.\n- The protagonist of \"The Hobbit\" is Bilbo Baggins, and the story revolves around his journey to the Lonely Mountain with the dwarves and their battle with Smaug the dragon.\n- Meanwhile, \"The Lord of the Rings\" mostly focuses on the adventures of Frodo Baggins, Bilbo’s nephew."
+  },
+  {
+    "record_id": "14352",
+    "mutation_type": "entity_swap",
+    "text": "To boil potatoes for easy peeling, bring a pot of water to a boil and score your potatoes all the way around the center. Place the potatoes in the pot and boil for about 5 minutes. When they are tender, transfer them to a bowl of ice water and swish them around for a few seconds until they are cool enough to handle. You can then easily remove the skin.",
+    "swap": [
+      {
+        "from": "15",
+        "to": "5"
+      }
+    ]
+  },
+  {
+    "record_id": "14352",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To boil potatoes for easy peeling, bring a pot of water to a boil and score your potatoes all the way around the center. Place the potatoes in the pot and boil for about 15 minutes. When they are tender, transfer them to a bowl of ice water and swish them around for a few seconds until they are cool enough to handle. You can then easily remove the skin. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "14352",
+    "mutation_type": "reformat",
+    "text": "- To boil potatoes for easy peeling, bring a pot of water to a boil and score your potatoes all the way around the center.\n- Place the potatoes in the pot and boil for about 15 minutes.\n- When they are tender, transfer them to a bowl of ice water and swish them around for a few seconds until they are cool enough to handle.\n- You can then easily remove the skin."
+  },
+  {
+    "record_id": "17472",
+    "mutation_type": "entity_swap",
+    "text": "To copy your photo from laptop to a CD, first, open 'My Computer' and select the files or photos you want to delete from the CD. To select more than one file, hold down the CTRL key while you click the files you want. Then, under File and Folder Tasks, click 'Copy this file', 'Copy this folder', or 'Copy the selected items'. If the files are located in 'My Pictures', under Picture Tasks, click 'Copy to CD' or 'Copy all items to CD'. Then, in the Copy Items dialog box, click the CD recording drive, and then click 'Copy'. In 'My Computer', double-click the CD recording drive. Windows will display a temporary area where the files are held before they are copied to the CD.",
+    "swap": [
+      {
+        "from": "copy to",
+        "to": "delete from"
+      }
+    ]
+  },
+  {
+    "record_id": "17472",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. To copy your photo from laptop to a CD, first, open 'My Computer' and select the files or photos you want to copy to the CD. To select more than one file, hold down the CTRL key while you click the files you want. Then, under File and Folder Tasks, click 'Copy this file', 'Copy this folder', or 'Copy the selected items'. If the files are located in 'My Pictures', under Picture Tasks, click 'Copy to CD' or 'Copy all items to CD'. Then, in the Copy Items dialog box, click the CD recording drive, and then click 'Copy'. In 'My Computer', double-click the CD recording drive. Windows will display a temporary area where the files are held before they are copied to the CD. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "17472",
+    "mutation_type": "reformat",
+    "text": "- To copy your photo from laptop to a CD, first, open 'My Computer' and select the files or photos you want to copy to the CD.\n- To select more than one file, hold down the CTRL key while you click the files you want.\n- Then, under File and Folder Tasks, click 'Copy this file', 'Copy this folder', or 'Copy the selected items'.\n- If the files are located in 'My Pictures', under Picture Tasks, click 'Copy to CD' or 'Copy all items to CD'.\n- Then, in the Copy Items dialog box, click the CD recording drive, and then click 'Copy'.\n- In 'My Computer', double-click the CD recording drive.\n- Windows will display a temporary area where the files are held before they are copied to the CD."
+  },
+  {
+    "record_id": "12018",
+    "mutation_type": "entity_swap",
+    "text": "DNA, or Deoxyribonucleic acid, is a nucleic acid that contains the genetic instructions used in the development and functioning of all known living organisms and some viruses. It is made up of molecules called nucleotides, which include a phosphate group, a sugar group, and a nitrogen base. The 5 types of nitrogen bases are adenine, thymine, guanine, and cytosine. The order of these bases determines the genetic code. DNA is structured like a double helix, similar to a ladder with base pairs forming the rungs and the sugar and phosphate molecules forming the vertical sidepieces. An important attribute of DNA is its ability to replicate, or make copies of itself.",
+    "swap": [
+      {
+        "from": "four",
+        "to": "5"
+      }
+    ]
+  },
+  {
+    "record_id": "12018",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. DNA, or Deoxyribonucleic acid, is a nucleic acid that contains the genetic instructions used in the development and functioning of all known living organisms and some viruses. It is made up of molecules called nucleotides, which include a phosphate group, a sugar group, and a nitrogen base. The four types of nitrogen bases are adenine, thymine, guanine, and cytosine. The order of these bases determines the genetic code. DNA is structured like a double helix, similar to a ladder with base pairs forming the rungs and the sugar and phosphate molecules forming the vertical sidepieces. An important attribute of DNA is its ability to replicate, or make copies of itself. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "12018",
+    "mutation_type": "reformat",
+    "text": "- DNA, or Deoxyribonucleic acid, is a nucleic acid that contains the genetic instructions used in the development and functioning of all known living organisms and some viruses.\n- It is made up of molecules called nucleotides, which include a phosphate group, a sugar group, and a nitrogen base.\n- The four types of nitrogen bases are adenine, thymine, guanine, and cytosine.\n- The order of these bases determines the genetic code.\n- DNA is structured like a double helix, similar to a ladder with base pairs forming the rungs and the sugar and phosphate molecules forming the vertical sidepieces.\n- An important attribute of DNA is its ability to replicate, or make copies of itself."
+  },
+  {
+    "record_id": "16080",
+    "mutation_type": "entity_swap",
+    "text": "The chances of getting HIV after a single encounter vary depending on the type of sexual activity. For unprotected receptive anal sex, the risk is estimated to be 1.4%. For an HIV-negative woman having unprotected receptive vaginal sex, the risk could be closer to 3%. A study of heterosexual couples in Africa estimated the chance of catching the AIDS virus from a single sexual encounter with an infected person to be one in 588.",
+    "swap": [
+      {
+        "from": "1%.",
+        "to": "3%."
+      }
+    ]
+  },
+  {
+    "record_id": "16080",
+    "mutation_type": "verbosity_pad",
+    "text": "Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears. The chances of getting HIV after a single encounter vary depending on the type of sexual activity. For unprotected receptive anal sex, the risk is estimated to be 1.4%. For an HIV-negative woman having unprotected receptive vaginal sex, the risk could be closer to 1%. A study of heterosexual couples in Africa estimated the chance of catching the AIDS virus from a single sexual encounter with an infected person to be one in 588. The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion."
+  },
+  {
+    "record_id": "16080",
+    "mutation_type": "reformat",
+    "text": "- The chances of getting HIV after a single encounter vary depending on the type of sexual activity.\n- For unprotected receptive anal sex, the risk is estimated to be 1.4%.\n- For an HIV-negative woman having unprotected receptive vaginal sex, the risk could be closer to 1%.\n- A study of heterosexual couples in Africa estimated the chance of catching the AIDS virus from a single sexual encounter with an infected person to be one in 588."
+  }
+]

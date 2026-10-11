@@ -1,0 +1,19 @@
+RECORD 06/20  id=17388
+
+QUESTION
+the difference between a cold and sinusitis
+
+CONTEXT
+[P1] The primary difference between a sinus infection and a cold is its duration. While colds generally peak after two to three days, sinus infections can last seven days or more. Further, people who simply have a common cold generally do not run a fever or experience significant fatigue, while people suffering from sinus infections may suffer both.
+
+[P2] • Sinus infection involves the sinus cavities of the skull, whereas the cold only involves the mucous membranes. • Sinus infection is mainly due to bacterial, whereas the cold is due to viral agents. • The headache in sinus infection is much heavier than in the cold, with the heaviness aggravating when bending forward.
+
+[P3] • The fever in the sinus infection is greater, and the nasal discharge is more yellowish than in the cold, where it might be clear, as well. • In the case of cold, the nasal block will be relieved in a couple of days, whereas in the sinus infection, it might persist for some time.
+
+ORIGINAL ANSWER
+The primary difference between a cold and sinusitis, or a sinus infection, is the duration of the illness. Colds generally peak after two to three days, whereas sinus infections can last seven days or more. People with a common cold generally do not run a fever or experience significant fatigue, unlike those with a sinus infection. Sinusitis involves the sinus cavities of the skull, while a cold only affects the mucous membranes. Sinusitis is usually due to bacterial agents, while a cold is due to viral agents. The headache in sinusitis is much heavier than in a cold, and tends to worsen when bending forward. The fever in sinusitis is greater, and the nasal discharge is more yellowish, while in a cold, the nasal blockage tends to be relieved in a couple of days, while in sinusitis, it can persist for some time.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+  * DATE         two to three days
+  * DATE         last seven days
+  * DATE         a couple of days
