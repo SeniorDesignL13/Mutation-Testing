@@ -1,0 +1,17 @@
+RECORD 14/20  id=17028
+
+QUESTION
+what did the factory system effect
+
+CONTEXT
+[P1] The factory system was a new way of organizing labor made necessary by the development of machines which were too large to house in a worker's cottage. Furthermore, the efficient use of the new machines required that many of them be installed together where they could all be driven by the.same power source.orking hours were as long as they had been for the farmer, that is, from dawn to dusk, six days per week. Hours were regulated with precision by the factory clock to ensure that a full measure of work was performed.
+
+[P2] (Answer #1). As more people in the United States went to work in factories, the social structures that had bound Americans together became weaker. America had been a more communal society with informal social structures.With the coming of factories, it became a more rationalized society with more formal structures.Before the factories, people worked out of their own homes. They typically produced most of the things they needed and traded for the few things they did not produce. They lived in places where everyone knew everyone else.ith the rise of factories, all of this changed. Work and home became separate places and ideas. People no longer lived in small communities with a relatively few people who knew them. Informal social pressures could not keep order among large groups of people who did not know one another well.
+
+[P3] The factory system is a mode of capitalist production that emerged in the late eighteenth century as a result of England ’ s Industrial Revolution.Preindustrial England was largely organized around localized forms of production.actory System. BIBLIOGRAPHY. The factory system is a mode of capitalist production that emerged in the late eighteenth century as a result of England ’ s Industrial Revolution. Preindustrial England was largely organized around localized forms of production.
+
+ORIGINAL ANSWER
+The factory system affected both labor organization and social structures. The development of large machines required a new way of organizing labor, which resulted in many machines being installed together in factories and workers having long, regular hours from dawn to dusk, six days a week. The rise of factories also led to a shift from a more communal society with informal social structures to a more rationalized society with more formal structures. Work and home became separate, and informal social pressures could no longer maintain order among large groups of people who didn't know each other well.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+  * DATE         six days

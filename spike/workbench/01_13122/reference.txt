@@ -1,0 +1,23 @@
+RECORD 01/20  id=13122
+
+QUESTION
+how to bake salmon med rare in the oven
+
+CONTEXT
+[P1] I usually place the fish into a pre-heated oven at 180C for 15 – 20 minutes. However, the time greatly depends on the thickness of the salmon. I found this great post about how to cook salmon in the oven - http://magazine.siansplan... - helped me a lot, definitely worth a read :)
+
+[P2] Preheat oven to 350. Heat a medium ovenproof nonstick skillet over medium-high heat. Add olive oil. Pat salmon dry with paper towels. Season the flesh-side of the salmon with salt. When the oil is hot, add salmon skin-side down. Sear until the skin is golden brown and crispy, about 5 minutes. Turn and transfer to oven and cook until a cake tester or tip of a paring knife is just warm to the touch when inserted into the middle of the salmon; about 5 minutes for medium-rare and 9 minutes for fully cooked through.
+
+[P3] 3. Brush top of salmon with remaining olive oil and place in oven about 20 minutes, until medium-rare in center. (An instant-read thermometer inserted in thickest part should register 100 to 110 degrees.) Remove from oven, and serve with citrus yogurt sauce. For sauce: ½ cup drained yogurt. 1 T olive oil.
+
+ORIGINAL ANSWER
+To bake salmon medium rare in the oven, first preheat your oven to either 180C or 350F. Pat the salmon dry with paper towels and season the flesh-side with salt. Heat a medium ovenproof nonstick skillet over medium-high heat and add olive oil. Place the salmon skin-side down in the skillet and sear until the skin is golden brown and crispy, this should take about 5 minutes. Then, turn the salmon and transfer the skillet to your preheated oven. Cook the salmon for about 5 minutes, until a cake tester or tip of a paring knife is just warm to the touch when inserted into the middle of the salmon.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+    ORDINAL      first
+  * CARDINAL     180C
+    CARDINAL     350F.
+  * PERSON       Pat
+  * TIME         about 5 minutes
+    PERSON       Cook
+  * TIME         about 5 minutes
