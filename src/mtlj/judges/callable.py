@@ -1,0 +1,46 @@
+"""Wrap a plain Python callable as a judge."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from muteval.judges.base import Context, Judge
+
+ScoreFn = Callable[[str, str, Context], float]
+
+
+class CallableJudge(Judge):
+    """Adapt a Python function into the shared Judge interface.
+
+    The wrapped function receives (input, output, context) and returns
+    a raw numeric score within the declared score_range.
+    """
+
+    def __init__(
+        self,
+        score_fn: ScoreFn,
+        *,
+        name: str = "callable-judge",
+        model: str = "python-callable",
+        version: str = "1.0.0",
+        score_range: tuple[float, float] = (0.0, 1.0),
+        higher_is_better: bool = True,
+    ) -> None:
+        if not callable(score_fn):
+            raise TypeError("score_fn must be callable")
+
+        self.score_fn = score_fn
+        self.name = name
+        self.model = model
+        self.version = version
+        self.score_range = score_range
+        self.higher_is_better = higher_is_better
+
+    def score_raw(
+        self,
+        input: str,
+        output: str,
+        context: Context,
+    ) -> float:
+        """Invoke the user function and return its raw score."""
+        return float(self.score_fn(input, output, context))
