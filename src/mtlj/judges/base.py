@@ -36,6 +36,9 @@ class MyJudge(Judge):
             self.max_score,
         )
 
+    def score_raw(self, input, output, context):
+            return super().score_raw(input, output, context)
+
 ### Using the judge
 
 judge = MyJudge()
