@@ -1,0 +1,26 @@
+RECORD 08/20  id=15204
+
+QUESTION
+how the colonists respond to the stamp act. why was it so upsetting?
+
+CONTEXT
+[P1] How did the colonists react to the stamp act of 1765? The colonists reacted in many ways, violent and non-violent. Most times it would start out as a peaceful protest like holding signs and saying chants like No Taxation without… Representation. Then some of the Red Coats would come along to cause a fight and get people arrested.
+
+[P2] April: SUGAR ACT & CURRENCY ACT are passed by Parliament. 1765____. March 22: STAMP ACT is passed by Parliament to raise funds for the mainte-. nance of British troops in the colonies. The first direct tax imposed. on the colonists, it requires the use of tax-stamped paper for all. newspapers, magazines, legal documents, etc.
+
+[P3] 1765____. March 22: STAMP ACT is passed by Parliament to fund the maintenance. of British troops in the colonies after the French and Indian War. The first direct tax imposed by Parliament, it requires the use of. tax-stamped paper for all newspapers, legal documents, etc. Summer/Fall: Public protests, legislative resolutions, town meetings, and. citizen boycotts of British goods occur throughout the colonies. Nov. 1: Stamp Act goes into effect. 1766____. March 18: STAMP ACT is repealed by Parliament, which also passes. DECLARATORY ACT to affirm its authority to “make laws . . . of. sufficient force and validity to bind the colonies and people of. America .
+
+ORIGINAL ANSWER
+The colonists responded to the Stamp Act of 1765 with a variety of actions, including both violent and non-violent protests. They held peaceful protests, some of which escalated into violence when British soldiers intervened. The colonists also organized public protests, legislative resolutions, town meetings, and boycotts of British goods. The Stamp Act was so upsetting to the colonists because it was the first direct tax imposed by Parliament and required the use of tax-stamped paper for all newspapers, legal documents, and other items. This was seen as an infringement on their rights as there was no colonial representation in Parliament. Thus, the slogan "No Taxation without Representation" became popular.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+    LAW          the Stamp Act
+  * DATE         1765
+  * NORP         British
+  * NORP         boycotts
+  * NORP         British
+    LAW          The Stamp Act
+  * ORDINAL      first
+  * ORG          Parliament
+  * ORG          Parliament
+    WORK_OF_ART  No Taxation without Representation

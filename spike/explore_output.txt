@@ -1,0 +1,100 @@
+=== filter funnel ===
+   17790  all records (train+test)
+    5934  task_type == QA
+    4210  no hallucination annotations
+     947  model startswith 'gpt-4'
+     919  quality == 'good'  [not in brief; see note]
+
+=== breakdowns ===
+  QA by model:             {'gpt-4-0613': 989, 'gpt-3.5-turbo-0613': 989, 'mistral-7B-instruct': 989, 'llama-2-7b-chat': 989, 'llama-2-13b-chat': 989, 'llama-2-70b-chat': 989}
+  clean QA by model:       {'gpt-4-0613': 947, 'gpt-3.5-turbo-0613': 914, 'llama-2-7b-chat': 479, 'llama-2-13b-chat': 590, 'llama-2-70b-chat': 669, 'mistral-7B-instruct': 611}
+  clean GPT-4 by quality:  {'good': 919, 'incorrect_refusal': 27, 'truncated': 1}
+  GPT-4 temperature:       {0.7: 947}
+
+=== distributions over final pool (n=919) ===
+  answer sentences (spaCy)     n=919   min=1     p10=2      median=5      p90=9      max=15     mean=5.4
+  answer words                 n=919   min=7     p10=52     median=99     p90=147    max=237    mean=99.4
+  context words                n=919   min=72    p10=140    median=217    p90=347    max=495    mean=235.1
+  context passages (\n\n)      n=919   min=3     p10=3      median=3      p90=3      max=3      mean=3.0
+  query words                  n=919   min=2     p10=4      median=7      p90=10     max=18     mean=7.0
+
+  answer sentence-count histogram (# = 5 records):
+      1 | ########### 57
+      2 | ####### 39
+      3 | ################ 82
+      4 | ############################# 148
+      5 | ################################### 177
+      6 | ########################## 134
+      7 | ######################## 120
+      8 | ############ 63
+      9 | ########## 50
+    10+ | ######### 49
+
+  answers with >= 3 sentences: 823
+
+=== 5 example records (random, seed=31) ===
+
+====================================================================================================
+id=11940  model=gpt-4-0613  quality=good  passages=3
+
+QUESTION: how to start a paw paw tree from seed
+
+PASSAGE 1: Using a paintbrush or something soft, rub a flower of one paw-paw tree to collect pollen. Then proceed to rub a flower of another tree.*Note: You cannot take pollen from one tree and use it on the same tree! Each individual flower will only accept pollen from a flower from a genetically distinct individual tree. It's best not to plant them too close to the house! 2  Flies will be attracted to the smelly flowers—this will help with pollination, but you won't get as much fruit. 3  Paw-paw's need plenty of room to grow, since they are able to reach 10–20 feet (3.0–6.1 m) in height.
+
+PASSAGE 2: Step 1. Cut open a soft, ripe paw paw fruit to remove the paw paw seeds from the pulp. Set the paw paw seeds into a colander or wire basket. Rinse the paw paw seeds under cool tap water.Use a small brush, if necessary, to remove excess pulp from the seeds.tep 4. Place the bag containing the paw paw seeds into a refrigerator where the temperature is approximately 30 to 40 degrees Fahrenheit. Leave the bag in the refrigerator for approximately 90 days. Check on the contents of the bag at least once a week to make certain the sphagnum peat moss remains moist.
+
+PASSAGE 3: 8. Place the potted pawpaw seed indoors near a window, or outdoors in a cold frame or on a lightly shaded porch. Choose a spot with at least six hours of direct sunlight daily.. Store the pawpaw seeds inside a paper bag away from heat and humidity until late winter, approximately two months before the last frost. Inspect the seeds, and discard any that appear damaged or rotten.
+
+ANSWER: To start a paw paw tree from seed, first cut open a ripe paw paw fruit and remove the seeds. Rinse the seeds under cool tap water, using a small brush if necessary to remove excess pulp. Place the seeds in a bag with sphagnum peat moss and put the bag in a refrigerator where the temperature is approximately 30 to 40 degrees Fahrenheit. Leave the bag in the refrigerator for about 90 days, checking at least once a week to ensure the moss remains moist. After this stratification period, place the potted pawpaw seed indoors near a window, or outdoors in a cold frame or on a lightly shaded porch. Choose a spot with at least six hours of direct sunlight daily.
+
+====================================================================================================
+id=15528  model=gpt-4-0613  quality=good  passages=3
+
+QUESTION: figure out number of joists needed
+
+PASSAGE 1: To figure out how much lumber is needed to sheath the floor just simply multiply the width by the length (equals square footage), add 10% for wastage and that’s the square feet of lumber needed. If using plywood square footage divided by 30. Example 30 ft X 40 ft = 1200 SF divided by 30 = 40 sheets.o figure out how much lumber is needed to sheath the floor just simply multiply the width by the length (equals square footage), add 10% for wastage and that’s the square feet of lumber needed. If using plywood square footage divided by 30. Example 30 ft X 40 ft = 1200 SF divided by 30 = 40 sheets.
+
+PASSAGE 2: Calculate the number of joists you need by dividing the length of the room by 16. You use 16 because the floor joists will be placed no more than 16 inches apart.Measure the distance between each floor joist. While the standard distance is 16 inches, the gaps may be smaller.Add these measurements together to determine the amount of lumber you need for the blocking.ou use 16 because the floor joists will be placed no more than 16 inches apart. Measure the distance between each floor joist. While the standard distance is 16 inches, the gaps may be smaller. Add these measurements together to determine the amount of lumber you need for the blocking.
+
+PASSAGE 3: Instructions. Measure the length and width of the room in inches. Calculate the number of joists you need by dividing the length of the room by 16. You use 16 because the floor joists will be placed no more than 16 inches apart. Measure the distance between each floor joist.While the standard distance is 16 inches, the gaps may be smaller.Add these measurements together to determine the amount of lumber you need for the blocking.ou use 16 because the floor joists will be placed no more than 16 inches apart. Measure the distance between each floor joist. While the standard distance is 16 inches, the gaps may be smaller. Add these measurements together to determine the amount of lumber you need for the blocking.
+
+ANSWER: To figure out the number of joists needed, you need to divide the length of the room by 16. This is because the floor joists will be placed no more than 16 inches apart.
+
+====================================================================================================
+id=12744  model=gpt-4-0613  quality=good  passages=3
+
+QUESTION: ways to get rid of sore muscles
+
+PASSAGE 1: Practicing Home Care. 1  1. Practice R.I.C.E. R.I.C.E is a treatment method for sore muscles that stands for rest, ice, compression, and elevation. 2  2. Soak in the tub. Heat can help with sore muscles. 3  3. Apply heat after 48 to 72 hours. If your muscles are still sore 2 or 3 days after treatment, consider applying heat.
+
+PASSAGE 2: If your muscles are sore, take it easy for a few days and allow them to heal. Ice the sore area for 15 to 20 minutes at a time three times a day. You can use a bag of frozen vegetables, ice cubes placed in a plastic Ziplock bag, or an ice pack from the supermarket.
+
+PASSAGE 3: 6.) Hot Shower to Get Rid of Sore Muscles Fast. Take a hot shower, utilize a sauna or apply a heat wrap to relieve sore muscles. When muscle temperature builds, your blood stream expands which brings oxygen and mending supplements to the muscles.
+
+ANSWER: There are several ways to get rid of sore muscles. The R.I.C.E method, which stands for rest, ice, compression, and elevation, is one of them. Icing the sore area for 15 to 20 minutes three times a day can also be helpful. After 48 to 72 hours, if the muscles are still sore, applying heat can be beneficial. This can be done through a hot tub soak, a hot shower, or using a heat wrap. Taking it easy for a few days to allow the muscles to heal is also recommended.
+
+====================================================================================================
+id=12294  model=gpt-4-0613  quality=good  passages=3
+
+QUESTION: what is the proper way to dispose of a worn usa flag
+
+PASSAGE 1: Disposal of a faded or worn American flag is to be done in one of three ways. You can, if necessary, put the flag out for collection only after you have removed the blue field from the flag. The blue field is to be burned in a peaceful manner and the ashes buried.
+
+PASSAGE 2: “This Flag has served its nation long and well. It has worn to a condition to which it should no longer be used to represent the nation. This Flag represents all of the Flags collected and being retired from service today. We honor them all as we salute one Flag.”.
+
+PASSAGE 3: The other method is to burn the flag yourself in a proper ceremony. If you are able to personally discharge your worn flag from service the ceremony that follows is the proper way. The flag must be folded in the customary triangle fold.
+
+ANSWER: The proper way to dispose of a worn USA flag is either by separating the blue field from the flag and burning it in a peaceful manner before burying the ashes, or by conducting a proper ceremony where the flag is folded in the customary triangle fold and then burned.
+
+====================================================================================================
+id=14970  model=gpt-4-0613  quality=good  passages=3
+
+QUESTION: how to use a screen installation tool
+
+PASSAGE 1: 1 Use short strokes going in the same direction. 2  Try not to go back and forth. 3  Use a small screwdriver to press the spline into the corners as necessary. 4  As you press the spline into the frame it will make the screen taught. 5  Once installed, trim the excess screen material with scissors or a utility knife.
+
+PASSAGE 2: To use the screen or spline installation tool, follow these steps: 1  Using the concave wheel of the installation tool, seat the vinyl retainer spline into the channel by starting in a corner. 2  Use short strokes going in the same direction. 3  Use a small screwdriver to press the spline into the corners as necessary. 4  As you press the spline into the 5  ... O
+
+PASSAGE 3: Fasteners should be snug, but not so tight that the base strip bends. Put a screw no more that 2 inches from the end of each base strip. Do not leave base strips exposed to direct sunlight. STEP 2: Roll screen into base.
+
+ANSWER: To use a screen installation tool, start by using the concave wheel of the tool to seat the vinyl retainer spline into the channel, beginning in a corner. Use short strokes going in the same direction and avoid going back and forth. If necessary, use a small screwdriver to press the spline into the corners. As you press the spline into the frame, it will make the screen taught. Once installed, trim the excess screen material with scissors or a utility knife. Make sure the fasteners are snug but not so tight that the base strip bends, and place a screw no more than 2 inches from the end of each base strip. Do not leave base strips exposed to direct sunlight and roll the screen into the base.

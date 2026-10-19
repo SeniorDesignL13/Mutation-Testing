@@ -1,0 +1,26 @@
+RECORD 03/20  id=16980
+
+QUESTION
+how to name your router linksys
+
+CONTEXT
+[P1] Step 2. Open your browser and enter 192.168.1.1 in the top address field. This is the default IP address for most Linksys routers. If you changed your IP router's IP address, enter that address instead.tep 2. Open your browser and enter 192.168.1.1 in the top address field. This is the default IP address for most Linksys routers. If you changed your IP router's IP address, enter that address instead.
+
+[P2] Step 3. Enter admin as the login username and password. On some Linksys routers, the username field may be left blank. Click OK to log in to your Linksys router. Step 4. Click the Wireless tab. Step 5. Enter your preferred name in the Wireless Network Name (SSID) field.tep 2. Open your browser and enter 192.168.1.1 in the top address field. This is the default IP address for most Linksys routers. If you changed your IP router's IP address, enter that address instead.
+
+[P3] Step 1. Connect an Ethernet cable from any of the numbered Ethernet ports on your Linksys router to the Ethernet port on your computer. Make sure the router is turned on.You can also use a wireless connection, but a wired connection offers greater reliability, especially when changing wireless settings.tep 2. Open your browser and enter 192.168.1.1 in the top address field. This is the default IP address for most Linksys routers. If you changed your IP router's IP address, enter that address instead.
+
+ORIGINAL ANSWER
+To name your Linksys router, first connect an Ethernet cable from any of the numbered Ethernet ports on your Linksys router to the Ethernet port on your computer. Make sure the router is turned on. Then open your browser and enter 192.168.1.1 in the top address field, which is the default IP address for most Linksys routers (if you changed your router's IP address, enter that instead). Next, enter 'admin' as the login username and password (for some Linksys routers, the username may be left blank). After logging in, click on the 'Wireless' tab and enter your preferred name in the 'Wireless Network Name (SSID)' field.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+  * ORG          Linksys
+    ORDINAL      first
+  * ORG          Linksys
+  * DATE         192.168.1.1
+  * ORG          IP
+  * ORG          Linksys
+  * ORG          IP
+  * ORG          Linksys
+    ORG          the 'Wireless'
+    ORG          the 'Wireless Network Name
