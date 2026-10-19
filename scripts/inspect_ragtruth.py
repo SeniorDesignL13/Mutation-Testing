@@ -8,7 +8,7 @@ from datasets import load_dataset
 ds = load_dataset("wandb/RAGTruth-processed")
 
 print("SPLITS:", {k: len(v) for k, v in ds.items()})
-first = list(ds.keys())[0]
+first = next(iter(ds.keys()))
 cols = ds[first].column_names
 print("\nCOLUMNS:", cols)
 
@@ -37,10 +37,24 @@ print("\n" + "=" * 60)
 print("VALUE DISTRIBUTIONS across all QA records")
 print("=" * 60)
 
-interesting = [c for c in cols if any(
-    k in c.lower() for k in
-    ("label", "halluc", "quality", "model", "conflict", "baseless", "span", "annot", "type")
-)]
+interesting = [
+    c
+    for c in cols
+    if any(
+        k in c.lower()
+        for k in (
+            "label",
+            "halluc",
+            "quality",
+            "model",
+            "conflict",
+            "baseless",
+            "span",
+            "annot",
+            "type",
+        )
+    )
+]
 print("fields examined:", interesting)
 
 allqa = []

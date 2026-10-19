@@ -33,7 +33,7 @@ from datetime import date
 try:
     from datasets import load_dataset
 except ImportError:
-    raise SystemExit("pip install datasets")
+    raise SystemExit("pip install datasets") from None
 
 SOURCE = "wandb/RAGTruth-processed"
 TARGET_MODEL = "gpt-4-0613"
@@ -47,9 +47,26 @@ MANIFEST_PATH = os.path.join(OUT_DIR, "manifest.json")
 # Tagged in the corpus as the gold set for validating the automated
 # entity-substitution operator (MTLJ-60).
 GOLD_SET_IDS = {
-    "11868", "12018", "12660", "12852", "13122", "13302", "13560", "14352",
-    "14922", "15204", "15450", "16080", "16980", "17028", "17148", "17388",
-    "17472", "17490", "17592", "17622",
+    "11868",
+    "12018",
+    "12660",
+    "12852",
+    "13122",
+    "13302",
+    "13560",
+    "14352",
+    "14922",
+    "15204",
+    "15450",
+    "16080",
+    "16980",
+    "17028",
+    "17148",
+    "17388",
+    "17472",
+    "17490",
+    "17592",
+    "17622",
 }
 
 
@@ -111,15 +128,17 @@ def main():
             if not (rid and question and answer and context):
                 continue
 
-            records.append({
-                "id": rid,
-                "question": question,
-                "context": context,
-                "answer": answer,
-                "split": split_name,
-                "model": rec.get("model"),
-                "gold_set": rid in GOLD_SET_IDS,
-            })
+            records.append(
+                {
+                    "id": rid,
+                    "question": question,
+                    "context": context,
+                    "answer": answer,
+                    "split": split_name,
+                    "model": rec.get("model"),
+                    "gold_set": rid in GOLD_SET_IDS,
+                }
+            )
 
     # Deterministic order -> stable checksum
     records.sort(key=lambda r: r["id"])
@@ -191,11 +210,15 @@ def main():
     print("=" * 58)
     print(f"  records frozen        {len(records):,}")
     print(f"  gold set found        {gold_found}/{len(GOLD_SET_IDS)}")
-    print(f"  answer words          median {c['median_answer_words']}  "
-          f"range {c['min_answer_words']}-{c['max_answer_words']}")
+    print(
+        f"  answer words          median {c['median_answer_words']}  "
+        f"range {c['min_answer_words']}-{c['max_answer_words']}"
+    )
     print(f"  context chars         median {c['median_context_chars']:,}")
-    print(f"  passages per record   median {c['median_passages']}  "
-          f"range {c['min_passages']}-{c['max_passages']}")
+    print(
+        f"  passages per record   median {c['median_passages']}  "
+        f"range {c['min_passages']}-{c['max_passages']}"
+    )
     print(f"  sha256                {digest}")
     print()
     print(f"Wrote {CORPUS_PATH}")
