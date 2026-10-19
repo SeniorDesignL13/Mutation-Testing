@@ -1,0 +1,17 @@
+# Verbosity-pad filler. Write it by hand ONCE; make_pads.py adds it verbatim to all 20 answers.
+# Lines starting with # are ignored. Text under BEFORE: goes in front of every answer,
+# text under AFTER: goes after it. Line breaks are joined with spaces (answers stay one paragraph).
+#
+# Rules (it must fit every one of the 20 questions, so keep it generic):
+#   - ~100 words in total, BEFORE + AFTER combined
+#   - talk about the answer, not the topic: hedges, signposting, "restating" with no content
+#     (the plan's safe openers: "It's worth noting...", "Based on the available information...")
+#   - no facts, no advice or opinions ("it's important to be careful" is a claim)
+#   - no "this covers everything" style completeness claims
+#   - no numbers, no names, no line breaks or bullets (the reformat run showed format alone shifts claim counts)
+
+BEFORE: Based on the available information, the following response addresses the question as presented. The explanation follows the framing of the question and uses wording that relates to the information provided. The response is structured around the question's wording and the context in which it appears.
+
+
+AFTER: The response is presented in the context of the information provided. The wording follows the original question without introducing additional subject matter. The explanation remains focused on the response itself, with the phrasing serving as a transition from the main answer to its conclusion.
+
