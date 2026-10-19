@@ -92,3 +92,16 @@ class Judge(ABC):
             model=self.model,
             version=self.version,
         )
+
+
+def normalize_score(
+    score: float,
+    min_score: float,
+    max_score: float,
+) -> float:
+    if max_score <= min_score:
+        raise ValueError("max_score must be greater than min_score")
+
+    normalized = (score - min_score) / (max_score - min_score)
+
+    return max(0.0, min(1.0, float(normalized)))
