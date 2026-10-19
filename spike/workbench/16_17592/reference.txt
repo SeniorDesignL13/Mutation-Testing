@@ -1,0 +1,30 @@
+RECORD 16/20  id=17592
+
+QUESTION
+what is different about the hobbit and lord of the rings
+
+CONTEXT
+[P1] Source: Total Film via io9. Peter Jackson on how The Hobbit differs from The Lord of the Rings: JACKSON: The Hobbit is very much a children's book and The Lord of the Rings is something else; it's not really aimed at children at all. I realized the characters of the dwarves are the difference. Their energy and disdain of anything politically correct brings a new kind of spirit to it.
+
+[P2] There's just so much depth within the Lord of the Rings, I see something new every time I watch it. Each character is dynamic, wheras in the Hobbit, every dwarf seems to carry the same silly, unintelligent, flat character as another. The Lord of the Rings gave me something different to root for in every character.
+
+[P3] The Hobbit is the prelude to the popular Lord of the Rings series, and is a single novel, while The Lord of the Rings is a lengthy trilogy. The protagonist in The Hobbit is Bilbo Baggins, while The Lord of the Rings focuses mostly on the adventures of Frodo Baggins, Bilbo’s nephew. The plot in The Hobbit revolves around Bilbo Baggins’ journey to the Lonely Mountain with the dwarves, and their battle with Smaug the dragon.
+
+ORIGINAL ANSWER
+"The Hobbit" and "The Lord of the Rings" differ in several ways. "The Hobbit" is primarily a children's book, while "The Lord of the Rings" is not aimed at children. The characters also differ, with the dwarves in "The Hobbit" bringing a unique energy and disdain for anything politically correct. In contrast, the characters in "The Lord of the Rings" are described as more dynamic. Additionally, "The Hobbit" is a single novel and serves as a prelude to "The Lord of the Rings," which is a trilogy. The protagonist of "The Hobbit" is Bilbo Baggins, and the story revolves around his journey to the Lonely Mountain with the dwarves and their battle with Smaug the dragon. Meanwhile, "The Lord of the Rings" mostly focuses on the adventures of Frodo Baggins, Bilbo’s nephew.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+  * WORK_OF_ART  The Lord of the Rings
+  * ORG          Hobbit
+  * WORK_OF_ART  The Lord of the Rings
+  * ORG          Hobbit
+  * WORK_OF_ART  The Lord of the Rings
+  * ORG          Hobbit
+  * WORK_OF_ART  The Lord of the Rings
+    WORK_OF_ART  "The Hobbit
+  * PERSON       Bilbo Baggins
+  * LOC          the Lonely Mountain
+  * GPE          Smaug
+  * WORK_OF_ART  The Lord of the Rings
+  * PERSON       Frodo Baggins
+  * ORG          Bilbo

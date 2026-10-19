@@ -1,0 +1,21 @@
+RECORD 12/20  id=12852
+
+QUESTION
+how to cook a tenderloin steak in the oven
+
+CONTEXT
+[P1] Place meat on grill rack over heat. Cover the grill.) Remove steaks from grill; cover and let stand for 5 minutes. For more tenderloin steak recipes, see: Grilled Steak and Peppers Grilled Beef Fillet with Portobello Relish Beef Tenderloins with Wine Sauce Try filet mignon! Our best filet mignon cooking tips.tep 2: Roast or grill the tenderloin. Roast: Browning the tenderloin first is optional, but it does caramelize the outside and lock in the juices. In a large skillet heat olive oil over medium-high heat.
+
+[P2] Start with beef tenderloin steaks cut 3/4 inch to 1 inch thick (1 inch for grilling). Trim fat from steaks. Season as desired. Timings below are based on meat removed directly from the refrigerator.tep 2: Roast or grill the tenderloin. Roast: Browning the tenderloin first is optional, but it does caramelize the outside and lock in the juices. In a large skillet heat olive oil over medium-high heat.
+
+[P3] 1 Let the steak sear for 1 minute. 2  Place the entire pan in the oven for about 5 minutes. 3  Poke the fleshy lump at the base of your palm, where it intersects with your thumb. Remove the steaks from the pan and place to the side, in a warm location, on a plate. 2  They will continue to (carryover) cook, on their own. 3  This should bring them up to a nice medium-rare, while also allowing the muscle to relax, again, and the juices to settle within the meat.
+
+ORIGINAL ANSWER
+Begin by trimming fat from your beef tenderloin steaks, which should be cut 3/4 inch to 1 inch thick. Season as desired. Optionally, you can brown the tenderloin first in a large skillet with olive oil over medium-high heat to caramelize the outside and lock in the juices. After, place the steak in a pan and sear for 1 minute. Then, place the entire pan in the oven for about 5 minutes. Remove the steaks from the oven and place them to the side in a warm location on a plate. They will continue to cook on their own, bringing them to a nice medium-rare while allowing the muscle to relax and the juices to settle within the meat.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+  * QUANTITY     3/4 inch
+  * QUANTITY     1 inch
+  * ORDINAL      first
+  * TIME         1 minute
+  * TIME         about 5 minutes
