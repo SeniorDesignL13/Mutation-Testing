@@ -182,5 +182,8 @@ What the example shows:
   invalid swap (a synonym, or a value the context still supports) counts as a miss against the
   judge. The spike's entity-swap operator rules exist to prevent this.
 
-`spike/detection_rate.py` computes this example. It's a reference implementation, not the
-engine's: the engine version belongs in `src/mtlj/stats/`.
+### Code
+
+`src/mtlj/stats/detection.py` implements this definition. `tests/stats/test_detection.py`
+checks that it reproduces the worked example above for both configs. `spike/detection_rate.py`
+is a standard-library-only script that prints the worked example from `spike/scores.csv`.
