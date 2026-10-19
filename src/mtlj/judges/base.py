@@ -3,8 +3,60 @@
 A judge evaluates an input/output pair with optional context and returns
 a normalized score plus metadata identifying the judge and model.
 
-Scores are normalized to [0.0, 1.0], where 1.0 always represents
-the better outcome. The original score and declared range are preserved.
+## Creating a Custom Judge
+
+Subclass Judge to integrate a custom scoring function into mtlj. Each judge provides a name,
+underlying model, version, declared score range, and a method for normalizing raw scores to the
+range [0.0, 1.0].
+
+### Worked example
+
+Suppose you have a judge that scores responses from 1 to 5, where higher scores indicate better
+responses.
+
+from dataclasses import dataclass
+
+from mtlj.judges.base import normalize_score
+
+from mtlj.judges.base import Judge
+
+
+@dataclass
+class MyJudge(Judge):
+    name: str = "MyJudge"
+    model: str = "example-model"
+    version: str = "1.0.0"
+    min_score: float = 1.0
+    max_score: float = 5.0
+
+    def normalize(self, score: float) -> float:
+        return normalize_score(
+            score,
+            self.min_score,
+            self.max_score,
+        )
+
+### Using the judge
+
+judge = MyJudge()
+
+raw_score = 4.0
+normalized = judge.normalize(raw_score)
+
+print(normalized)      # 0.75
+
+print(judge.name)      # MyJudge
+
+print(judge.model)     # example-model
+
+print(judge.version)   # 1.0.0
+
+print(judge.min_score) # 1.0
+
+print(judge.max_score) # 5.0
+
+The raw score of 4.0 becomes 0.75 because it lies three-quarters of the way between the declared
+minimum of 1.0 and maximum of 5.0.
 """
 
 from __future__ import annotations
