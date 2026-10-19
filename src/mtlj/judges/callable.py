@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from muteval.judges.base import Context, Judge
+from mtlj.judges.base import Context, Judge
 
 ScoreFn = Callable[[str, str, Context], float]
 
