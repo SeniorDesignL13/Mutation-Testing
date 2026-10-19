@@ -19,6 +19,9 @@ from statistics import NormalDist
 
 DEFAULT_ALPHA = 0.05
 CI_LEVEL = 0.95
+# A drop must beat tau by more than this to count. It only absorbs floating-point rounding in
+# the means, which matters when sigma (and so tau) is 0. Real score steps are about 0.1.
+EPSILON = 1e-9
 
 
 class ExclusionReason(Enum):
@@ -102,7 +105,8 @@ def threshold(sigma: float, n_original: int, n_mutant: int, alpha: float = DEFAU
     if not 0 < alpha < 0.5:
         raise ValueError(f"alpha must be in (0, 0.5), got {alpha}")
     if sigma == 0:
-        # A fully deterministic judge has no noise to clear, so any strict drop counts.
+        # A fully deterministic judge has no noise to clear, so any drop counts, apart from
+        # rounding error (see EPSILON).
         return 0.0
     return NormalDist().inv_cdf(1 - alpha) * sigma * math.sqrt(1 / n_original + 1 / n_mutant)
 
@@ -150,7 +154,7 @@ def detect_mutant(
     delta = original_mean - statistics.fmean(mutant.scores)
     if original_mean <= tau:
         return MutantOutcome(mutant.record_id, False, ExclusionReason.NO_HEADROOM, delta, tau)
-    return MutantOutcome(mutant.record_id, delta > tau, None, delta, tau)
+    return MutantOutcome(mutant.record_id, delta > tau + EPSILON, None, delta, tau)
 
 
 def detection_rate(

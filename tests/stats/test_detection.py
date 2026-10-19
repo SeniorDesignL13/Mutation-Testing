@@ -111,7 +111,7 @@ def test_threshold_shrinks_with_more_samples_as_documented(n: int, ratio: float)
     assert round(threshold(1.0, n, n), 2) == ratio
 
 
-def test_zero_noise_counts_any_strict_drop() -> None:
+def test_zero_noise_counts_any_real_drop() -> None:
     originals = {"a": [0.8] * 3, "b": [0.8] * 3, "c": [0.8] * 3}
     mutants = [
         MutantScores("a", [0.75] * 3),
@@ -124,6 +124,17 @@ def test_zero_noise_counts_any_strict_drop() -> None:
     assert (result.sigma, result.tau) == (0.0, 0.0)
     assert [o.detected for o in result.outcomes] == [True, False, False]
     assert (result.detected, result.testable) == (1, 3)
+
+
+def test_zero_noise_ignores_rounding_in_the_means() -> None:
+    # 0.7, 0.9 and 0.8 average to 0.8, but in floating point delta comes out just above 0.
+    result = detection_rate({"a": [0.8] * 3}, [MutantScores("a", [0.7, 0.9, 0.8])])
+    outcome = outcome_of(result, "a")
+
+    assert result.tau == 0.0
+    assert outcome.delta is not None
+    assert 0 < outcome.delta < 1e-12
+    assert not outcome.detected
 
 
 def test_original_at_or_below_tau_has_no_headroom() -> None:
