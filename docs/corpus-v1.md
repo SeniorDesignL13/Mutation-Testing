@@ -1,14 +1,12 @@
 # v1 Evaluation Corpus — Selection and Freeze
 MTLJ-44 · Ethan Goedelman · 2026-10-19
 
-> Fill in the bracketed values from the output of `scripts/freeze_corpus.py`
-> before committing. Everything else is final.
-
 ## What we froze
 
 **RAGTruth QA**, filtered to GPT-4 responses that human annotators marked
-hallucination-free and rated good quality. **[N] records**, frozen at
-`corpus/v1/corpus_v1.jsonl`, SHA-256 `[digest]`.
+hallucination-free and rated good quality. **919 records**, frozen at
+`corpus/v1/corpus_v1.jsonl`, SHA-256
+`aceb7c3063361ba3141ba15c68aba531bca0e3855c9d7f099c4a782b9608323c`.
 
 Audits draw a seeded sample from this pool rather than running the whole thing.
 The seed is recorded in run provenance, so any audit is reproducible from its
@@ -55,7 +53,7 @@ Reproduced exactly by `scripts/freeze_corpus.py`.
 | No hallucination annotations | 4,210 |
 | `model == gpt-4-0613` | 947 |
 | `quality == good` | 919 |
-| Non-empty question, answer, and context | **[N]** |
+| Non-empty question, answer, and context | **919** |
 
 **Why GPT-4 only.** RAGTruth's six generating models hallucinate at very
 different rates — GPT-4 at 4.4%, Llama-2-7B at 51.2%. Restricting to GPT-4 gives
@@ -71,10 +69,10 @@ zero-delta mutant that looks like a judge miss.
 
 | | |
 |---|---|
-| Records | **[N]** |
-| Median answer length | [X] words |
-| Answer length range | [min]–[max] words |
-| Median context | [X] characters |
+| Records | **919** |
+| Median answer length | 99 words |
+| Answer length range | 7–237 words |
+| Median context | 1,213 characters |
 | Passages per record | 3 |
 | Gold set | 20 records |
 
@@ -94,10 +92,11 @@ dataset version produces a byte-identical file and the same checksum. The
 manifest at `corpus/v1/manifest.json` records the filter chain, resulting counts,
 composition statistics, and the digest.
 
-Verify at any time:
+Verify at any time from the repo root. The checksum file names a bare
+`corpus_v1.jsonl`, so the check has to run inside `corpus/v1/`:
 
 ```
-sha256sum -c corpus/v1/corpus_v1.sha256
+(cd corpus/v1 && sha256sum -c corpus_v1.sha256)
 ```
 
 **A new corpus gets a new version directory.** `corpus/v1/` is never edited in
@@ -124,7 +123,7 @@ not by judge agreement — which is itself one of the findings the tool exists t
 surface, but it means per-record baselines vary more than a naive reading would
 suggest.
 
-**Size.** [N] records is enough for the SD1 prototype and the planned audit, but
+**Size.** 919 records is enough for the SD1 prototype and the planned audit, but
 it bounds the precision of any per-operator rate we report. Confidence intervals
 are reported alongside every rate for that reason.
 
