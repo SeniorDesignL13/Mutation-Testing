@@ -1,9 +1,7 @@
 """Tests for the detection rate defined in docs/metrics.md."""
 
-import csv
 import math
-from collections import defaultdict
-from pathlib import Path
+from collections.abc import Callable
 
 import pytest
 
@@ -17,8 +15,6 @@ from mtlj.stats.detection import (
     threshold,
     wilson_interval,
 )
-
-SPIKE_SCORES = Path(__file__).parents[2] / "spike" / "scores.csv"
 
 # The worked example's table in docs/metrics.md: record -> (delta, detected).
 WORKED_EXAMPLE = {
@@ -45,18 +41,6 @@ WORKED_EXAMPLE = {
 }
 
 
-def spike_rate(config: str, mutation_type: str) -> DetectionRate:
-    """Detection rate of one mutation type in the MTLJ-31 spike's scores."""
-    scores: dict[tuple[str, str], list[float]] = defaultdict(list)
-    with SPIKE_SCORES.open(newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            if row["config"] == config:
-                scores[(row["record_id"], row["mutation_type"])].append(float(row["score"]))
-    originals = {r: s for (r, kind), s in scores.items() if kind == "original"}
-    mutants = [MutantScores(r, s) for (r, kind), s in scores.items() if kind == mutation_type]
-    return detection_rate(originals, mutants)
-
-
 def outcome_of(result: DetectionRate, record_id: str) -> MutantOutcome:
     return next(o for o in result.outcomes if o.record_id == record_id)
 
@@ -66,7 +50,12 @@ def outcome_of(result: DetectionRate, record_id: str) -> MutantOutcome:
     [("default", 0.0536, 0.0558, 12, (39, 78)), ("penalize", 0.0619, 0.0644, 11, (34, 74))],
 )
 def test_spike_entity_swaps_match_worked_example(
-    config: str, sigma: float, tau: float, detected: int, ci_percent: tuple[int, int]
+    spike_rate: Callable[[str, str], DetectionRate],
+    config: str,
+    sigma: float,
+    tau: float,
+    detected: int,
+    ci_percent: tuple[int, int],
 ) -> None:
     result = spike_rate(config, "entity_swap")
 
@@ -80,7 +69,9 @@ def test_spike_entity_swaps_match_worked_example(
     assert (result.n_samples, result.alpha) == (5, 0.05)
 
 
-def test_spike_entity_swap_verdicts_match_worked_example_table() -> None:
+def test_spike_entity_swap_verdicts_match_worked_example_table(
+    spike_rate: Callable[[str, str], DetectionRate],
+) -> None:
     result = spike_rate("default", "entity_swap")
 
     for record_id, (delta, detected) in WORKED_EXAMPLE.items():
@@ -90,7 +81,9 @@ def test_spike_entity_swap_verdicts_match_worked_example_table() -> None:
 
 
 @pytest.mark.parametrize(("mutation_type", "flagged"), [("verbosity_pad", 1), ("reformat", 2)])
-def test_spike_preserving_mutants_rarely_flagged(mutation_type: str, flagged: int) -> None:
+def test_spike_preserving_mutants_rarely_flagged(
+    spike_rate: Callable[[str, str], DetectionRate], mutation_type: str, flagged: int
+) -> None:
     assert spike_rate("default", mutation_type).detected == flagged
 
 

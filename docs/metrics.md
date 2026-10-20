@@ -173,7 +173,9 @@ What the example shows:
 
 ### What detection rate doesn't tell you
 
-- **How far scores fell.** Report the mean Δ and effect size ([spike](spike-effect-size.md)) with it.
+- **How far scores fell.** Report the mean Δ and effect size ([spike](spike-effect-size.md)) with it:
+  the mean of the per-mutant Δ_r with a 95% paired t-interval, and that mean divided by σ. Every
+  mutant with a Δ_r counts, including those excluded for no headroom.
 - **Why a mutant was missed.** The spike found most misses were "yes" → "borderline" verdict
   shifts that the score ignores. Record the verdicts separately.
 - **Anything about preserving operators.** They ask the opposite question (does the score stay
@@ -197,3 +199,5 @@ Agreed by the team on 2026-10-20:
 `src/mtlj/stats/detection.py` implements this definition. `tests/stats/test_detection.py`
 checks that it reproduces the worked example above for both configs. `spike/detection_rate.py`
 is a standard-library-only script that prints the worked example from `spike/scores.csv`.
+`src/mtlj/stats/paired.py` computes the mean Δ, its interval and the effect size from the
+per-mutant outcomes; `tests/stats/test_paired.py` checks it against the spike's results tables.
