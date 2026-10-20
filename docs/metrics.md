@@ -1,5 +1,5 @@
 # Metrics
-MTLJ-35 · Ethan Goedelman · 2026-10-19 · **Status: proposed, pending team review**
+MTLJ-35 · Ethan Goedelman · 2026-10-19 · **Status: accepted 2026-10-20, ratified by the team**
 
 How mtlj turns judge scores into results. One section per metric.
 

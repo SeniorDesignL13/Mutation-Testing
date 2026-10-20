@@ -126,7 +126,3 @@ suggest.
 **Size.** 919 records is enough for the SD1 prototype and the planned audit, but
 it bounds the precision of any per-operator rate we report. Confidence intervals
 are reported alongside every rate for that reason.
-
-## Team agreement
-
-Recorded in Discord on [date]. See MTLJ-44 comments for the thread link.
