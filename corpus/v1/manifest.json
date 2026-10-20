@@ -1,0 +1,45 @@
+{
+  "corpus_version": "v1",
+  "frozen_on": "2026-10-19",
+  "source_dataset": "wandb/RAGTruth-processed",
+  "license": "MIT",
+  "sha256": "aceb7c3063361ba3141ba15c68aba531bca0e3855c9d7f099c4a782b9608323c",
+  "record_count": 919,
+  "gold_set_count": 20,
+  "filter_chain": [
+    {
+      "step": "all records scanned",
+      "remaining": 17790
+    },
+    {
+      "step": "task_type == QA",
+      "remaining": 5934
+    },
+    {
+      "step": "no hallucination annotations",
+      "remaining": 4210
+    },
+    {
+      "step": "model == gpt-4-0613",
+      "remaining": 947
+    },
+    {
+      "step": "quality == good",
+      "remaining": 919
+    },
+    {
+      "step": "non-empty question/answer/context",
+      "remaining": 919
+    }
+  ],
+  "composition": {
+    "median_answer_words": 99,
+    "min_answer_words": 7,
+    "max_answer_words": 237,
+    "median_context_chars": 1213,
+    "min_passages": 3,
+    "max_passages": 3,
+    "median_passages": 3
+  },
+  "sampling_policy": "Audits draw a seeded sample from this pool rather than using it whole. The seed is recorded in run provenance so any audit is reproducible from its manifest."
+}
