@@ -182,6 +182,16 @@ What the example shows:
   invalid swap (a synonym, or a value the context still supports) counts as a miss against the
   judge. The spike's entity-swap operator rules exist to prevent this.
 
+### Decisions
+
+Agreed by the team on 2026-10-20:
+
+- **Evaluations store verdict counts alongside the score.** Each scoring records the judge's
+  yes / borderline / no claim verdict counts next to the float score, so the verdict shifts the
+  score ignores (see "What detection rate doesn't tell you") are kept.
+- **Default N is 5.** Every original and every mutant is scored 5 times per run for audits. N is
+  still recorded in run provenance, so a run can override it and old runs stay reproducible.
+
 ### Code
 
 `src/mtlj/stats/detection.py` implements this definition. `tests/stats/test_detection.py`

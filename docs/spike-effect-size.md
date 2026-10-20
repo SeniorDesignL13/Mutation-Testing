@@ -10,6 +10,23 @@ own run-to-run noise, and two changes that should not matter (padding, reformatt
 significant shift. The judge also misses about a third of the wrong facts, which is the kind of
 weakness mtlj exists to surface.
 
+> **Note (added 2026-10-20).** The statistical definition behind these numbers was formalized
+> afterward in [metrics.md](metrics.md) (MTLJ-35), which is canonical. It estimates the noise
+> floor as the pooled within-original variance instead of this spike's mean of per-original SDs,
+> so three headline numbers below are superseded:
+>
+> | | This spike (superseded) | metrics.md (canonical) |
+> |---|---|---|
+> | Noise floor | 0.028 | 0.054 |
+> | Detection threshold | 0.029 | 0.056 |
+> | Swaps detected | 13/20 | 12/20 |
+>
+> Pooled variance is the better estimator because noise is concentrated in a few records (record
+> 17472 alone contributes 53% of the total variance), so averaging SDs understates it. The
+> spike's qualitative finding is unchanged: the signal is detectable, preserving operators show
+> no shift, and most misses are flat rather than marginal. The results tables below report what
+> was measured at the time and are left as they were.
+
 ## Method
 **Records.** 20 records from RAGTruth QA (`wandb/RAGTruth-processed`, train + test), GPT-4
 responses with no hallucination annotations.
