@@ -1,0 +1,7 @@
+- To copy your photo from laptop to a CD, first, open 'My Computer' and select the files or photos you want to copy to the CD.
+- To select more than one file, hold down the CTRL key while you click the files you want.
+- Then, under File and Folder Tasks, click 'Copy this file', 'Copy this folder', or 'Copy the selected items'.
+- If the files are located in 'My Pictures', under Picture Tasks, click 'Copy to CD' or 'Copy all items to CD'.
+- Then, in the Copy Items dialog box, click the CD recording drive, and then click 'Copy'.
+- In 'My Computer', double-click the CD recording drive.
+- Windows will display a temporary area where the files are held before they are copied to the CD.

@@ -1,0 +1,21 @@
+RECORD 11/20  id=17148
+
+QUESTION
+how to relieve tight calf muscles
+
+CONTEXT
+[P1] Treatment for Tight Calf Muscles: If a calf cramp or tightness strikes in the middle of a run, stretching the muscle is the best immediate fix. Find a curb and rest the forefoot of the leg that's cramping on the curb. Slowly lower your heel off the curb and hold for 30 seconds. If your calf really starts seizing up, you may need to gently massage the area. After runs, one of the best ways to treat tight calf muscles is to see a sports massage therapist or physical therapist for a deep tissue massage. If you don't have the money or time for professional massages, you can also do self-massage at home using a massage tool such as a massage ball or foam roller.
+
+[P2] Perform calf raises by first standing with your hands holding the back of a chair or table. Slowly raise your heels off the ground so that you are standing on your toes and the balls of your feet. You should feel a stretch in your calf muscles. Hold this position for a few seconds. Relax and repeat.
+
+[P3] Calf Stretch Tips: 1  Hold Time: Work up to holding each stretch for 20 seconds or more. 2  Set Count: Three to five sets of holding a stretch, per leg.  Breathe: Slowly inhale through your nose and exhale out your mouth during each stretch.
+
+ORIGINAL ANSWER
+To relieve tight calf muscles, you can try several methods. Firstly, if tightness or cramping occurs during a run, find a curb and rest the forefoot of the cramping leg on it, then slowly lower your heel off the curb and hold for 30 seconds. If the cramping intensifies, gently massage the area. After running, consider seeing a sports massage therapist or physical therapist for a deep tissue massage. Alternatively, self-massage at home using a massage ball or foam roller can be beneficial. Performing calf raises can also help, by standing with your hands holding the back of a chair or table, slowly raise your heels off the ground, hold for a few seconds, relax and repeat. Lastly, calf stretches can be performed, hold each stretch for 20 seconds or more, doing three to five sets per leg, and remember to breathe slowly in through your nose and out through your mouth during each stretch.
+
+ENTITIES  (* = appears verbatim in context -> valid swap target)
+    ORDINAL      Firstly
+  * TIME         30 seconds
+  * TIME         a few seconds
+  * TIME         20 seconds
+    CARDINAL     three to five

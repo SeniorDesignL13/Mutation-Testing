@@ -1,0 +1,6 @@
+- To uninstall uTorrent on Windows 10, you need to go to the Control Panel and select the "Add/Remove Programs" option.
+- Find "uTorrent" in the list of installed programs and select it.
+- Run the uninstaller to start the removal process.
+- When prompted, click "Yes" to continue with the uninstallation.
+- After the standard uninstall process is completed, select "Scan Leftovers" to find any leftover files or registry entries, and click "Delete Leftovers".
+- Make sure the uTorrent program is closed and not running in the background before starting this process.
