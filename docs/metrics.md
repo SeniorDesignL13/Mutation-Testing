@@ -1,5 +1,5 @@
 # Metrics
-MTLJ-35 · Ethan Goedelman · 2026-10-19 · **Status: proposed, pending team review**
+MTLJ-35 · Ethan Goedelman · 2026-10-19 · **Status: accepted 2026-10-20, ratified by the team**
 
 How mtlj turns judge scores into results. One section per metric.
 
@@ -181,6 +181,16 @@ What the example shows:
 - **Whether the mutant is valid.** The metric assumes every mutant is worse than its original. An
   invalid swap (a synonym, or a value the context still supports) counts as a miss against the
   judge. The spike's entity-swap operator rules exist to prevent this.
+
+### Decisions
+
+Agreed by the team on 2026-10-20:
+
+- **Evaluations store verdict counts alongside the score.** Each scoring records the judge's
+  yes / borderline / no claim verdict counts next to the float score, so the verdict shifts the
+  score ignores (see "What detection rate doesn't tell you") are kept.
+- **Default N is 5.** Every original and every mutant is scored 5 times per run for audits. N is
+  still recorded in run provenance, so a run can override it and old runs stay reproducible.
 
 ### Code
 
