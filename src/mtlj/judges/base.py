@@ -16,8 +16,6 @@ responses.
 
 from dataclasses import dataclass
 
-from mtlj.judges.base import normalize_score
-
 from mtlj.judges.base import Judge
 
 
@@ -26,37 +24,26 @@ class MyJudge(Judge):
     name: str = "MyJudge"
     model: str = "example-model"
     version: str = "1.0.0"
-    min_score: float = 1.0
-    max_score: float = 5.0
-
-    def normalize(self, score: float) -> float:
-        return normalize_score(
-            score,
-            self.min_score,
-            self.max_score,
-        )
+    score_range: tuple = (1.0, 5.0)
 
     def score_raw(self, input, output, context):
-            return super().score_raw(input, output, context)
+        return 4.0
+
 
 ### Using the judge
 
 judge = MyJudge()
 
-raw_score = 4.0
-normalized = judge.normalize(raw_score)
+print(judge.name)  # MyJudge
 
-print(normalized)      # 0.75
+print(judge.model)  # example-model
 
-print(judge.name)      # MyJudge
+print(judge.version)  # 1.0.0
 
-print(judge.model)     # example-model
+print(judge.score_range)  # (1.0, 5.0)
 
-print(judge.version)   # 1.0.0
+print(judge("q", "a", {}).score)  # 0.75
 
-print(judge.min_score) # 1.0
-
-print(judge.max_score) # 5.0
 
 The raw score of 4.0 becomes 0.75 because it lies three-quarters of the way between the declared
 minimum of 1.0 and maximum of 5.0.
@@ -147,16 +134,3 @@ class Judge(ABC):
             model=self.model,
             version=self.version,
         )
-
-
-def normalize_score(
-    score: float,
-    min_score: float,
-    max_score: float,
-) -> float:
-    if max_score <= min_score:
-        raise ValueError("max_score must be greater than min_score")
-
-    normalized = (score - min_score) / (max_score - min_score)
-
-    return max(0.0, min(1.0, float(normalized)))
