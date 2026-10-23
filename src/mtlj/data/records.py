@@ -5,7 +5,14 @@ format into this one internal format. Mutation operators only ever read
 this format; they never contain source-specific parsing logic.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _reject_blank(value: str) -> str:
+    """Reject empty or whitespace-only text without modifying valid text."""
+    if not value.strip():
+        raise ValueError("must not be empty or whitespace")
+    return value
 
 
 class Passage(BaseModel):
@@ -14,6 +21,8 @@ class Passage(BaseModel):
     passage_id: str = Field(..., description="Unique id for this passage within its source.")
     text: str = Field(..., description="The raw passage text.")
     title: str | None = Field(None, description="Optional title/heading for the passage.")
+
+    _text_not_blank = field_validator("text")(_reject_blank)
 
 
 class DatasetRecord(BaseModel):
@@ -38,3 +47,5 @@ class DatasetRecord(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+
+    _answer_not_blank = field_validator("answer")(_reject_blank)
