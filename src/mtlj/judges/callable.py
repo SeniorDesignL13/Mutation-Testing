@@ -4,16 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from mtlj.judges.base import Context, Judge
+from mtlj.judges.base import Context, Judge, RawScore
 
-ScoreFn = Callable[[str, str, Context], float]
+ScoreFn = Callable[[str, str, Context], float | RawScore]
 
 
 class CallableJudge(Judge):
     """Adapt a Python function into the shared Judge interface.
 
     The wrapped function receives (input, output, context) and returns
-    a raw numeric score within the declared score_range.
+    a raw numeric score within the declared score_range, or a RawScore
+    carrying that score plus claim verdict counts.
     """
 
     def __init__(
@@ -41,6 +42,7 @@ class CallableJudge(Judge):
         input: str,
         output: str,
         context: Context,
-    ) -> float:
+    ) -> float | RawScore:
         """Invoke the user function and return its raw score."""
-        return float(self.score_fn(input, output, context))
+        # Judge.__call__ converts and range-checks the score, so a RawScore passes through as is.
+        return self.score_fn(input, output, context)
