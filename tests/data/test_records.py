@@ -47,10 +47,11 @@ def test_fixture_loads_and_ids_unique() -> None:
     assert isinstance(records[0].context[0], Passage)
 
 
-@pytest.mark.parametrize("answer", ["", "   ", "\n\t"])
-def test_blank_answer_rejected(answer: str) -> None:
+@pytest.mark.parametrize("field", ["question", "answer"])
+@pytest.mark.parametrize("value", ["", "   ", "\n\t"])
+def test_blank_question_or_answer_rejected(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
-        DatasetRecord(**_record(answer=answer))
+        DatasetRecord(**_record(**{field: value}))
 
 
 @pytest.mark.parametrize("text", ["", "   "])
