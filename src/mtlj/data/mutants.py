@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from typing import Any, Self
 
@@ -51,6 +51,7 @@ def _check_inputs(intensity: float, parameters: Mapping[str, float]) -> None:
 def make_mutant_id(
     record_id: str,
     original_text: str,
+    context_sha256: str,
     operator_name: str,
     intensity: float,
     parameters: Mapping[str, float],
@@ -58,14 +59,16 @@ def make_mutant_id(
 ) -> str:
     """Derive a mutant's id from its inputs, so the same inputs always give the same id.
 
-    The original text is part of the id, so a record whose answer is later corrected gets new
-    mutant ids. Numbers are normalised first, so intensity ``1`` and ``1.0`` give the same id,
-    matching what the model stores after validation.
+    The original text and context are part of the id, so a record whose answer or passages are
+    later corrected gets new mutant ids. (Operators read the context: verbosity padding builds
+    its filler from it.) Numbers are normalised first, so intensity ``1`` and ``1.0`` give the
+    same id, matching what the model stores after validation.
     """
     key = json.dumps(
         {
             "record_id": record_id,
             "original_sha256": _sha256(original_text),
+            "context_sha256": context_sha256,
             "operator_name": operator_name,
             "intensity": float(intensity),
             "parameters": {name: float(value) for name, value in parameters.items()},
@@ -78,6 +81,15 @@ def make_mutant_id(
 
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def context_sha256(context: Sequence[str]) -> str:
+    """SHA-256 of the passage texts an operator is given, in order."""
+    return _sha256(json.dumps(list(context), ensure_ascii=False))
+
+
+def _record_context(record: DatasetRecord) -> list[str]:
+    return [p.text for p in record.context]
 
 
 class _FrozenDict(dict):
@@ -95,6 +107,24 @@ class _FrozenDict(dict):
 
     def __reduce__(self) -> tuple:
         return (_FrozenDict, (dict(self),))
+
+
+def _freeze(value: Any) -> Any:
+    """Make nested mappings read-only and lists tuples, so no part of details can be edited."""
+    if isinstance(value, Mapping):
+        return _FrozenDict({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _thaw(value: Any) -> Any:
+    """Undo _freeze, giving plain dicts and lists for serialization."""
+    if isinstance(value, Mapping):
+        return {key: _thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw(item) for item in value]
+    return value
 
 
 class Mutant(BaseModel):
@@ -119,6 +149,9 @@ class Mutant(BaseModel):
         ..., description="How a good judge's score should move, from the operator's metadata."
     )
     original_text: str = Field(..., description="The answer before mutation.")
+    context_sha256: str = Field(
+        ..., description="SHA-256 of the context passages the operator saw; see context_sha256."
+    )
     mutated_text: str = Field(..., description="The answer after mutation.")
     mutated_sha256: str = Field(..., description="SHA-256 of mutated_text as UTF-8.")
     changed: bool = Field(..., description="Whether the operator changed the text.")
@@ -134,11 +167,23 @@ class Mutant(BaseModel):
     def _read_only(cls, value: Mapping[str, Any]) -> Mapping[str, Any]:
         # frozen=True stops reassigning a field, not editing a dict in place, which would leave
         # mutant_id stale without any error.
-        return _FrozenDict(value)
+        return _freeze(value)
 
     @field_serializer("parameters", "details")
     def _as_dict(self, value: Mapping[str, Any]) -> dict[str, Any]:
-        return dict(value)
+        return _thaw(value)
+
+    def __hash__(self) -> int:
+        # pydantic's frozen hash would hash the dict fields and fail. Equal mutants share these.
+        return hash((self.mutant_id, self.mutated_sha256))
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """Copy the mutant. With ``update``, the copy is validated, unlike pydantic's default,
+        so an update can't leave mutant_id, the hash or ``changed`` out of date."""
+        copied = super().model_copy(update=update, deep=deep)
+        if update:
+            return type(self).model_validate(copied.model_dump())
+        return copied
 
     @model_validator(mode="after")
     def _check_derived_fields(self) -> Self:
@@ -146,6 +191,7 @@ class Mutant(BaseModel):
         expected_id = make_mutant_id(
             self.record_id,
             self.original_text,
+            self.context_sha256,
             self.operator_name,
             self.intensity,
             self.parameters,
@@ -157,6 +203,20 @@ class Mutant(BaseModel):
             raise ValueError("mutated_sha256 doesn't match mutated_text")
         if self.changed != (self.mutated_text != self.original_text):
             raise ValueError(f"changed={self.changed} doesn't match the texts")
+        # Not part of the id, so check them against the operator when we know it. Detection
+        # relies on expected_direction to decide whether a score change is a catch or a miss.
+        operator_cls = _operators().get(self.operator_name)
+        if operator_cls is not None:
+            meta = operator_cls.metadata
+            if (self.operator_family, self.expected_direction) != (
+                meta.family,
+                meta.expected_direction,
+            ):
+                raise ValueError(
+                    f"{self.operator_name} is {meta.family.value} / "
+                    f"{meta.expected_direction.value}, not {self.operator_family.value} / "
+                    f"{self.expected_direction.value}"
+                )
         return self
 
     @classmethod
@@ -174,9 +234,16 @@ class Mutant(BaseModel):
             raise ValueError(f"result was not made from record {record.record_id!r}'s answer")
         parameters = parameters or {}
         meta = operator.metadata
+        context_hash = context_sha256(_record_context(record))
         return cls(
             mutant_id=make_mutant_id(
-                record.record_id, result.original_text, meta.name, intensity, parameters, seed
+                record.record_id,
+                result.original_text,
+                context_hash,
+                meta.name,
+                intensity,
+                parameters,
+                seed,
             ),
             record_id=record.record_id,
             operator_name=meta.name,
@@ -186,6 +253,7 @@ class Mutant(BaseModel):
             seed=seed,
             expected_direction=meta.expected_direction,
             original_text=result.original_text,
+            context_sha256=context_hash,
             mutated_text=result.mutated_text,
             mutated_sha256=_sha256(result.mutated_text),
             # From the texts, not result.changed: an operator can report no change while still
@@ -205,8 +273,9 @@ class Mutant(BaseModel):
     ) -> Mutant:
         """Run ``operator`` on ``record``'s answer and return the resulting mutant."""
         _check_inputs(intensity, parameters or {})
-        context = [p.text for p in record.context]
-        result = operator.apply(record.answer, context, intensity=intensity, seed=seed)
+        result = operator.apply(
+            record.answer, _record_context(record), intensity=intensity, seed=seed
+        )
         return cls.from_result(record, operator, result, intensity, seed, parameters)
 
     def regenerate(self, record: DatasetRecord) -> Mutant:
@@ -215,6 +284,8 @@ class Mutant(BaseModel):
             raise ValueError(f"mutant was made from {self.record_id!r}, not {record.record_id!r}")
         if record.answer != self.original_text:
             raise ValueError(f"record {record.record_id!r}'s answer has changed since mutation")
+        if context_sha256(_record_context(record)) != self.context_sha256:
+            raise ValueError(f"record {record.record_id!r}'s context has changed since mutation")
         try:
             operator_cls = _operators()[self.operator_name]
         except KeyError:

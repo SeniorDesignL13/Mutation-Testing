@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mtlj.data.mutants import Mutant, make_mutant_id
+from mtlj.data.mutants import Mutant, context_sha256, make_mutant_id
 from mtlj.data.records import DatasetRecord
 from mtlj.operators.base import ExpectedDirection, MutationResult, OperatorFamily
 from mtlj.operators.degrading.entity_swap import EntitySwapOperator
@@ -24,6 +24,14 @@ RECORD = DatasetRecord(
     context=[{"passage_id": "p1", "text": "The annual conference took place in Paris."}],
     answer="The conference was held in Paris last spring.",
 )
+
+RECORD_CONTEXT_SHA256 = context_sha256([p.text for p in RECORD.context])
+
+
+def _with_other_context() -> DatasetRecord:
+    other = [{"passage_id": "p1", "text": "The summit took place in Rome."}]
+    return DatasetRecord.model_validate({**RECORD.model_dump(), "context": other})
+
 
 OPERATORS = [EntitySwapOperator(), VerbosityPaddingOperator()]
 
@@ -43,6 +51,7 @@ def _id(**overrides) -> str:
     args = {
         "record_id": "t_1",
         "original_text": "A.",
+        "context_sha256": context_sha256(["Some passage."]),
         "operator_name": "entity_swap",
         "intensity": 1.0,
         "parameters": {},
@@ -149,10 +158,36 @@ def test_from_result_rejects_result_from_other_text() -> None:
         Mutant.from_result(RECORD, EntitySwapOperator(), result, intensity=1.0, seed=7)
 
 
+def test_regenerate_rejects_changed_context() -> None:
+    mutant = Mutant.generate(RECORD, VerbosityPaddingOperator(), intensity=0.5, seed=11)
+    corrected = _with_other_context()
+    with pytest.raises(ValueError, match="context has changed"):
+        mutant.regenerate(corrected)
+
+
+def test_same_answer_with_different_context_gets_a_different_id() -> None:
+    """Padding builds its filler from the context, so the context is part of the mutant's id."""
+    other = _with_other_context()
+    first = Mutant.generate(RECORD, VerbosityPaddingOperator(), intensity=0.5, seed=11)
+    second = Mutant.generate(other, VerbosityPaddingOperator(), intensity=0.5, seed=11)
+
+    assert first.mutant_id != second.mutant_id
+    assert first.context_sha256 != second.context_sha256
+
+
+def test_context_hash_depends_on_passage_order() -> None:
+    assert context_sha256(["a", "b"]) != context_sha256(["b", "a"])
+    assert context_sha256(["ab"]) != context_sha256(["a", "b"])
+
+
 def test_regenerate_rejects_unknown_operator() -> None:
     data = _mutant().model_dump()
     data["operator_name"] = "no_such_operator"
-    data["mutant_id"] = _id(original_text=RECORD.answer, operator_name="no_such_operator")
+    data["mutant_id"] = _id(
+        original_text=RECORD.answer,
+        context_sha256=RECORD_CONTEXT_SHA256,
+        operator_name="no_such_operator",
+    )
     with pytest.raises(ValueError, match="no_such_operator"):
         Mutant.model_validate(data).regenerate(RECORD)
 
@@ -232,6 +267,7 @@ def test_mutant_id_is_deterministic() -> None:
     [
         {"record_id": "t_2"},
         {"original_text": "B."},
+        {"context_sha256": context_sha256(["Another passage."])},
         {"operator_name": "verbosity_padding"},
         {"intensity": 0.5},
         {"parameters": {"num_swaps": 1}},
@@ -301,7 +337,11 @@ def test_parameters_rejected_before_operator_runs(monkeypatch) -> None:
 def test_parameters_rejected_on_load() -> None:
     data = _mutant().model_dump()
     data["parameters"] = {"num_swaps": 2.0}
-    data["mutant_id"] = _id(original_text=RECORD.answer, parameters={"num_swaps": 2.0})
+    data["mutant_id"] = _id(
+        original_text=RECORD.answer,
+        context_sha256=RECORD_CONTEXT_SHA256,
+        parameters={"num_swaps": 2.0},
+    )
     with pytest.raises(ValidationError, match="parameters"):
         Mutant.model_validate(data)
 
@@ -310,6 +350,18 @@ def test_seed_is_required() -> None:
     data = _mutant().model_dump()
     data["seed"] = None
     with pytest.raises(ValidationError):
+        Mutant.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [("expected_direction", "unchanged"), ("operator_family", "preserving")],
+)
+def test_direction_and_family_must_match_a_known_operator(field, wrong) -> None:
+    """Neither is part of the id, so a hand-edited row would otherwise flip detection."""
+    data = _mutant().model_dump(mode="json")
+    data[field] = wrong
+    with pytest.raises(ValidationError, match="entity_swap is degrading / decrease"):
         Mutant.model_validate(data)
 
 
@@ -438,3 +490,33 @@ def test_mappings_dump_as_plain_dicts() -> None:
     assert type(data["details"]) is dict
     assert type(data["parameters"]) is dict
     assert json.loads(_mutant().model_dump_json())["details"] == dict(_mutant().details)
+
+
+def test_nested_details_are_read_only() -> None:
+    result = MutationResult(
+        original_text=RECORD.answer,
+        mutated_text=RECORD.answer + " Indeed.",
+        changed=True,
+        details={"swaps": [{"from": "Paris", "to": "Rome"}]},
+    )
+    mutant = Mutant.from_result(RECORD, VerbosityPaddingOperator(), result, intensity=0.5, seed=1)
+
+    with pytest.raises(AttributeError):
+        mutant.details["swaps"].append("x")
+    with pytest.raises(TypeError, match="read-only"):
+        mutant.details["swaps"][0]["to"] = "Lyon"
+    assert mutant.model_dump()["details"] == {"swaps": [{"from": "Paris", "to": "Rome"}]}
+    assert Mutant.model_validate_json(mutant.model_dump_json()) == mutant
+
+
+def test_mutants_are_hashable() -> None:
+    first, again = _mutant(), _mutant()
+    other = Mutant.generate(RECORD, EntitySwapOperator(), intensity=1.0, seed=8)
+
+    assert hash(first) == hash(again)
+    assert len({first, again, other}) == len({first.mutant_id, other.mutant_id})
+
+
+def test_model_copy_with_update_is_validated() -> None:
+    with pytest.raises(ValidationError, match="mutant_id"):
+        _mutant().model_copy(update={"seed": 5})
