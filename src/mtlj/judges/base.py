@@ -47,6 +47,17 @@ print(judge("q", "a", {}).score)  # 0.75
 
 The raw score of 4.0 becomes 0.75 because it lies three-quarters of the way between the declared
 minimum of 1.0 and maximum of 5.0.
+
+### Reporting claim verdicts
+
+A judge that rules on individual claims can return a RawScore instead of a float, so the
+verdicts the score ignores are kept (see docs/metrics.md, "Decisions"):
+
+    def score_raw(self, input, output, context):
+        return RawScore(4.0, verdict_counts=VerdictCounts(yes=6, borderline=1, no=0), n_claims=7)
+
+The counts may sum to less than n_claims, because some judges (DeepEval faithfulness) skip
+a verdict for a claim now and then.
 """
 
 from __future__ import annotations
@@ -55,10 +66,32 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, final
+from typing import Any, NamedTuple, final
 
 ScoreRange = tuple[float, float]
 Context = Mapping[str, Any]
+
+
+class VerdictCounts(NamedTuple):
+    """How many claims the judge ruled yes, borderline, and no."""
+
+    yes: int
+    borderline: int
+    no: int
+
+
+@dataclass(frozen=True, slots=True)
+class RawScore:
+    """A raw score plus the claim verdicts behind it, for judges that report them."""
+
+    score: float
+    verdict_counts: VerdictCounts | None = None
+    n_claims: int | None = None
+
+
+def _is_count(value: object) -> bool:
+    """True for a non-negative int; bools are rejected even though they subclass int."""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +104,8 @@ class JudgeResult:
     judge_name: str
     model: str
     version: str
+    verdict_counts: VerdictCounts | None = None
+    n_claims: int | None = None
 
     def __post_init__(self) -> None:
         if not isfinite(self.score) or not 0.0 <= self.score <= 1.0:
@@ -85,6 +120,24 @@ class JudgeResult:
 
         if not all((self.judge_name, self.model, self.version)):
             raise ValueError("judge_name, model, and version are required")
+
+        if self.n_claims is not None and not _is_count(self.n_claims):
+            raise ValueError("n_claims must be a non-negative int")
+
+        if self.verdict_counts is not None:
+            counts = self.verdict_counts
+            if not isinstance(counts, (tuple, list)) or len(counts) != 3:
+                raise ValueError("verdict_counts must be three non-negative ints")
+            if not all(map(_is_count, counts)):
+                raise ValueError("verdict_counts must be three non-negative ints")
+            # Store a VerdictCounts even when given a plain tuple or list, so the result stays
+            # hashable and callers can rely on .yes / ._asdict().
+            object.__setattr__(self, "verdict_counts", VerdictCounts(*counts))
+            if self.n_claims is None:
+                raise ValueError("n_claims is required when verdict_counts is given")
+            # Less than n_claims is allowed: DeepEval sometimes skips a verdict for a claim.
+            if sum(self.verdict_counts) > self.n_claims:
+                raise ValueError("verdict_counts must not sum to more than n_claims")
 
 
 class Judge(ABC):
@@ -101,8 +154,8 @@ class Judge(ABC):
     higher_is_better: bool = True
 
     @abstractmethod
-    def score_raw(self, input: str, output: str, context: Context) -> float:
-        """Return a score on this judge's declared score_range."""
+    def score_raw(self, input: str, output: str, context: Context) -> float | RawScore:
+        """Return a score on this judge's declared score_range, optionally with verdicts."""
         ...  # Place holder
 
     @final
@@ -113,7 +166,10 @@ class Judge(ABC):
         if not isfinite(low) or not isfinite(high) or low >= high:
             raise ValueError("score_range must have finite bounds with low < high")
 
-        raw_score = float(self.score_raw(input, output, context))
+        raw = self.score_raw(input, output, context)
+        if not isinstance(raw, RawScore):
+            raw = RawScore(raw)
+        raw_score = float(raw.score)
 
         if not isfinite(raw_score) or not low <= raw_score <= high:
             raise ValueError(
@@ -133,4 +189,6 @@ class Judge(ABC):
             judge_name=self.name,
             model=self.model,
             version=self.version,
+            verdict_counts=raw.verdict_counts,
+            n_claims=raw.n_claims,
         )
