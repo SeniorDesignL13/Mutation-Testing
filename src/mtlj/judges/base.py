@@ -66,6 +66,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from math import isfinite
+from numbers import Real
 from typing import Any, NamedTuple, final
 
 ScoreRange = tuple[float, float]
@@ -169,7 +170,14 @@ class Judge(ABC):
         raw = self.score_raw(input, output, context)
         if not isinstance(raw, RawScore):
             raw = RawScore(raw)
-        raw_score = float(raw.score)
+        # Only real numbers: float() would quietly turn True into 1.0 and "0.5" into 0.5.
+        if isinstance(raw.score, bool) or not isinstance(raw.score, Real):
+            raise TypeError(f"Judge {self.name!r} returned {raw.score!r}; expected a real number")
+        try:
+            raw_score = float(raw.score)
+        except OverflowError:
+            # An int too big for a float (e.g. 10**400) is out of range, not a crash.
+            raw_score = float("inf")
 
         if not isfinite(raw_score) or not low <= raw_score <= high:
             raise ValueError(
