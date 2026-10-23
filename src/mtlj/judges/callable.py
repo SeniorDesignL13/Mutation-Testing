@@ -34,7 +34,8 @@ class CallableJudge(Judge):
         self.name = name
         self.model = model
         self.version = version
-        self.score_range = score_range
+        # A list (e.g. from JSON config) would make every JudgeResult unhashable.
+        self.score_range = tuple(score_range)
         self.higher_is_better = higher_is_better
 
     def score_raw(

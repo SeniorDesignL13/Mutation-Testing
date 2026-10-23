@@ -286,6 +286,31 @@ def test_accepts_valid_verdict_counts(verdict_counts, n_claims):
 
 
 @pytest.mark.parametrize(
+    "verdict_counts",
+    [
+        (6, 1, 0),  # Plain tuple
+        [6, 1, 0],  # List
+    ],
+)
+def test_plain_sequence_is_stored_as_verdict_counts(verdict_counts):
+    result = make_result(verdict_counts, n_claims=7)
+
+    assert isinstance(result.verdict_counts, VerdictCounts)
+    assert result.verdict_counts.yes == 6
+    assert result.verdict_counts._asdict() == {"yes": 6, "borderline": 1, "no": 0}
+    hash(result)  # Frozen result stays hashable
+
+
+def test_raw_score_with_list_counts_is_stored_as_verdict_counts():
+    judge = VerdictJudge(RawScore(7.5, verdict_counts=[6, 1, 0], n_claims=7))
+
+    result = judge(input="input", output="output", context={})
+
+    assert result.verdict_counts == VerdictCounts(yes=6, borderline=1, no=0)
+    assert isinstance(result.verdict_counts, VerdictCounts)
+
+
+@pytest.mark.parametrize(
     ("verdict_counts", "n_claims", "match"),
     [
         (VerdictCounts(5, 2, 1), 7, "sum"),  # More verdicts than claims
@@ -293,6 +318,11 @@ def test_accepts_valid_verdict_counts(verdict_counts, n_claims):
         (VerdictCounts(True, 0, 0), 1, "verdict_counts"),  # Bool is not a count
         (VerdictCounts(1.0, 0, 0), 1, "verdict_counts"),  # Float is not a count
         ((1, 0), 1, "verdict_counts"),  # Wrong length
+        ([1, 0, 0, 0], 1, "verdict_counts"),  # Wrong length list
+        (7, 7, "verdict_counts"),  # Total count instead of three counts
+        ("yes", 3, "verdict_counts"),  # String of length 3
+        ({"yes": 1, "borderline": 0, "no": 0}, 1, "verdict_counts"),  # Dict
+        ([1, -1, 0], 1, "verdict_counts"),  # Negative count in a list
         (VerdictCounts(1, 0, 0), None, "n_claims"),  # Verdicts without a claim count
         (None, -1, "n_claims"),  # Negative claim count
         (None, True, "n_claims"),  # Bool is not a claim count

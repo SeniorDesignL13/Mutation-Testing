@@ -125,8 +125,14 @@ class JudgeResult:
             raise ValueError("n_claims must be a non-negative int")
 
         if self.verdict_counts is not None:
-            if len(self.verdict_counts) != 3 or not all(map(_is_count, self.verdict_counts)):
+            counts = self.verdict_counts
+            if not isinstance(counts, (tuple, list)) or len(counts) != 3:
                 raise ValueError("verdict_counts must be three non-negative ints")
+            if not all(map(_is_count, counts)):
+                raise ValueError("verdict_counts must be three non-negative ints")
+            # Store a VerdictCounts even when given a plain tuple or list, so the result stays
+            # hashable and callers can rely on .yes / ._asdict().
+            object.__setattr__(self, "verdict_counts", VerdictCounts(*counts))
             if self.n_claims is None:
                 raise ValueError("n_claims is required when verdict_counts is given")
             # Less than n_claims is allowed: DeepEval sometimes skips a verdict for a claim.

@@ -182,3 +182,14 @@ def test_rejects_invalid_verdicts_from_function():
 
     with pytest.raises(ValueError, match="sum"):
         judge(input="input", output="output", context={})
+
+
+def test_list_score_range_is_stored_as_tuple():
+    """A range from JSON config arrives as a list; results must stay hashable."""
+    judge = CallableJudge(lambda input, output, context: 4, score_range=[1.0, 5.0])
+
+    result = judge(input="input", output="output", context={})
+
+    assert result.score_range == (1.0, 5.0)
+    assert result.score == pytest.approx(0.75)
+    hash(result)
