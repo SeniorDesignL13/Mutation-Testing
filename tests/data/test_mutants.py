@@ -1,7 +1,9 @@
 """Tests for the mutant format and its reproducibility."""
 
+import copy
 import json
 import os
+import pickle
 import subprocess
 import sys
 from pathlib import Path
@@ -137,6 +139,14 @@ def test_regenerate_rejects_changed_answer() -> None:
     corrected = RECORD.model_copy(update={"answer": "The conference was held in Lyon."})
     with pytest.raises(ValueError, match="answer has changed"):
         _mutant().regenerate(corrected)
+
+
+def test_from_result_rejects_result_from_other_text() -> None:
+    result = EntitySwapOperator().apply(
+        "The meeting was held in Berlin.", [p.text for p in RECORD.context], seed=7
+    )
+    with pytest.raises(ValueError, match="t_1"):
+        Mutant.from_result(RECORD, EntitySwapOperator(), result, intensity=1.0, seed=7)
 
 
 def test_regenerate_rejects_unknown_operator() -> None:
@@ -365,3 +375,66 @@ def test_fields_cannot_be_reassigned() -> None:
 def test_mappings_cannot_be_edited_in_place(field) -> None:
     with pytest.raises(TypeError):
         getattr(_mutant(), field)["num_swaps"] = 3
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda m: m.__setitem__("k", 1),
+        lambda m: m.__delitem__("swapped_from"),
+        lambda m: m.update(k=1),
+        lambda m: m.pop("swapped_from"),
+        lambda m: m.popitem(),
+        lambda m: m.clear(),
+        lambda m: m.setdefault("k", 1),
+        lambda m: m.__ior__({"k": 1}),
+    ],
+    ids=["setitem", "delitem", "update", "pop", "popitem", "clear", "setdefault", "ior"],
+)
+def test_every_in_place_edit_is_rejected(edit) -> None:
+    mutant = _mutant()
+    before = dict(mutant.details)
+    with pytest.raises(TypeError, match="read-only"):
+        edit(mutant.details)
+    assert dict(mutant.details) == before
+
+
+# Copying and pickling (parallel workers, model_copy)
+
+
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        lambda m: pickle.loads(pickle.dumps(m)),
+        copy.deepcopy,
+        copy.copy,
+        lambda m: m.model_copy(deep=True),
+        lambda m: m.model_copy(),
+    ],
+    ids=["pickle", "deepcopy", "copy", "model_copy-deep", "model_copy"],
+)
+def test_mutant_can_be_copied_and_pickled(duplicate) -> None:
+    mutant = _mutant()
+
+    again = duplicate(mutant)
+
+    assert again == mutant
+    assert again.details == mutant.details
+    with pytest.raises(TypeError, match="read-only"):
+        again.details["k"] = 1
+    with pytest.raises(TypeError, match="read-only"):
+        again.parameters["k"] = 1.0
+
+
+def test_pickled_mutant_still_regenerates() -> None:
+    again = pickle.loads(pickle.dumps(_mutant()))
+
+    assert again.regenerate(RECORD) == again
+
+
+def test_mappings_dump_as_plain_dicts() -> None:
+    data = _mutant().model_dump()
+
+    assert type(data["details"]) is dict
+    assert type(data["parameters"]) is dict
+    assert json.loads(_mutant().model_dump_json())["details"] == dict(_mutant().details)

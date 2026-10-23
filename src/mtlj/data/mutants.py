@@ -16,7 +16,6 @@ import hashlib
 import json
 from collections.abc import Mapping
 from functools import lru_cache
-from types import MappingProxyType
 from typing import Any, Self
 
 from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
@@ -81,6 +80,23 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+class _FrozenDict(dict):
+    """A dict that refuses in-place edits but still pickles and deep-copies.
+
+    MappingProxyType would also block edits, but it can't be pickled, so a mutant holding one
+    couldn't be deep-copied or sent to a worker process.
+    """
+
+    def _readonly(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("mutant parameters and details are read-only")
+
+    __setitem__ = __delitem__ = __ior__ = _readonly
+    clear = pop = popitem = setdefault = update = _readonly
+
+    def __reduce__(self) -> tuple:
+        return (_FrozenDict, (dict(self),))
+
+
 class Mutant(BaseModel):
     """One mutated answer and everything needed to reproduce it.
 
@@ -118,7 +134,7 @@ class Mutant(BaseModel):
     def _read_only(cls, value: Mapping[str, Any]) -> Mapping[str, Any]:
         # frozen=True stops reassigning a field, not editing a dict in place, which would leave
         # mutant_id stale without any error.
-        return MappingProxyType(dict(value))
+        return _FrozenDict(value)
 
     @field_serializer("parameters", "details")
     def _as_dict(self, value: Mapping[str, Any]) -> dict[str, Any]:
@@ -154,6 +170,8 @@ class Mutant(BaseModel):
         parameters: Mapping[str, float] | None = None,
     ) -> Mutant:
         """Wrap an operator's result with the provenance needed to reproduce it."""
+        if result.original_text != record.answer:
+            raise ValueError(f"result was not made from record {record.record_id!r}'s answer")
         parameters = parameters or {}
         meta = operator.metadata
         return cls(
