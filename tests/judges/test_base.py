@@ -331,3 +331,48 @@ def test_raw_score_with_list_counts_is_stored_as_verdict_counts():
 def test_rejects_invalid_verdict_counts(verdict_counts, n_claims, match):
     with pytest.raises(ValueError, match=match):
         make_result(verdict_counts, n_claims)
+
+
+# --------------------------------------------------
+# Raw score type tests
+# --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw_score",
+    [
+        True,  # Bool would otherwise become 1.0
+        False,  # Bool would otherwise become 0.0
+        "5.0",  # Numeric string
+        None,  # Missing score
+        [5.0],  # Container
+    ],
+)
+def test_rejects_non_numeric_raw_scores(raw_score):
+    judge = DummyJudge(raw_score)
+
+    with pytest.raises(TypeError, match="TestJudge"):
+        judge(input="input", output="output", context={})
+
+
+def test_rejects_non_numeric_raw_score_inside_raw_score():
+    judge = VerdictJudge(RawScore(True))
+
+    with pytest.raises(TypeError, match="real number"):
+        judge(input="input", output="output", context={})
+
+
+def test_accepts_int_raw_score_as_float():
+    result = DummyJudge(5)(input="input", output="output", context={})
+
+    assert result.raw_score == 5.0
+    assert isinstance(result.raw_score, float)
+    assert isinstance(result.score, float)
+
+
+def test_rejects_int_too_large_for_float():
+    """10**400 overflows float(); it must be reported as out of range, not crash."""
+    judge = DummyJudge(10**400)
+
+    with pytest.raises(ValueError, match="expected a finite score"):
+        judge(input="input", output="output", context={})
