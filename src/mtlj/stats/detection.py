@@ -34,7 +34,7 @@ class ExclusionReason(Enum):
 
 @dataclass(frozen=True, slots=True)
 class MutantScores:
-    """One degrading mutant's successful judge scores, linked to its original by record id."""
+    """One mutant's successful judge scores, linked to its original by record id."""
 
     record_id: str
     scores: Sequence[float]
