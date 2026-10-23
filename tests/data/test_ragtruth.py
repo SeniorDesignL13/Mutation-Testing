@@ -1,14 +1,20 @@
 """Tests for the RAGTruth corpus loader."""
 
+import hashlib
 import json
 import logging
 from pathlib import Path
 
 import pytest
 
+import mtlj.data.ragtruth as ragtruth
 from mtlj.data.ragtruth import (
+    CORPUS_V1_DIR,
     CORPUS_V1_MANIFEST,
     ChecksumMismatchError,
+    IncompleteCorpusError,
+    LoadResult,
+    SkippedRecord,
     load_corpus_v1,
     load_ragtruth,
 )
@@ -17,7 +23,10 @@ SAMPLE = Path(__file__).parent / "ragtruth_sample.jsonl"
 
 
 def _raw_lines() -> list[dict]:
-    return [json.loads(line) for line in SAMPLE.read_text(encoding="utf-8").splitlines()]
+    # split("\n") like the loader: splitlines() would also split on U+2028 and friends,
+    # which are legal inside JSON strings.
+    text = SAMPLE.read_text(encoding="utf-8")
+    return [json.loads(line) for line in text.split("\n") if line.strip()]
 
 
 def test_sample_maps_fields() -> None:
@@ -67,7 +76,9 @@ def test_conversion_is_lossless() -> None:
         ({"id": 11856}, "field 'id' must be str"),
         ({"context": "text"}, "field 'context' must be list"),
         ({"context": [1, 2]}, "context.0.text: Input should be a valid string"),
-        ({"answer": 5}, "answer: Input should be a valid string"),
+        ({"answer": 5}, "field 'answer' must be str"),
+        ({"question": None}, "field 'question' must be str"),
+        ({"answer_v2": "new"}, "unexpected field(s) ['answer_v2']"),
         ({"question": "  "}, "question: Value error, must not be empty or whitespace"),
         ({"gold_set": "yes"}, "field 'gold_set' must be bool"),
         ({"split": None}, "field 'split' must be str"),
@@ -151,6 +162,41 @@ def test_malformed_lines_skipped_and_logged(
     assert len(caplog.records) == 4
 
 
+def test_duplicate_key_skipped_not_last_one_wins(tmp_path: Path) -> None:
+    line = json.dumps(_raw_lines()[0])
+    path = tmp_path / "corpus.jsonl"
+    path.write_text(line[:-1] + ', "answer": "replaced"}\n', encoding="utf-8")
+
+    result = load_ragtruth(path)
+
+    assert result.records == []
+    assert [s.reason for s in result.skipped] == ["invalid record: duplicate key 'answer'"]
+
+
+def test_skip_log_escapes_newlines_in_id(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    raw = {**_raw_lines()[0], "id": "1\nERROR forged entry", "answer": " "}
+    path = tmp_path / "corpus.jsonl"
+    path.write_text(json.dumps(raw) + "\n", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="mtlj.data.ragtruth"):
+        load_ragtruth(path)
+
+    [message] = [r.getMessage() for r in caplog.records]
+    assert "\n" not in message
+    assert "'1\\nERROR forged entry'" in message
+
+
+def test_unexpected_errors_are_not_hidden_as_skips(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bug in the conversion must crash the load, not skip every line as 'invalid'."""
+
+    def broken(raw: dict) -> None:
+        raise TypeError("bug in the loader")
+
+    monkeypatch.setattr(ragtruth, "_to_record", broken)
+    with pytest.raises(TypeError, match="bug in the loader"):
+        load_ragtruth(SAMPLE)
+
+
 def test_load_is_repeatable() -> None:
     assert load_ragtruth(SAMPLE) == load_ragtruth(SAMPLE)
 
@@ -158,6 +204,44 @@ def test_load_is_repeatable() -> None:
 def test_checksum_mismatch_raises() -> None:
     with pytest.raises(ChecksumMismatchError):
         load_ragtruth(SAMPLE, expected_sha256="0" * 64)
+
+
+def test_checksum_accepts_uppercase_digest() -> None:
+    digest = hashlib.sha256(SAMPLE.read_bytes()).hexdigest()
+    assert load_ragtruth(SAMPLE, expected_sha256=digest.upper()).records
+
+
+def test_checksum_mismatch_raises_even_with_good_lines(tmp_path: Path) -> None:
+    path = tmp_path / "corpus.jsonl"
+    path.write_bytes(SAMPLE.read_bytes())
+    expected = hashlib.sha256(path.read_bytes()).hexdigest()
+    path.write_bytes(SAMPLE.read_bytes() + b"\n")  # One extra blank line changes the bytes
+
+    with pytest.raises(ChecksumMismatchError):
+        load_ragtruth(path, expected_sha256=expected)
+
+
+def test_checksum_files_agree() -> None:
+    """corpus_v1.sha256 (for sha256sum -c) and the manifest must name the same digest."""
+    manifest = json.loads(CORPUS_V1_MANIFEST.read_text(encoding="utf-8"))
+    digest, name = (CORPUS_V1_DIR / "corpus_v1.sha256").read_text(encoding="utf-8").split()
+
+    assert name == "corpus_v1.jsonl"
+    assert digest == manifest["sha256"]
+
+
+def test_frozen_corpus_with_skipped_lines_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = load_ragtruth
+
+    def one_line_skipped(path: Path, expected_sha256: str | None = None) -> LoadResult:
+        result = real(path, expected_sha256)
+        result.records.pop()
+        result.skipped.append(SkippedRecord(5, "x", "invalid record: example"))
+        return result
+
+    monkeypatch.setattr(ragtruth, "load_ragtruth", one_line_skipped)
+    with pytest.raises(IncompleteCorpusError, match="loaded 918 of 919"):
+        load_corpus_v1()
 
 
 def test_full_corpus_matches_manifest() -> None:
