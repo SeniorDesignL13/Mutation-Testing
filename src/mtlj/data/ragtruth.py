@@ -13,6 +13,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -64,7 +65,7 @@ def _summarize(error: ValidationError) -> str:
     )
 
 
-def _field(raw: dict, key: str, kind: type):
+def _field(raw: dict, key: str, kind: type) -> Any:
     """Return ``raw[key]``, raising KeyError if missing or TypeError if the wrong type."""
     value = raw[key]
     if not isinstance(value, kind):
