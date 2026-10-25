@@ -48,4 +48,5 @@ class DatasetRecord(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    _question_not_blank = field_validator("question")(_reject_blank)
     _answer_not_blank = field_validator("answer")(_reject_blank)
