@@ -3,6 +3,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -11,10 +12,12 @@ from mtlj.data.records import DatasetRecord
 from mtlj.engine.generator import (
     NO_CHANGE,
     OPERATOR_ERROR,
+    REPEATED_DOSE,
     BatteryItem,
     default_battery,
     derive_seed,
     generate_mutants,
+    run_manifest,
     write_generation,
 )
 from mtlj.operators.base import (
@@ -75,6 +78,18 @@ class FailsOnRecordOne(MutationOperator):
         if "number 1 " in text:
             raise RuntimeError("boom")
         return MutationResult(text, text + "!", True, {})
+
+
+class FixedDose(MutationOperator):
+    """Reports how many substitutions it made, like entity swap: 1, 1, then 3 by intensity."""
+
+    metadata = _meta("fixed_dose")
+    DOSES: ClassVar[dict[float, int]] = {0.2: 1, 0.6: 1, 1.0: 3}
+
+    def apply(self, text, context, intensity=1.0, seed=None) -> MutationResult:
+        count = self.DOSES[intensity]
+        subs = [{"original": f"x{i}", "replacement": f"y{i}"} for i in range(count)]
+        return MutationResult(text, f"{text} [{seed}]", True, {"substitutions": subs})
 
 
 def test_one_mutant_per_record_operator_and_intensity() -> None:
@@ -219,3 +234,51 @@ def test_write_generation_writes_three_readable_files(tmp_path: Path) -> None:
     assert len(skipped) == len(RECORDS)
     assert {s["reason"] for s in skipped} == {NO_CHANGE}
     assert b"\r\n" not in (out / "mutants.jsonl").read_bytes()
+
+
+def test_repeated_dose_is_skipped_and_the_lowest_intensity_is_kept() -> None:
+    result = generate_mutants(RECORDS, [BatteryItem(FixedDose(), (0.2, 0.6, 1.0))])
+    kept = {(m.record_id, m.intensity) for m in result.mutants}
+    assert kept == {(r.record_id, i) for r in RECORDS for i in (0.2, 1.0)}
+    assert len(result.skipped) == len(RECORDS)
+    skip = result.skipped[0]
+    assert (skip.intensity, skip.reason) == (0.6, REPEATED_DOSE)
+    assert skip.detail == {"dose": 1, "same_as_intensity": 0.2}
+    assert result.summary()["skipped_by_reason"] == {REPEATED_DOSE: len(RECORDS)}
+
+
+def test_repeated_doses_can_be_kept() -> None:
+    battery = [BatteryItem(FixedDose(), (0.2, 0.6, 1.0))]
+    result = generate_mutants(RECORDS, battery, drop_repeated_doses=False)
+    assert len(result.mutants) == len(RECORDS) * 3
+    assert not result.skipped
+    assert result.drop_repeated_doses is False
+
+
+def test_operators_without_a_dose_are_never_deduplicated() -> None:
+    result = generate_mutants(RECORDS, [BatteryItem(AppendSeed(), (0.25, 0.5, 1.0))])
+    assert len(result.mutants) == len(RECORDS) * 3
+    assert not result.skipped
+
+
+def test_run_json_describes_the_run(tmp_path: Path) -> None:
+    battery = [BatteryItem(FixedDose(), (0.2, 0.6, 1.0)), BatteryItem(AppendSeed(), (1.0,))]
+    result = generate_mutants(RECORDS, battery, base_seed=7)
+    write_generation(result, tmp_path)
+
+    raw = (tmp_path / "run.json").read_bytes()
+    assert b"\r\n" not in raw
+    manifest = json.loads(raw)
+    assert manifest == run_manifest(result)
+    assert manifest["base_seed"] == 7
+    assert manifest["battery"] == {"fixed_dose": [0.2, 0.6, 1.0], "append_seed": [1.0]}
+    assert manifest["drop_repeated_doses"] is True
+    assert manifest["summary"] == result.summary()
+    assert set(manifest["versions"]) == {"python", "spacy", "en_core_web_sm"}
+
+
+def test_run_json_is_the_same_for_the_same_run(tmp_path: Path) -> None:
+    battery = [BatteryItem(AppendSeed(), (0.5, 1.0))]
+    for name in ("a", "b"):
+        write_generation(generate_mutants(RECORDS, battery, base_seed=2), tmp_path / name)
+    assert (tmp_path / "a" / "run.json").read_bytes() == (tmp_path / "b" / "run.json").read_bytes()
