@@ -489,7 +489,7 @@ def test_mappings_dump_as_plain_dicts() -> None:
 
     assert type(data["details"]) is dict
     assert type(data["parameters"]) is dict
-    assert json.loads(_mutant().model_dump_json())["details"] == data["details"]
+    assert json.loads(_mutant().model_dump_json())["details"] == dict(_mutant().details)
 
 
 def test_nested_details_are_read_only() -> None:
