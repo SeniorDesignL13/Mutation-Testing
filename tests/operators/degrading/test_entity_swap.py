@@ -141,3 +141,46 @@ def test_same_seed_is_reproducible() -> None:
     b = op.apply(MULTI_ANSWER, MULTI_CONTEXT, intensity=1.0, seed=11)
     assert a.mutated_text == b.mutated_text
     assert a.details == b.details
+
+
+def test_entity_ending_in_punctuation_still_matches_the_context() -> None:
+    """ "U.S." has no word character after the final dot, which a plain \\b would miss."""
+    result = EntitySwapOperator().apply(
+        "The company is based in the U.S.",
+        ["The company is based in the U.S. and sells in Canada."],
+        seed=1,
+    )
+    assert result.changed
+    assert result.details["substitutions"][0]["original"] == "U.S."
+    assert result.details["skipped"]["no_context_support"] == 0
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_a_repeated_entity_is_swapped_in_one_claim_only_even_at_full_intensity(seed) -> None:
+    result = EntitySwapOperator().apply(
+        "Paris is large. Paris is also old.",
+        ["Paris is a large old city. Berlin is also large."],
+        intensity=1.0,
+        seed=seed,
+    )
+    assert len(result.details["substitutions"]) == 1
+    assert result.mutated_text.count("Paris") == 1
+
+
+def test_context_is_parsed_once_however_many_swaps_are_tried(monkeypatch) -> None:
+    from mtlj.operators.degrading import entity_swap
+
+    real = entity_swap._nlp()
+    calls: list[str] = []
+
+    def counting(text):
+        calls.append(text)
+        return real(text)
+
+    monkeypatch.setattr(entity_swap, "_nlp", lambda: counting)
+    parses = {}
+    for intensity in (0.2, 1.0):
+        calls.clear()
+        EntitySwapOperator().apply(MULTI_ANSWER, MULTI_CONTEXT, intensity=intensity, seed=1)
+        parses[intensity] = len(calls)
+    assert parses[0.2] == parses[1.0] == 1 + len(MULTI_CONTEXT)  # the answer + each passage

@@ -9,10 +9,10 @@ context. The rules follow the feasibility study (docs/spike-effect-size.md):
   format (a year stays a year, a month stays a month).
 * The replacement must not appear in any context sentence that mentions the
   original, so another passage cannot support the new value.
-* Exactly one span is changed per targeted claim (sentence), never every
-  occurrence of the string.
-* Entities that appear once in the answer are preferred, so the answer does not
-  end up contradicting itself.
+* Exactly one span is changed per targeted claim (sentence), and each distinct
+  entity is swapped at most once, so an entity repeated in the answer is never
+  replaced everywhere.
+* Entities that appear once in the answer are preferred.
 
 Intensity controls how many claims are changed: ``ceil(intensity * 5)``.
 Every substitution is recorded in ``details["substitutions"]`` (the provenance).
@@ -126,26 +126,29 @@ class EntitySwapOperator(MutationOperator):
     # -- helpers -----------------------------------------------------------------
 
     @staticmethod
-    def _context_sentences(context: list[str]) -> list[str]:
+    def _parse_context(context: list[str]) -> list:
+        """Run spaCy once over each passage. Everything else reads from these parses."""
+        return [_nlp()(passage) for passage in context]
+
+    @staticmethod
+    def _context_sentences(docs: list) -> list[str]:
         """Normalised sentences of every passage."""
-        sentences: list[str] = []
-        for passage in context:
-            for sent in _nlp()(passage).sents:
-                sentences.append(_norm(sent.text))
-        return sentences
+        return [_norm(sent.text) for doc in docs for sent in doc.sents]
 
     @staticmethod
     def _word_in(text: str, haystack: str) -> bool:
-        return re.search(r"\b" + re.escape(text) + r"\b", haystack) is not None
+        # (?<!\w) and (?!\w) rather than \b, so entities that end in punctuation ("U.S.") match.
+        return re.search(r"(?<!\w)" + re.escape(text) + r"(?!\w)", haystack) is not None
 
-    def _context_entities(self, context: list[str], label: str) -> list[str]:
-        """Unique entities of ``label`` found in the context passages."""
-        found: dict[str, str] = {}
-        for passage in context:
-            for ent in _nlp()(passage).ents:
-                if ent.label_ == label and _is_proper(ent):
-                    found.setdefault(_norm(ent.text), ent.text)
-        return list(found.values())
+    @staticmethod
+    def _context_entities(docs: list) -> dict[str, list[str]]:
+        """Unique proper entities of each label found in the context passages."""
+        found: dict[str, dict[str, str]] = {label: {} for label in ENTITY_LABELS}
+        for doc in docs:
+            for ent in doc.ents:
+                if ent.label_ in found and _is_proper(ent):
+                    found[ent.label_].setdefault(_norm(ent.text), ent.text)
+        return {label: list(ents.values()) for label, ents in found.items()}
 
     def _valid(
         self,
@@ -199,7 +202,7 @@ class EntitySwapOperator(MutationOperator):
         self,
         ent_text: str,
         label: str,
-        context: list[str],
+        context_entities: dict[str, list[str]],
         original_sents: list[str],
         whole_context: str,
         rng: random.Random,
@@ -211,9 +214,7 @@ class EntitySwapOperator(MutationOperator):
 
         n_words = len(ent_text.split())
         from_context = [
-            c
-            for c in self._context_entities(context, label)
-            if self._valid(c, ent_text, original_sents)
+            c for c in context_entities.get(label, []) if self._valid(c, ent_text, original_sents)
         ]
         same_length = [c for c in from_context if len(c.split()) == n_words]
         pool_choice = same_length or from_context
@@ -246,7 +247,9 @@ class EntitySwapOperator(MutationOperator):
         doc = _nlp()(text)
         sentences = list(doc.sents)
         sent_index = {s.start_char: i for i, s in enumerate(sentences)}
-        context_sents = self._context_sentences(context)
+        context_docs = self._parse_context(context)  # each passage is parsed once per call
+        context_sents = self._context_sentences(context_docs)
+        context_entities = self._context_entities(context_docs)
         whole_context = _norm(" ".join(context))
         skipped = {"no_context_support": 0, "no_valid_replacement": 0, "not_a_proper_noun": 0}
 
@@ -272,22 +275,24 @@ class EntitySwapOperator(MutationOperator):
 
         chosen: list[dict] = []
         used_sentences: set[int] = set()
+        used_entities: set[str] = set()
         for ent in candidates:
             if len(chosen) >= wanted:
                 break
             idx = sent_index.get(ent.sent.start_char, -1)
-            if idx in used_sentences:
-                continue
             norm_ent = _norm(ent.text)
+            if idx in used_sentences or norm_ent in used_entities:
+                continue
             original_sents = [s for s in context_sents if self._word_in(norm_ent, s)]
             found = self._replacement(
-                ent.text, ent.label_, context, original_sents, whole_context, rng
+                ent.text, ent.label_, context_entities, original_sents, whole_context, rng
             )
             if found is None:
                 skipped["no_valid_replacement"] += 1
                 continue
             replacement, source = found
             used_sentences.add(idx)
+            used_entities.add(norm_ent)
             chosen.append(
                 {
                     "original": ent.text,
