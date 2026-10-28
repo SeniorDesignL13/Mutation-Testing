@@ -3,11 +3,17 @@
 The safest way to guarantee "no new claims" is to never invent new
 content. Padding is drawn only from:
   (a) phrases already present in the source context, restated, or
-  (b) a small, hand-reviewed list of meaning-free connective phrases.
+  (b) a small, hand-reviewed list of meaning-free connective phrases and
+      sentence stems.
 
 Every word added either already appeared in the source or comes from a
 fixed list of filler phrases that carry no factual content, so this
 operator cannot smuggle in a claim.
+
+Intensity maps linearly onto the number of words added:
+``words = round(intensity * 400)``. The four study levels are therefore
+intensity 0.125 / 0.25 / 0.5 / 1.0 for 50 / 100 / 200 / 400 words. Use
+``intensity_for_words`` to convert.
 """
 
 import logging
@@ -27,6 +33,12 @@ from mtlj.operators.base import (
 
 logger = logging.getLogger(__name__)
 
+# The padding levels (extra words) used to build the dose-response curve.
+PAD_LEVELS = (50, 100, 200, 400)
+MAX_PAD_WORDS = 400
+# The added word count must land within this fraction of the target.
+TOLERANCE = 0.10
+
 # Hand-reviewed, meaning-free connective phrases. None of these assert a
 # fact, so they cannot smuggle in a new claim regardless of where inserted.
 NEUTRAL_CONNECTORS = [
@@ -39,6 +51,33 @@ NEUTRAL_CONNECTORS = [
     "as a result,",
     "overall,",
 ]
+
+# Templates that only *mention* a phrase taken from the source context.
+MENTION_TEMPLATES = [
+    "{connector} this concerns {phrase}.",
+    "{connector} this is about {phrase}.",
+    "{connector} this touches on {phrase}.",
+    "{connector} the answer mentions {phrase}.",
+]
+
+# Meaning-free sentence stems that talk about the response itself, not the
+# topic. Used on their own when the context gives no usable phrases, and
+# mixed in for variety otherwise.
+NEUTRAL_STEMS = [
+    "this is worth keeping in mind.",
+    "the above is stated as clearly as possible.",
+    "please read the above with that in mind.",
+    "this is simply a restatement of the same answer.",
+    "nothing further is meant by this.",
+    "the details above are given for completeness.",
+    "this is included only for clarity.",
+    "it helps to read the answer once more.",
+]
+
+
+def intensity_for_words(words: int) -> float:
+    """Return the intensity that yields ``words`` filler words."""
+    return words / MAX_PAD_WORDS
 
 
 @lru_cache
@@ -62,35 +101,52 @@ class VerbosityPaddingOperator(MutationOperator):
         description=(
             "Adds filler words to the text without introducing any new "
             "claim, by restating words already present in the source "
-            "context or inserting meaning-free connective phrases."
+            "context or inserting meaning-free connective phrases. "
+            "intensity * 400 filler words are added (50/100/200/400)."
         ),
         parameters=[
             ParameterSpec(
                 name="words_added",
-                description="Approximate number of filler words to add.",
-                default=50,
+                description="Filler words added at intensity 1.0 (intensity scales this).",
+                default=MAX_PAD_WORDS,
                 min_value=10,
-                max_value=400,
+                max_value=MAX_PAD_WORDS,
             )
         ],
     )
 
     def _extract_source_phrases(self, context: list[str]) -> list[str]:
-        """Pull noun phrases already present in the source context.
+        """Pull unique noun phrases already present in the source context.
 
-        Filters out bare pronouns (spaCy sometimes tags "that" or "it" as
-        a noun chunk) and very short chunks, since these produce filler
-        that reads unnaturally (e.g. "this concerns that.").
+        Skips bare pronouns (spaCy sometimes tags "that" or "it" as a noun
+        chunk), very short chunks, and chunks containing digits, so the
+        filler never repeats a number from the source.
         """
-        phrases = []
+        phrases: list[str] = []
+        seen: set[str] = set()
         for passage in context:
             doc = _nlp()(passage)
             for chunk in doc.noun_chunks:
                 text = chunk.text.strip()
                 is_bare_pronoun = len(chunk) == 1 and chunk[0].pos_ == "PRON"
-                if text and not is_bare_pronoun and len(text) > 2:
+                has_digit = any(ch.isdigit() for ch in text)
+                if not text or is_bare_pronoun or has_digit or len(text) <= 2:
+                    continue
+                key = text.lower()
+                if key not in seen:
+                    seen.add(key)
                     phrases.append(text)
         return phrases
+
+    def _candidate(self, rng: random.Random, phrases: list[str]) -> str:
+        """Build one filler sentence."""
+        connector = rng.choice(NEUTRAL_CONNECTORS)
+        if phrases and rng.random() < 0.75:
+            template = rng.choice(MENTION_TEMPLATES)
+            sentence = template.format(connector=connector, phrase=rng.choice(phrases))
+            return sentence[0].upper() + sentence[1:]
+        stem = rng.choice(NEUTRAL_STEMS)
+        return f"{connector.capitalize()} {stem}"
 
     def apply(
         self,
@@ -99,39 +155,48 @@ class VerbosityPaddingOperator(MutationOperator):
         intensity: float = 1.0,
         seed: int | None = None,
     ) -> MutationResult:
-        """Append filler sentences to ``text`` until the target word count is hit."""
+        """Append filler sentences so that about ``intensity * 400`` words are added."""
         rng = random.Random(seed)
-        target_words = int(self.metadata.parameters[0].default * intensity)
-        source_phrases = self._extract_source_phrases(context)
+        max_words = int(self.metadata.parameters[0].max_value)
+        target_words = round(min(max(intensity, 0.0), 1.0) * max_words)
+        phrases = self._extract_source_phrases(context)
 
-        filler_parts: list[str] = []
+        filler: list[str] = []
+        used: set[str] = set()
         words_so_far = 0
-        attempts = 0
 
-        while words_so_far < target_words and attempts < 50:
-            attempts += 1
-            connector = rng.choice(NEUTRAL_CONNECTORS)
+        # Greedy fill: each round, draw a few candidates and keep the one
+        # that lands the running total closest to the target. Stop when no
+        # candidate gets closer.
+        for _ in range(500):
+            if words_so_far >= target_words:
+                break
+            options = [self._candidate(rng, phrases) for _ in range(12)]
+            options = [s for s in options if s not in used] or options
+            best = min(
+                options,
+                key=lambda s: abs(target_words - (words_so_far + len(s.split()))),
+            )
+            new_total = words_so_far + len(best.split())
+            if abs(target_words - new_total) >= abs(target_words - words_so_far):
+                break
+            filler.append(best)
+            used.add(best)
+            words_so_far = new_total
 
-            if source_phrases:
-                phrase = rng.choice(source_phrases)
-                sentence = f"{connector} this concerns {phrase}."
-            else:
-                sentence = f"{connector.capitalize()} this remains the case."
-
-            filler_parts.append(sentence)
-            words_so_far += len(sentence.split())
-
-        mutated_text = text.rstrip() + " " + " ".join(filler_parts)
-        logger.debug("verbosity_padding: added %d words", words_so_far)
+        mutated_text = text.rstrip() + (" " + " ".join(filler) if filler else "")
+        within = target_words == 0 or abs(words_so_far - target_words) <= TOLERANCE * target_words
+        logger.debug("verbosity_padding: added %d of %d words", words_so_far, target_words)
 
         return MutationResult(
             original_text=text,
             mutated_text=mutated_text,
-            changed=len(filler_parts) > 0,
+            changed=len(filler) > 0,
             details={
                 "words_added": words_so_far,
                 "target_words": target_words,
-                "num_filler_sentences": len(filler_parts),
-                "source_phrases_available": len(source_phrases),
+                "within_tolerance": within,
+                "num_filler_sentences": len(filler),
+                "source_phrases_available": len(phrases),
             },
         )
