@@ -278,14 +278,18 @@ class Mutant(BaseModel):
         )
         return cls.from_result(record, operator, result, intensity, seed, parameters)
 
-    def regenerate(self, record: DatasetRecord) -> Mutant:
-        """Rebuild this mutant from its provenance. Equal to ``self`` if reproducible."""
+    def check_record(self, record: DatasetRecord) -> None:
+        """Raise ValueError unless ``record`` is the one this mutant was made from, unchanged."""
         if record.record_id != self.record_id:
             raise ValueError(f"mutant was made from {self.record_id!r}, not {record.record_id!r}")
         if record.answer != self.original_text:
             raise ValueError(f"record {record.record_id!r}'s answer has changed since mutation")
         if context_sha256(_record_context(record)) != self.context_sha256:
             raise ValueError(f"record {record.record_id!r}'s context has changed since mutation")
+
+    def regenerate(self, record: DatasetRecord) -> Mutant:
+        """Rebuild this mutant from its provenance. Equal to ``self`` if reproducible."""
+        self.check_record(record)
         try:
             operator_cls = _operators()[self.operator_name]
         except KeyError:
