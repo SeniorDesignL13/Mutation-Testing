@@ -115,3 +115,11 @@ def test_every_filler_sentence_starts_with_a_capital() -> None:
     filler = result.mutated_text[len(ANSWER.rstrip()) :].strip()
     sentences = [s for s in re.split(r"(?<=\.)\s+", filler) if s]
     assert all(s[0].isupper() for s in sentences)
+
+
+def test_nothing_added_leaves_the_text_untouched() -> None:
+    """At intensity 0 no filler is added, so a trailing newline must not count as a change."""
+    answer = "The fish is done when the center is translucent.\n"
+    result = VerbosityPaddingOperator().apply(answer, CONTEXT, intensity=0.0, seed=1)
+    assert result.changed is False
+    assert result.mutated_text == answer

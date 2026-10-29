@@ -184,7 +184,8 @@ class VerbosityPaddingOperator(MutationOperator):
             used.add(best)
             words_so_far = new_total
 
-        mutated_text = text.rstrip() + (" " + " ".join(filler) if filler else "")
+        # With no filler the text comes back untouched (not rstripped), so it isn't "changed".
+        mutated_text = text.rstrip() + " " + " ".join(filler) if filler else text
         within = target_words == 0 or abs(words_so_far - target_words) <= TOLERANCE * target_words
         logger.debug("verbosity_padding: added %d of %d words", words_so_far, target_words)
 
