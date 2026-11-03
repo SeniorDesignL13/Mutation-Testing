@@ -88,7 +88,7 @@ services:
   # Only started with `--profile models`. Download a model once with:
   #   docker compose exec ollama ollama pull llama3.2
   ollama:
-    image: ollama/ollama:0.35.0
+    image: ollama/ollama:0.40.11
     profiles: ["models"]
     ports:
       - "11434:11434"
