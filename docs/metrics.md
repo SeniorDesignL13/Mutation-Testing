@@ -73,8 +73,9 @@ Excluded from the denominator. The report counts each reason:
 
 ### Reported with it
 
-Detection rate, its 95% CI, detected ÷ testable, excluded counts by reason, σ, τ, N and α.
-Run provenance records N and α so the result can be reproduced.
+Detection rate, its 95% Wilson and [bootstrap](#bootstrap-intervals) intervals, detected ÷
+testable, excluded counts by reason, σ, τ, N and α. Run provenance records N and α so the result
+can be reproduced.
 
 ### Choices behind the definition
 
@@ -263,8 +264,8 @@ rewarded, and one near 1 can still be penalized.
 
 ### Reported with it
 
-Spurious sensitivity, its 95% CI, flagged ÷ testable split into penalized and rewarded, p and
-whether the result is above chance, excluded counts by reason, σ, τ, N and α. Also the paired mean
+Spurious sensitivity, its 95% Wilson and [bootstrap](#bootstrap-intervals) intervals, flagged ÷
+testable split into penalized and rewarded, p and whether the result is above chance, excluded counts by reason, σ, τ, N and α. Also the paired mean
 Δ with its 95% interval (see "What detection rate doesn't tell you"), which says whether the
 moves lean one way.
 
@@ -391,3 +392,136 @@ Proposed for the team to agree:
 Wilson interval and mutant types. `tests/stats/test_spurious.py` checks that it reproduces the
 worked example for both configs and both preserving operators. `spike/spurious_sensitivity.py` is
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
+
+## Bootstrap intervals
+MTLJ-39 · Ethan Goedelman · 2026-11-04 · **Status: proposed, awaiting team review**
+
+Every detection rate and spurious sensitivity also carries a **bootstrap interval: resample the
+run's records with replacement, recompute σ, τ and every verdict in each resample, and take the
+middle 95% of the resampled rates.** It's reported alongside the Wilson interval, not in its place.
+
+### Why a second interval
+
+The Wilson interval treats each mutant's verdict as fixed and asks how much the rate would move
+with a different sample of mutants. But τ isn't fixed. It's a multiple of σ, which is estimated
+from the same records, and noise is concentrated in a few of them (original 17472 contributes 53%
+of the default config's variance). A sample that draws 17472 twice has a larger τ, and one that
+misses it has a smaller one, so marginal verdicts flip with it. The worked examples above have
+several: swap 09 clears τ by 0.001, and reformatted records 13122 and 14352 by 0.0002. The
+bootstrap interval covers both sources of uncertainty.
+
+### Definition
+
+Computed for each judge, judge config and operator, alongside the rate, from the same scores.
+
+```
+for b = 1 … B                                          B = 10,000 resamples, seed 0
+    draw n records with replacement                    n = records in the run
+    σ_b     = noise floor of the drawn originals       as in detection rate
+    τ_rb    = threshold from σ_b, for each drawn mutant
+    rate_b  = hits ÷ testable among the drawn mutants  each metric's own rule
+CI = [ (1 − L)/2 quantile,  (1 + L)/2 quantile ] of the rate_b,   L = 0.95 by default
+```
+
+- **The record is the unit.** A record is one original and its mutants, and drawing it brings
+  both, so each mutant stays paired with its own original. Every original in the run is a
+  record, including those whose mutant is excluded, because all of them feed σ. Detection
+  rate's no-headroom exclusion is decided again in each resample, since it depends on τ.
+- **Only records are resampled, not the N scores within a text.** The within-text noise already
+  shows up as variation between records. Resampling both levels counts it twice and overstates
+  the spread, so with data in levels the usual choice is to resample the top level only.
+- **Percentile interval.** BCa, the usual refinement, corrects for bias using the share of
+  resamples below the observed rate. A rate over 20 mutants moves in steps of 5 points, so many
+  resamples tie with the observed rate, and that correction becomes unreliable.
+- **10,000 resamples from seed 0,** both recorded with the interval, so the same scores always
+  give the same interval. At 10,000 the simulation error in each bound is well under one
+  mutant's step.
+- **Invalid resamples are left out.** A resample with no testable mutant, or with no original
+  that has two or more scores, has no rate. The number kept is reported.
+- **The confidence level is configurable,** 0.95 by default, and sets the Wilson interval too.
+
+### Reported with it
+
+The interval, its level, the number of resamples, the number of valid resamples and the seed.
+The audit's result file (MTLJ-32) doesn't exist yet. When it does, it should carry all five.
+
+### Choices behind the definition
+
+**Alongside Wilson, not instead of it.** At the spike's size, the bootstrap interval is the
+worse of the two where it matters most. Exact coverage of a nominal 95% interval, when τ is
+fixed (the case Wilson is built for), by testable mutants n and true rate p:
+
+| n | p = 0.05 | p = 0.25 | p = 0.60 |
+|---|---|---|---|
+| 20 | 64% / 93% | 96% / 94% | 96% / 96% |
+| 100 | 96% / 97% | 96% / 95% | 96% / 95% |
+| 900 | 95% / 95% | 96% / 95% | 95% / 95% |
+
+Each cell is bootstrap / Wilson, computed over the binomial distribution of the flag count. With
+20 mutants and a true rate of 5%, the bootstrap interval misses a third of the time. When no
+mutant is flagged (36% of such runs), no resample can flag one either, so the interval is
+[0%, 0%]. A rate near 5% is where spurious sensitivity sits for a judge that ignores the change.
+From 100 mutants up, the two cover equally well, and the bootstrap adds τ's uncertainty, which
+Wilson leaves out. A full run on corpus v1 has about 900 records per operator.
+
+**Records, not just the verdicts.** Resampling the per-mutant verdicts with τ held fixed is
+cheaper, but it reproduces Wilson's assumption. On the default config's swaps, the same 10,000
+draws with σ held fixed give [40%, 80%], close to Wilson's [39%, 78%].
+
+### Worked example
+
+The same spike data as the two worked examples above: 20 records, N = 5, default and penalize
+configs.
+
+| Operator | Config | Rate | Wilson 95% | Bootstrap 95% |
+|---|---|---|---|---|
+| Entity swap (detection rate) | default | 12/20 = 60% | [39%, 78%] | [30%, 80%] |
+| Entity swap (detection rate) | penalize | 11/20 = 55% | [34%, 74%] | [35%, 80%] |
+| Padding (spurious sensitivity) | default | 3/20 = 15% | [5%, 36%] | [0%, 30%] |
+| Padding (spurious sensitivity) | penalize | 5/20 = 25% | [11%, 47%] | [15%, 45%] |
+| Reformatting (spurious sensitivity) | default | 5/20 = 25% | [11%, 47%] | [5%, 45%] |
+| Reformatting (spurious sensitivity) | penalize | 5/20 = 25% | [11%, 47%] | [5%, 45%] |
+
+What the example shows:
+
+- **Uncertainty in τ lowers the swaps' bottom bound** from 39% to 30% on the default config.
+  The resamples with a rate of 35% or less draw original 17472 2.1 times on average instead of
+  once, and their σ averages 0.068 instead of 0.052. The larger τ loses the swaps that cleared
+  it narrowly.
+- **Every bound moves in steps of 5 points,** one mutant in 20.
+- **Padding's bottom bound is 0%** although 3 mutants were flagged: 4% of resamples
+  ((17/20)^20) draw none of the three. The exact binomial test (p = 0.08) still decides whether
+  the judge is above chance, as before.
+
+### What the bootstrap interval doesn't tell you
+
+- **It doesn't make a small sample reliable.** At 20 mutants it's coarse, and near 0% it's
+  wrong more often than its level says (see "Choices").
+- **It doesn't correct for testing many operators.** Each interval holds for one judge, config
+  and operator on its own. Multiple-comparison correction is MTLJ-36.
+
+### Decisions
+
+Proposed for the team to agree:
+
+- **Report the bootstrap interval alongside Wilson,** not in place of it. The preliminary design
+  document (§9.4) names the bootstrap as the only interval, so this changes it.
+- **Percentile method, 10,000 resamples, seed 0,** with the level configurable and 0.95 by
+  default.
+- **Open question: which interval the CLI and dashboard show first.** One option is Wilson below
+  100 testable mutants and the bootstrap from 100 up, where it covers as well and includes τ's
+  uncertainty.
+
+### Code
+
+`src/mtlj/stats/bootstrap.py` resamples records and takes the percentile interval. It knows
+neither metric's rule: `detection.py` and `spurious.py` each pass the vectorized form of their
+own (`resampled_verdict`), and return the interval as `bootstrap` on their result, with `level`
+beside it. `tests/stats/test_bootstrap.py` checks that:
+
+- when τ can't move, the bootstrap distribution is exactly binomial, at 95% and 90%;
+- on simulated runs with a known rate, the interval covers it about 95% of the time;
+- drawing every record once reproduces each metric's own rate, on the spike data and on edge
+  cases;
+- uncertainty in τ widens the interval;
+- the worked example above is reproduced.

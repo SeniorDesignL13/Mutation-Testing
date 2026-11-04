@@ -15,11 +15,25 @@ import statistics
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from statistics import NormalDist
 
+import numpy as np
 from scipy.stats import binomtest
 
 from mtlj.stats import detection
+from mtlj.stats.bootstrap import (
+    DEFAULT_RESAMPLES,
+    DEFAULT_SEED,
+    BootstrapInterval,
+    Flags,
+    Floats,
+    RecordSummaries,
+    Verdict,
+    bootstrap_rate,
+    summarize,
+)
 from mtlj.stats.detection import (
+    CI_LEVEL,
     DEFAULT_ALPHA,
     EPSILON,
     ExclusionReason,
@@ -37,15 +51,18 @@ EXCLUSION_REASONS = (ExclusionReason.NO_CHANGE, ExclusionReason.NO_SCORES)
 class SpuriousSensitivity:
     """Spurious sensitivity for one judge, judge config and operator, with what's reported with it.
 
-    ``rate``, ``ci`` and ``p_value`` are None when no mutant is testable. ``p_value`` is the
-    one-sided exact binomial test of ``flagged`` against ``alpha``: the chance that a judge
-    blind to the change gets at least this many flags. ``above_chance`` is True when it's below
-    ``alpha``. ``tau`` is the threshold at ``n_samples`` scores on both sides. In ``outcomes``,
-    ``detected`` means flagged, and the sign of ``delta`` says which way the score moved.
+    ``ci`` is the Wilson interval at ``level``, and ``bootstrap`` the record-level bootstrap
+    interval at the same level (see ``mtlj.stats.bootstrap``). ``rate``, ``ci``, ``bootstrap``
+    and ``p_value`` are None when no mutant is testable. ``p_value`` is the one-sided exact
+    binomial test of ``flagged`` against ``alpha``: the chance that a judge blind to the change
+    gets at least this many flags. ``above_chance`` is True when it's below ``alpha``. ``tau`` is
+    the threshold at ``n_samples`` scores on both sides. In ``outcomes``, ``detected`` means
+    flagged, and the sign of ``delta`` says which way the score moved.
     """
 
     rate: float | None
     ci: tuple[float, float] | None
+    bootstrap: BootstrapInterval | None
     p_value: float | None
     above_chance: bool
     flagged: int
@@ -57,6 +74,7 @@ class SpuriousSensitivity:
     tau: float
     n_samples: int
     alpha: float
+    level: float
     outcomes: tuple[MutantOutcome, ...]
 
 
@@ -93,10 +111,31 @@ def flag_mutant(
     return MutantOutcome(mutant.record_id, abs(delta) > tau + EPSILON, None, delta, tau)
 
 
+def resampled_verdict(alpha: float = DEFAULT_ALPHA) -> Verdict:
+    """``flag_mutant``'s rule, vectorized over bootstrap resamples (``mtlj.stats.bootstrap``).
+
+    Each resample has its own sigma and so its own tau. Testability doesn't depend on tau.
+    """
+    z = NormalDist().inv_cdf(1 - alpha / 2)
+
+    def verdict(sigma: Floats, mutants: RecordSummaries) -> tuple[Flags, Flags]:
+        # Same order of operations as ``threshold``, so a resample equal to the original sample
+        # reproduces its verdicts.
+        tau = (z * sigma)[:, None] * mutants.spread
+        testable = np.broadcast_to(mutants.scored, tau.shape)
+        return np.abs(mutants.delta) > tau + EPSILON, testable
+
+    return verdict
+
+
 def spurious_sensitivity(
     originals: Mapping[str, Sequence[float]],
     mutants: Iterable[MutantScores],
     alpha: float = DEFAULT_ALPHA,
+    *,
+    level: float = CI_LEVEL,
+    n_resamples: int = DEFAULT_RESAMPLES,
+    seed: int = DEFAULT_SEED,
 ) -> SpuriousSensitivity:
     """Spurious sensitivity of one preserving operator's mutants, for one judge and judge config.
 
@@ -107,11 +146,14 @@ def spurious_sensitivity(
         mutants: the operator's mutants.
         alpha: two-sided false-flag rate, also the rate the result is tested against.
             docs/metrics.md fixes it at 0.05.
+        level: confidence level of both intervals.
+        n_resamples: bootstrap resamples (see ``mtlj.stats.bootstrap``).
+        seed: bootstrap seed, so the same scores always give the same interval.
 
     Returns:
-        The rate with its 95% Wilson interval and the binomial test against alpha, the counts
-        behind it, and sigma, tau, N and alpha. ``n_samples`` is the most scores any text
-        received, as in ``detection.detection_rate``.
+        The rate with its Wilson and bootstrap intervals and the binomial test against alpha,
+        the counts behind it, and sigma, tau, N, alpha and the level. ``n_samples`` is the most
+        scores any text received, as in ``detection.detection_rate``.
 
     Raises:
         ValueError: if no original has two or more scores (see ``noise_floor``).
@@ -130,10 +172,18 @@ def spurious_sensitivity(
         else None
     )
     n_samples = max(len(s) for s in [*originals.values(), *(m.scores for m in mutants)])
+    bootstrap = (
+        bootstrap_rate(
+            summarize(originals, mutants), resampled_verdict(alpha), level, n_resamples, seed
+        )
+        if testable
+        else None
+    )
 
     return SpuriousSensitivity(
         rate=len(flagged) / testable if testable else None,
-        ci=wilson_interval(len(flagged), testable) if testable else None,
+        ci=wilson_interval(len(flagged), testable, level) if testable else None,
+        bootstrap=bootstrap,
         p_value=p_value,
         above_chance=p_value is not None and p_value < alpha,
         flagged=len(flagged),
@@ -145,5 +195,6 @@ def spurious_sensitivity(
         tau=threshold(sigma, n_samples, n_samples, alpha),
         n_samples=n_samples,
         alpha=alpha,
+        level=level,
         outcomes=outcomes,
     )
