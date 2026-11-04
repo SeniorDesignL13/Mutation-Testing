@@ -33,6 +33,51 @@ Stop with **Ctrl+C**.
 | http://localhost:3000 | The website |
 | http://localhost:8000/docs | The API. Click any route, then **Try it out** |
 
+## Run an audit
+
+Add `OPENAI_API_KEY` to `.env` (see [How to develop](docs/DEVELOPER.md)), then:
+
+```bash
+uv run mtlj audit run --dataset gold --limit 3 --output runs/example
+```
+
+This scores 3 records and their mutants, 5 times each. It's 85 scorings, about 3 minutes and
+under 10 cents with `gpt-4o-mini`. It prints:
+
+```text
+Planned: 3 originals and 14 mutants, 5 scorings each: 85 scorings with deepeval-faithfulness (gpt-4o-mini).
+
+Judge: deepeval-faithfulness (gpt-4o-mini, version 4.2.8)
+Dataset: gold (3 records)
+Status: complete
+Samples: 5, alpha: 0.05
+Scorings: 85 ok, 0 failed
+Noise floor: 0.000
+
+Detection rate (degrading operators)
+  entity_swap: 50.0% [9.5%, 90.5%], 1/2 detected, mean drop +0.049, excluded {'no_change': 3}
+    intensity 0.2: 50.0% [9.5%, 90.5%], 1/2 detected, mean drop +0.049, excluded {'no_change': 1}
+    ...
+
+Spurious sensitivity (preserving operators, read against 5%)
+  verbosity_padding: 8.3% [1.5%, 35.4%], 1/12 flagged (1 penalized, 0 rewarded), mean drop +0.002
+    ...
+
+Saved to runs/example
+```
+
+- **Detection rate:** how many mutants that should score lower did, by more than noise.
+- **Spurious sensitivity:** how many mutants that shouldn't change the score did. It's read
+  against 5%, the rate noise alone gives.
+
+Three records are only enough to try it: the intervals are wide, and these records never vary,
+so the noise floor is 0. Use `--dataset gold` or `--dataset corpus-v1` for real numbers. All of
+`corpus-v1` is tens of thousands of scorings, so `mtlj` asks before any run over 1,000.
+
+`--dataset` also takes a RAGTruth `.jsonl` file. See `uv run mtlj audit run --help` for the rest.
+The command exits 1 if the run stops early. Print a run's results again with
+`uv run mtlj audit show runs/example`. [Audit results](docs/results.md) explains the files.
+
 ## What's where
 
 ```
@@ -61,6 +106,7 @@ generated, `.github/` runs the automatic checks, and the dotfiles configure tool
 ## Next
 
 - **[How to develop](docs/DEVELOPER.md)**: running Python on your machine, how-tos, fixing problems
+- **[Audit results](docs/results.md)**: what a run leaves behind and the `results.json` format
 - **[Rules for contributing](docs/CONTRIBUTING.md)**: how Jira and GitHub work together, Git step by step, pull requests, code style
 
 ## Tech stack

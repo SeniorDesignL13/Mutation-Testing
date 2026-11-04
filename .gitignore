@@ -35,3 +35,6 @@ Thumbs.db
 *.log
 .deepeval/
 .claude/settings.local.json
+
+# Audit runs: `mtlj audit run` writes here
+runs/
