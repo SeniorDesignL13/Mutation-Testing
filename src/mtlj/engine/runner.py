@@ -142,6 +142,8 @@ class Evaluation(BaseModel):
     n_claims: int | None = None
     error_type: str | None = None
     error: str | None = None
+    backend: str | None = None
+    quantization: str | None = None
 
 
 @dataclass
@@ -355,6 +357,8 @@ async def _evaluate(judge: Judge, task: EvalTask, executor: ThreadPoolExecutor) 
         "judge_name": judge.name,
         "model": judge.model,
         "version": judge.version,
+        "backend": task.backend,
+        "quantization": task.quantization,
     }
     start = time.perf_counter()
     try:
@@ -389,6 +393,8 @@ async def _evaluate(judge: Judge, task: EvalTask, executor: ThreadPoolExecutor) 
         verdict_borderline=counts.borderline if counts else None,
         verdict_no=counts.no if counts else None,
         n_claims=result.n_claims,
+        backend=result.backend,
+        quantization=result.quantization,
     )
 
 

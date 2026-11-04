@@ -108,6 +108,10 @@ class JudgeResult:
     verdict_counts: VerdictCounts | None = None
     n_claims: int | None = None
 
+    # Inference provenance
+    backend: str | None = None
+    quantization: str | None = None
+
     def __post_init__(self) -> None:
         if not isfinite(self.score) or not 0.0 <= self.score <= 1.0:
             raise ValueError("score must be finite and within [0.0, 1.0]")
@@ -199,4 +203,6 @@ class Judge(ABC):
             version=self.version,
             verdict_counts=raw.verdict_counts,
             n_claims=raw.n_claims,
+            backend=getattr(self, "backend_name", None),
+            quantization=getattr(self, "quantization", None),
         )
