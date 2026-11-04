@@ -391,3 +391,132 @@ Proposed for the team to agree:
 Wilson interval and mutant types. `tests/stats/test_spurious.py` checks that it reproduces the
 worked example for both configs and both preserving operators. `spike/spurious_sensitivity.py` is
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
+
+## Multiple-comparison correction
+MTLJ-36 · Ethan Goedelman · 2026-11-04 · **Status: proposed, awaiting team review**
+
+An audit runs many tests at once, so some come out significant by chance. **Each test is
+reported with its p-value as it is and with its Benjamini-Hochberg adjusted p-value, and a
+result counts as significant after correction when its adjusted p-value is below q = 0.05.**
+Among the results called significant, the expected share of false ones is then at most 5%.
+
+### Why correct
+
+Each test is set to come out significant by chance at most 5% of the time. A judge that ignores
+padding and formatting completely, audited on padding at its four lengths and on reformatting,
+gets five such chances. If the tests were independent, the chance that at least one says the
+judge is spuriously sensitive would be up to 1 − 0.95⁵ = 23%, and every operator or intensity
+added raises it. The report would then show weaknesses that aren't there.
+
+### Definition
+
+```
+family   = every test in the run for one judge and judge config
+m        = tests in the family that have a p-value
+p_(1) ≤ … ≤ p_(m)                                       the p-values, sorted
+p̃_(i)   = min over j ≥ i of  m · p_(j) ÷ j,  capped at 1   adjusted p-value
+significant after correction   ⇔   p̃ < q,  q = 0.05
+```
+
+- **The family** is every test one judge and judge config gets in a run. Today that's spurious
+  sensitivity's exact binomial test, once for each preserving operator and intensity. Detection
+  rate has no test (see "Decisions").
+- **A test without a p-value** (no testable mutant) is left out of m.
+- **q equals α,** so the uncorrected verdict (p < α, spurious sensitivity's "above chance") and
+  the corrected one use the same cutoff, and a family of one test gets the same verdict both
+  ways.
+- **Strictly below q,** like spurious sensitivity's p < α. The 1995 paper uses ≤. The two differ
+  only when an adjusted p-value equals q exactly.
+
+### Reported with it
+
+For each test: its p-value, its adjusted p-value and its verdict before and after correction.
+For the family: m, q and the method. The uncorrected values stay in the report so a reader can
+see what the correction changed. The audit's result file (MTLJ-32) doesn't exist yet; when it
+does, it should carry all of these.
+
+### Choices behind the definition
+
+**Benjamini-Hochberg, not Bonferroni or Holm.** Bonferroni and Holm limit the chance of even one
+false positive in the family. That makes every test stricter as the family grows: with 20 tests,
+Bonferroni needs p < 0.0025 from each. An audit is a profile of a judge across many operators,
+and what a reader needs is that most of the weaknesses it shows are real. Benjamini-Hochberg
+limits the share of false ones among those shown, and loses less power as tests are added. On
+the paper's own example (15 tests), Bonferroni and Holm find 3 significant results and
+Benjamini-Hochberg finds 4.
+
+**One family per judge and judge config.** Every metric is computed for one judge and judge
+config, and spurious sensitivity "belongs to a judge *and* its config". A run that scores two
+configs therefore makes two families. Correcting across them would make one config's verdicts
+depend on how many other configs the run happened to include. Correcting the whole run instead
+is one call with every test in it; on the spike data it changes no verdict either.
+
+**Benjamini-Hochberg, not Benjamini-Yekutieli.** Benjamini-Hochberg's guarantee is proven for
+independent tests and for a kind of positive dependence between them. Tests in one run aren't
+independent: they share the noise floor σ and the same originals, so a larger σ raises τ and
+lowers every flag rate together. That looks like the positive dependence the guarantee covers,
+though it isn't proven for these tests. Benjamini-Yekutieli holds under any dependence, but
+divides q by 1 + 1/2 + … + 1/m (2.9 for 10 tests), which would make it much stricter.
+
+**Discrete p-values make it conservative.** An exact binomial p-value on 20 mutants takes only a
+few values, and the test comes out significant by chance less often than α: it takes 4 flags of
+20, which happens 1.6% of the time. Benjamini-Hochberg on such p-values keeps the false
+discovery rate further below q than it needs to, so on a small corpus the correction is stricter
+than its 5%. With about 900 mutants per condition in a full run, the p-values are close to
+continuous.
+
+### Worked example
+
+Real spike data: padding and reformatting, each at one intensity, under both configs. Each config
+is its own family of two tests.
+
+| Config | Operator | Flagged | p | Adjusted p | Above chance | After correction |
+|---|---|---|---|---|---|---|
+| default | Padding | 3/20 | 0.0755 | 0.0755 | no | no |
+| default | Reformatting | 5/20 | 0.0026 | 0.0051 | yes | yes |
+| penalize | Padding | 5/20 | 0.0026 | 0.0026 | yes | yes |
+| penalize | Reformatting | 5/20 | 0.0026 | 0.0026 | yes | yes |
+
+What the example shows:
+
+- **With two tests per family, the correction changes no verdict.** Reformatting's 0.0026 on the
+  default config doubles to 0.0051, still far below 0.05.
+- **When every test in a family is significant, nothing changes.** On the penalize config both
+  p-values are 0.0026, and the larger one is adjusted by m ÷ m = 1.
+- **Correcting both configs as one family** gives 0.0034 for the three results above chance, and
+  the same verdicts.
+
+An illustration with made-up p-values shows when it does matter. A family of four tests with p
+= 0.01, 0.03, 0.04 and 0.20 has three results below 0.05. After correction only the first is
+significant (adjusted 0.04); the second and third both adjust to 0.053.
+
+### What the correction doesn't tell you
+
+- **Which significant results are the false ones.** It limits their expected share across the
+  family, not any one of them.
+- **Anything about the intervals.** Each Wilson interval covers one condition on its own.
+  Adjusting intervals for being picked out of many is a different procedure (the false coverage
+  rate) and isn't done.
+- **That a result which isn't significant is fine.** Correction makes each test stricter, so
+  with few mutants a real effect can stop being significant. Read the rate and its interval with
+  it.
+- **Anything about the paired mean Δ or the variance ratios** (MTLJ-38). Their intervals aren't
+  corrected either.
+
+### Decisions
+
+Proposed for the team to agree:
+
+- **Benjamini-Hochberg at q = 0.05,** with uncorrected and corrected values both reported.
+- **One family per judge and judge config in a run.**
+- **Open question: should detection rate get an above-chance test?** The exact binomial test
+  against α that spurious sensitivity uses would say whether a judge catches an operator at all,
+  and would join the family. Today a detection rate has an interval but no verdict.
+
+### Code
+
+`src/mtlj/stats/correction.py` implements this. `benjamini_hochberg` corrects any family of
+p-values with SciPy's `false_discovery_control`, and `correct_spurious_sensitivity` corrects one
+family of spurious sensitivity results. `tests/stats/test_correction.py` checks it against the
+paper's example and statsmodels, checks the false discovery rate on simulated families, and
+reproduces the worked example above.
