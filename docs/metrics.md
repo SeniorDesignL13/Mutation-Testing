@@ -204,7 +204,7 @@ is a standard-library-only script that prints the worked example from `spike/sco
 per-mutant outcomes; `tests/stats/test_paired.py` checks it against the spike's results tables.
 
 ## Spurious sensitivity
-MTLJ-33 · Ethan Goedelman · 2026-10-23 · **Status: proposed, awaiting team review**
+MTLJ-33 · Ethan Goedelman · 2026-10-23 · **Status: accepted, ratified by the team (recorded 2026-11-04)**
 
 The headline metric for preserving operators: **the share of preserving mutants whose score
 moves, in either direction, by more than the judge's own run-to-run noise can explain.** A
@@ -265,9 +265,9 @@ rewarded, and one near 1 can still be penalized.
 ### Reported with it
 
 Spurious sensitivity, its 95% Wilson and [bootstrap](#bootstrap-intervals) intervals, flagged ÷
-testable split into penalized and rewarded, p and whether the result is above chance, excluded counts by reason, σ, τ, N and α. Also the paired mean
-Δ with its 95% interval (see "What detection rate doesn't tell you"), which says whether the
-moves lean one way.
+testable split into penalized and rewarded, p and whether the result is above chance, excluded
+counts by reason, σ, τ, N and α. Also the paired mean Δ with its 95% interval (see "What
+detection rate doesn't tell you"), which says whether the moves lean one way.
 
 ### Choices behind the definition
 
@@ -378,13 +378,19 @@ What the example shows:
 
 ### Decisions
 
-Proposed for the team to agree:
+Agreed by the team. The date of the decision wasn't written down at the time; this note was
+added on 2026-11-04.
 
 - **Count moves in both directions,** not only penalties as the ticket asked (see "Choices").
+  This replaces the penalties-only rule, with detection rate's one-sided threshold, that the
+  preliminary design document (§9.3, dated 2026-10-27) still describes.
 - **A judge is spuriously sensitive to an operator when p < α,** from the exact binomial test.
-- **Open question: an identity control.** Re-scoring each original as a "mutant" that changes
-  nothing would measure the chance flag rate directly, instead of assuming α. It costs N more
-  scorings per record.
+
+Still open:
+
+- **An identity control.** Re-scoring each original as a "mutant" that changes nothing would
+  measure the chance flag rate directly, instead of assuming α. It costs N more scorings per
+  record.
 
 ### Code
 
