@@ -25,13 +25,19 @@ mutant with its own original and measure the judge's noise (see docs/metrics.md)
   call, so a misconfigured adapter costs nothing.
 * Every sample is stored on its own, with the verdict counts and claim count the judge reported
   (the 2026-10-20 decision). Nothing is averaged on write.
+* With a ``cache`` (``mtlj.engine.cache``), a scoring the cache already holds is answered from
+  it, without calling the judge, and every new score is stored in it, so re-running an audit
+  doesn't pay for the same calls twice. The key covers the judge and its config, the exact
+  input, output and context, and the sample index: each of a run's samples is still its own
+  call, and a re-run gets back the same samples. Failures are never cached. For fresh calls, run
+  without a cache or with one opened ``refresh=True``. The summary reports the hit rate.
 * The judge sees the record's question as ``input``, the answer (original or mutated) as
   ``output``, and ``{"passages": [{"passage_id", "text", "title"}, ...]}`` as ``context``: the
   record's passages, in order. This is the shape the adapter contract tests
   (tests/judges/test_contract.py, ``PASSAGES``).
 
-Not here yet: retries (MTLJ-94), rate limiting (MTLJ-96), resuming a run (MTLJ-91), the
-response cache (MTLJ-93) and a Postgres sink (MTLJ-26/28).
+Not here yet: retries (MTLJ-94), rate limiting (MTLJ-96), resuming a run (MTLJ-91) and a
+Postgres sink (MTLJ-26/28).
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ from pydantic import BaseModel
 
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord, Passage
+from mtlj.engine.cache import CachedScore, CacheKeys, ResponseCache
 from mtlj.judges.base import Context, Judge
 
 logger = logging.getLogger(__name__)
@@ -119,6 +126,9 @@ class Evaluation(BaseModel):
     ``score`` is normalized to [0, 1] with higher = better; ``raw_score`` is on the judge's own
     range. Both are None, and ``error_type`` and ``error`` say why, when the call failed. The
     verdict counts and ``n_claims`` are None when the judge doesn't report them.
+
+    ``cached`` is True when the score came from the response cache instead of a call. Its
+    ``latency_ms`` is then the original call's.
     """
 
     model_config = {"extra": "forbid", "frozen": True}
@@ -132,6 +142,7 @@ class Evaluation(BaseModel):
     version: str
     status: Literal["ok", "error"]
     latency_ms: float
+    cached: bool = False
     operator_name: str | None = None
     intensity: float | None = None
     score: float | None = None
@@ -152,6 +163,10 @@ class RunSummary:
     model: str
     version: str
     samples: int
+    # The response cache (see mtlj.engine.cache). Zero, and a rate of None, without one.
+    cache_hits: int = 0  # scorings answered from the cache, with no judge call
+    cache_misses: int = 0  # scorings the cache didn't have, so the judge was called
+    cache_hit_rate: float | None = None  # hits / (hits + misses)
     total: int = 0
     ok: int = 0
     errors: int = 0
@@ -338,6 +353,29 @@ def _check_identity(judge: Judge) -> None:
             raise ValueError(f"judge.{attr} must be a non-empty string, got {value!r}")
 
 
+def _cache_entry(evaluation: Evaluation) -> CachedScore:
+    """What the response cache keeps of a scoring: its score, what came with it, its latency."""
+    return CachedScore.model_validate(evaluation.model_dump(include=set(CachedScore.model_fields)))
+
+
+def _from_cache(judge: Judge, task: EvalTask, hit: CachedScore) -> Evaluation:
+    """The evaluation for a scoring the response cache answered, without calling the judge."""
+    return Evaluation(
+        kind=task.kind,
+        target_id=task.target_id,
+        record_id=task.record_id,
+        sample_index=task.sample_index,
+        operator_name=task.operator_name,
+        intensity=task.intensity,
+        judge_name=judge.name,
+        model=judge.model,
+        version=judge.version,
+        status=OK,
+        cached=True,
+        **hit.model_dump(),
+    )
+
+
 async def _evaluate(judge: Judge, task: EvalTask, executor: ThreadPoolExecutor) -> Evaluation:
     """Score one task on a worker thread. A failed call becomes an ERROR evaluation."""
     loop = asyncio.get_running_loop()
@@ -398,6 +436,7 @@ async def run_judge(
     mutants: Iterable[Mutant],
     sink: ResultSink,
     *,
+    cache: ResponseCache | None = None,
     samples: int = DEFAULT_SAMPLES,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
@@ -413,14 +452,17 @@ async def run_judge(
             originals feed the noise floor.
         mutants: the mutants to score. Each one's record must be in ``records``.
         sink: where evaluations go.
+        cache: answer scorings it holds without calling the judge, and store the new ones
+            (see ``mtlj.engine.cache``). ``None``, the default, calls the judge every time.
         samples: how many times each text is scored.
         max_concurrency: the most judge calls in flight at once.
         max_consecutive_errors: stop the run once this many calls in a row have failed.
             ``None`` never stops.
 
     Raises:
-        ValueError: for bad arguments (see ``build_tasks``), or a judge whose name, model or
-            version isn't a non-empty string, before any call is made.
+        ValueError: for bad arguments (see ``build_tasks``), a judge whose name, model or
+            version isn't a non-empty string, or, with a cache, a judge whose
+            ``cache_settings()`` can't be written as JSON, before any call is made.
         RunAbortedError: once ``max_consecutive_errors`` calls in a row have failed. Every
             result, failures included, has been written by then. Its ``summary`` has the counts.
         Exception: whatever ``sink.write`` raised first (or anything else that went wrong
@@ -433,8 +475,12 @@ async def run_judge(
     _check_identity(judge)
     tasks = build_tasks(records, mutants, samples)
     summary = RunSummary(judge.name, judge.model, judge.version, samples)
+    # Works out the judge's part of every key now, so a judge that can't be cached costs nothing.
+    keys = CacheKeys(judge) if cache is not None else None
     if not tasks:
         return summary
+    if cache is not None:
+        logger.info("response cache: %s%s", cache.path, " (refreshing)" if cache.refresh else "")
 
     logger.info(
         "scoring %d texts x %d samples with %s (%s), %d at a time",
@@ -468,11 +514,26 @@ async def run_judge(
             if failure is not None or abort_reason is not None:
                 return
             try:
-                evaluation = await _evaluate(judge, task, executor)
+                key = hit = None
+                if keys is not None and cache is not None:
+                    context = judge_context(task.passages)
+                    key = keys(task.input, task.output, context, task.sample_index)
+                    hit = cache.get(key)
+                if hit is not None:
+                    evaluation = _from_cache(judge, task, hit)
+                else:
+                    evaluation = await _evaluate(judge, task, executor)
+                    if key is not None and cache is not None and evaluation.status == OK:
+                        # Before the write, so a score that was paid for is kept if the sink fails.
+                        cache.put(key, judge, _cache_entry(evaluation))
                 async with write_lock:
                     if failure is not None:
                         return
                     await sink.write(evaluation)
+                if key is not None and hit is not None:
+                    summary.cache_hits += 1
+                elif key is not None:
+                    summary.cache_misses += 1
             except Exception as exc:  # judge errors are rows already; this is the runner's own
                 failure = failure or exc
                 return
@@ -511,6 +572,8 @@ async def run_judge(
         executor.shutdown(wait=False, cancel_futures=True)
 
     summary.elapsed_s = time.perf_counter() - started
+    lookups = summary.cache_hits + summary.cache_misses
+    summary.cache_hit_rate = summary.cache_hits / lookups if lookups else None
     if failure is not None:
         logger.error("run with %s stopped: %r: %s", judge.name, failure, summary)
         failure.add_note(f"run summary when it stopped: {summary}")
@@ -529,6 +592,7 @@ def run_judge_sync(
     mutants: Iterable[Mutant],
     sink: ResultSink,
     *,
+    cache: ResponseCache | None = None,
     samples: int = DEFAULT_SAMPLES,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
@@ -540,6 +604,7 @@ def run_judge_sync(
             records,
             mutants,
             sink,
+            cache=cache,
             samples=samples,
             max_concurrency=max_concurrency,
             max_consecutive_errors=max_consecutive_errors,

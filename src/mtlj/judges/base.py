@@ -58,6 +58,21 @@ verdicts the score ignores are kept (see docs/metrics.md, "Decisions"):
 
 The counts may sum to less than n_claims, because some judges (DeepEval faithfulness) skip
 a verdict for a claim now and then.
+
+### Caching
+
+The runner can answer a call from its response cache (mtlj.engine.cache) instead of calling
+the judge. The cache keys each call on the judge's name, model, version, score range and
+cache_settings(): everything else that decides its scores. By default that's the judge's
+public instance attributes, which is right when its settings are constructor arguments kept as
+they are. Override it when a setting lives somewhere else (a private attribute, a client
+object), or an attribute can't be written as JSON:
+
+    def cache_settings(self):
+        return {"temperature": self._client.temperature, "prompt": PROMPT}
+
+The cache refuses a judge whose settings aren't JSON, such as a CallableJudge, whose function
+can't be told apart from another one with the same name.
 """
 
 from __future__ import annotations
@@ -158,6 +173,21 @@ class Judge(ABC):
     def score_raw(self, input: str, output: str, context: Context) -> float | RawScore:
         """Return a score on this judge's declared score_range, optionally with verdicts."""
         ...  # Place holder
+
+    def cache_settings(self) -> Mapping[str, Any]:
+        """Everything besides name, model, version and score range that decides the scores.
+
+        The response cache keys every call on it, so judges that differ in any of it never
+        share a cached score. The default is the public instance attributes (see "Caching" in
+        this module's docstring); the values must be JSON for the judge to be cached.
+        """
+        identity = {"name", "model", "version", "score_range", "higher_is_better"}
+        attributes = getattr(self, "__dict__", {})
+        return {
+            key: value
+            for key, value in attributes.items()
+            if not key.startswith("_") and key not in identity
+        }
 
     @final
     def __call__(self, input: str, output: str, context: Context) -> JudgeResult:
