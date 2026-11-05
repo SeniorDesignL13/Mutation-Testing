@@ -28,6 +28,7 @@ from typing import Any
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
 from mtlj.operators.base import MutationOperator
+from mtlj.operators.registry import get_operator
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +88,11 @@ def default_battery() -> list[BatteryItem]:
     """The operators and intensities used for the study.
 
     Padding at 0.125 / 0.25 / 0.5 / 1.0 is 50 / 100 / 200 / 400 filler words. Entity swap at
-    0.2 / 0.6 / 1.0 changes 1 / 3 / 5 claims. Imported here so spaCy isn't loaded at import time.
+    0.2 / 0.6 / 1.0 changes 1 / 3 / 5 claims.
     """
-    from mtlj.operators.degrading.entity_swap import EntitySwapOperator
-    from mtlj.operators.preserving.verbosity_padding import VerbosityPaddingOperator
-
     return [
-        BatteryItem(VerbosityPaddingOperator(), (0.125, 0.25, 0.5, 1.0)),
-        BatteryItem(EntitySwapOperator(), (0.2, 0.6, 1.0)),
+        BatteryItem(get_operator("verbosity_padding"), (0.125, 0.25, 0.5, 1.0)),
+        BatteryItem(get_operator("entity_swap"), (0.2, 0.6, 1.0)),
     ]
 
 
