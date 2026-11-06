@@ -46,8 +46,11 @@ def outcome_of(result: DetectionRate, record_id: str) -> MutantOutcome:
 
 
 @pytest.mark.parametrize(
-    ("config", "sigma", "tau", "detected", "ci_percent"),
-    [("default", 0.0536, 0.0558, 12, (39, 78)), ("penalize", 0.0619, 0.0644, 11, (34, 74))],
+    ("config", "sigma", "tau", "detected", "ci_percent", "p_value"),
+    [
+        ("default", 0.0536, 0.0558, 12, (39, 78), 2.1e-11),
+        ("penalize", 0.0619, 0.0644, 11, (34, 74), 5.4e-10),
+    ],
 )
 def test_spike_entity_swaps_match_worked_example(
     spike_rate: Callable[[str, str], DetectionRate],
@@ -56,6 +59,7 @@ def test_spike_entity_swaps_match_worked_example(
     tau: float,
     detected: int,
     ci_percent: tuple[int, int],
+    p_value: float,
 ) -> None:
     result = spike_rate(config, "entity_swap")
 
@@ -65,6 +69,8 @@ def test_spike_entity_swaps_match_worked_example(
     assert result.rate == detected / 20
     assert result.ci is not None
     assert (round(result.ci[0] * 100), round(result.ci[1] * 100)) == ci_percent
+    assert result.p_value == pytest.approx(p_value, rel=0.05)
+    assert result.above_chance
     assert result.excluded == dict.fromkeys(ExclusionReason, 0)
     assert (result.n_samples, result.alpha) == (5, 0.05)
 
@@ -175,13 +181,27 @@ def test_all_excluded_gives_no_rate() -> None:
 
     result = detection_rate(originals, mutants)
 
-    assert (result.rate, result.ci) == (None, None)
+    assert (result.rate, result.ci, result.p_value) == (None, None, None)
+    assert not result.above_chance
     assert (result.detected, result.testable) == (0, 0)
     assert result.excluded == {
         ExclusionReason.NO_CHANGE: 1,
         ExclusionReason.NO_SCORES: 2,
         ExclusionReason.NO_HEADROOM: 0,
     }
+
+
+def test_p_value_is_the_binomial_tail_against_alpha() -> None:
+    # Of 20 testable mutants, a blind judge detects 3 by chance 7.5% of the time, 4 only 1.6%.
+    originals = {str(i): [1.0, 0.9] for i in range(20)}
+
+    def run(detected: int) -> DetectionRate:
+        mutants = [MutantScores(str(i), [0.0, 0.0] if i < detected else [0.95]) for i in range(20)]
+        return detection_rate(originals, mutants)
+
+    assert run(0).p_value == pytest.approx(1.0)
+    assert (run(3).p_value, run(3).above_chance) == (pytest.approx(0.0755, abs=1e-4), False)
+    assert (run(4).p_value, run(4).above_chance) == (pytest.approx(0.0159, abs=1e-4), True)
 
 
 def test_wilson_interval_stays_inside_zero_and_one() -> None:

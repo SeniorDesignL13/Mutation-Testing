@@ -4,7 +4,9 @@ A degrading mutant counts as detected when the judge's mean score on it drops by
 judge's own run-to-run noise can explain. That noise is measured on the unmutated originals of
 the same run, so the threshold adapts to each judge and judge config, and detection rates stay
 comparable across them. docs/metrics.md ("Detection rate") defines the metric and explains the
-choices behind it; this module implements it as written there.
+choices behind it; this module implements it as written there. The rate comes with the same
+one-sided exact binomial test against alpha that spurious sensitivity has, which says whether the
+judge catches the operator at all.
 """
 
 from __future__ import annotations
@@ -16,6 +18,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from statistics import NormalDist
+
+from scipy.stats import binomtest
 
 DEFAULT_ALPHA = 0.05
 CI_LEVEL = 0.95
@@ -60,13 +64,18 @@ class MutantOutcome:
 class DetectionRate:
     """Detection rate for one judge, judge config and operator, with what's reported with it.
 
-    ``rate`` and ``ci`` are None when no mutant is testable, since 0 of 0 isn't a rate.
-    ``tau`` is the threshold at ``n_samples`` scores on both sides. A mutant or original with
-    fewer successful scores gets its own, larger threshold, recorded in its outcome.
+    ``rate``, ``ci`` and ``p_value`` are None when no mutant is testable, since 0 of 0 isn't a
+    rate. ``p_value`` is the one-sided exact binomial test of ``detected`` against ``alpha``: the
+    chance that a judge blind to the operator detects at least this many mutants through noise
+    alone. ``above_chance`` is True when it's below ``alpha``. ``tau`` is the threshold at
+    ``n_samples`` scores on both sides. A mutant or original with fewer successful scores gets
+    its own, larger threshold, recorded in its outcome.
     """
 
     rate: float | None
     ci: tuple[float, float] | None
+    p_value: float | None
+    above_chance: bool
     detected: int
     testable: int
     excluded: dict[ExclusionReason, int]
@@ -169,12 +178,13 @@ def detection_rate(
             feed the noise floor, including originals whose mutant is excluded. A record id
             that's missing here means its original has no successful scores.
         mutants: the operator's mutants.
-        alpha: one-sided false-detection rate. docs/metrics.md fixes it at 0.05.
+        alpha: one-sided false-detection rate, also the rate the result is tested against.
+            docs/metrics.md fixes it at 0.05.
 
     Returns:
-        The rate with its 95% Wilson interval, the counts behind it, and sigma, tau, N and
-        alpha. ``n_samples`` is the most scores any text received: the N the run asked for,
-        since failed scorings only lower a text's count.
+        The rate with its 95% Wilson interval and the binomial test against alpha, the counts
+        behind it, and sigma, tau, N and alpha. ``n_samples`` is the most scores any text
+        received: the N the run asked for, since failed scorings only lower a text's count.
 
     Raises:
         ValueError: if no original has two or more scores (see ``noise_floor``).
@@ -188,11 +198,18 @@ def detection_rate(
     reasons = Counter(o.excluded for o in outcomes)
     testable = reasons[None]
     detected = sum(o.detected for o in outcomes)
+    p_value = (
+        float(binomtest(detected, testable, alpha, alternative="greater").pvalue)
+        if testable
+        else None
+    )
     n_samples = max(len(s) for s in [*originals.values(), *(m.scores for m in mutants)])
 
     return DetectionRate(
         rate=detected / testable if testable else None,
         ci=wilson_interval(detected, testable) if testable else None,
+        p_value=p_value,
+        above_chance=p_value is not None and p_value < alpha,
         detected=detected,
         testable=testable,
         excluded={reason: reasons[reason] for reason in ExclusionReason},

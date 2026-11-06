@@ -11,10 +11,10 @@ from statsmodels.stats.multitest import multipletests
 from mtlj.stats.correction import (
     CorrectedTest,
     benjamini_hochberg,
-    correct_spurious_sensitivity,
+    correct_above_chance,
 )
-from mtlj.stats.detection import MutantScores
-from mtlj.stats.spurious import spurious_sensitivity
+from mtlj.stats.detection import DetectionRate, MutantScores, detection_rate
+from mtlj.stats.spurious import SpuriousSensitivity, spurious_sensitivity
 
 # What the spike_texts fixture returns: originals by record id, and one type's mutants.
 SpikeTexts = tuple[dict[str, list[float]], list[MutantScores]]
@@ -181,53 +181,56 @@ def test_rejects_a_q_outside_zero_to_one(q: float) -> None:
 @pytest.mark.parametrize(
     ("config", "adjusted"),
     [
-        ("default", {"verbosity_pad": 0.0755, "reformat": 0.0051}),
-        ("penalize", {"verbosity_pad": 0.0026, "reformat": 0.0026}),
+        ("default", {"entity_swap": 0.0, "verbosity_pad": 0.0755, "reformat": 0.0039}),
+        ("penalize", {"entity_swap": 0.0, "verbosity_pad": 0.0026, "reformat": 0.0026}),
     ],
 )
-def test_spike_preserving_operators_match_worked_example(
+def test_spike_family_matches_worked_example(
     spike_texts: Callable[[str, str], SpikeTexts],
     config: str,
     adjusted: dict[str, float],
 ) -> None:
-    results = {
-        operator: spurious_sensitivity(*spike_texts(config, operator)) for operator in adjusted
+    results: dict[str, DetectionRate | SpuriousSensitivity] = {
+        "entity_swap": detection_rate(*spike_texts(config, "entity_swap")),
+        "verbosity_pad": spurious_sensitivity(*spike_texts(config, "verbosity_pad")),
+        "reformat": spurious_sensitivity(*spike_texts(config, "reformat")),
     }
-    correction = correct_spurious_sensitivity(results)
+    correction = correct_above_chance(results)
 
     assert {k: round(t.adjusted or 0, 4) for k, t in correction.tests.items()} == adjusted
     for operator, test in correction.tests.items():
         assert test.p_value == results[operator].p_value
         assert test.significant is results[operator].above_chance
-    # Correction changes no verdict on the spike: reformatting stays above chance on both
-    # configs, and padding only on the penalize one.
+    # Correction changes no verdict on the spike: entity swap and reformatting stay above chance
+    # on both configs, and padding only on the penalize one.
     assert [t.significant_corrected for t in correction.tests.values()] == [
         t.significant for t in correction.tests.values()
     ]
-    assert correction.q == 0.05
+    assert (correction.q, correction.n_tests) == (0.05, 3)
 
 
-def test_spurious_results_with_different_alphas_are_rejected(
+def test_results_with_different_alphas_are_rejected(
     spike_texts: Callable[[str, str], SpikeTexts],
 ) -> None:
-    texts = spike_texts("default", "reformat")
-    results = {
-        "at 5%": spurious_sensitivity(*texts),
-        "at 10%": spurious_sensitivity(*texts, alpha=0.10),
+    results: dict[str, DetectionRate | SpuriousSensitivity] = {
+        "at 5%": detection_rate(*spike_texts("default", "entity_swap")),
+        "at 10%": spurious_sensitivity(*spike_texts("default", "reformat"), alpha=0.10),
     }
 
     with pytest.raises(ValueError, match="different alphas"):
-        correct_spurious_sensitivity(results)
+        correct_above_chance(results)
 
 
-def test_untestable_spurious_results_are_left_out() -> None:
+def test_untestable_results_are_left_out() -> None:
     originals = {"a": [0.8, 0.9], "b": [0.7, 0.9]}
-    results = {
-        "untestable": spurious_sensitivity(originals, [MutantScores("a", [0.1], changed=False)]),
+    results: dict[str, DetectionRate | SpuriousSensitivity] = {
+        "unchanged": spurious_sensitivity(originals, [MutantScores("a", [0.1], changed=False)]),
+        "no scores": detection_rate(originals, [MutantScores("b", [])]),
         "testable": spurious_sensitivity(originals, [MutantScores("a", [0.85, 0.85])]),
     }
-    correction = correct_spurious_sensitivity(results)
+    correction = correct_above_chance(results)
 
     assert correction.n_tests == 1
-    assert correction.tests["untestable"] == CorrectedTest(None, None, False, False)
+    assert correction.tests["unchanged"] == CorrectedTest(None, None, False, False)
+    assert correction.tests["no scores"] == CorrectedTest(None, None, False, False)
     assert correction.tests["testable"].adjusted == results["testable"].p_value

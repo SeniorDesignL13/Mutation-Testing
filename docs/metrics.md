@@ -33,6 +33,8 @@ s_r²           sample variance of o_r1 … o_rN (n − 1 denominator)
 Δ_r  = mean(o_r) − mean(m_r)                            drop in mean score
 detected_r   ⇔   Δ_r > τ + ε,  ε = 1e-9                floating-point tolerance
 DR   = detected mutants ÷ testable mutants              detection rate
+p    = P( X ≥ detected ),  X ~ Binomial(testable, α)    chance of this many detections from noise
+above chance   ⇔   p < α
 ```
 
 With the usual equal N, these reduce to σ = √(mean of s_r²) and τ = 1.645 · σ · √(2/N).
@@ -52,6 +54,10 @@ With the usual equal N, these reduce to σ = √(mean of s_r²) and τ = 1.645 �
   genuine verdict.
 - **Detection rate** is reported with a 95% Wilson score interval, which behaves at 0% and
   100% and with few mutants.
+- **p** is a one-sided exact binomial test, the same one spurious sensitivity uses: the chance
+  that a judge blind to the operator detects at least this many mutants through noise alone.
+  With 20 testable mutants it takes 4 detections to be above chance. Above chance says the
+  judge catches the operator at all, not that it catches it well.
 
 More samples shrink τ, because each mean is estimated more precisely:
 
@@ -73,8 +79,9 @@ Excluded from the denominator. The report counts each reason:
 
 ### Reported with it
 
-Detection rate, its 95% CI, detected ÷ testable, excluded counts by reason, σ, τ, N and α.
-Run provenance records N and α so the result can be reproduced.
+Detection rate, its 95% CI, detected ÷ testable, p and whether the rate is above chance,
+excluded counts by reason, σ, τ, N and α. Run provenance records N and α so the result can be
+reproduced.
 
 ### Choices behind the definition
 
@@ -154,7 +161,8 @@ appendix.
 | 19 | 12018 | four → 5 types of bases | 1.000 | 0.833 | +0.167 | yes |
 | 20 | 16080 | 1% → 3% | 1.000 | 0.750 | +0.250 | yes |
 
-**4. Detection rate.** 12 / 20 = **60%**, 95% CI [39%, 78%].
+**4. Detection rate.** 12 / 20 = **60%**, 95% CI [39%, 78%]. p = 2 × 10⁻¹¹, so the rate is far
+above chance.
 
 What the example shows:
 
@@ -168,8 +176,8 @@ What the example shows:
   lower than the original, and more samples can't change that. This matches the spike's finding.
 - **The same rule rarely fires on preserving mutants.** Padding: 1 of 20. Reformatting: 2 of 20.
 - **The penalize config gives a different result.** With `penalize_ambiguous_claims=True`: σ = 0.062,
-  τ = 0.064, detection rate 11 / 20 = 55% [34%, 74%], with padding and reformatting flagged in
-  5 of 40. Detection rate belongs to a judge *and* its config.
+  τ = 0.064, detection rate 11 / 20 = 55% [34%, 74%] (p = 5 × 10⁻¹⁰), with padding and
+  reformatting flagged in 5 of 40. Detection rate belongs to a judge *and* its config.
 
 ### What detection rate doesn't tell you
 
@@ -178,6 +186,9 @@ What the example shows:
   mutant with a Δ_r counts, including those excluded for no headroom.
 - **Why a mutant was missed.** The spike found most misses were "yes" → "borderline" verdict
   shifts that the score ignores. Record the verdicts separately.
+- **That a judge above chance is good.** Above chance only says the judge catches the operator
+  at all: 4 detections of 20 is above chance and a 20% detection rate. Read the rate and its
+  interval with it.
 - **Anything about preserving operators.** They ask the opposite question (does the score stay
   put?), which [spurious sensitivity](#spurious-sensitivity) answers with the same σ.
 - **Whether the mutant is valid.** The metric assumes every mutant is worse than its original. An
@@ -193,6 +204,12 @@ Agreed by the team on 2026-10-20:
   score ignores (see "What detection rate doesn't tell you") are kept.
 - **Default N is 5.** Every original and every mutant is scored 5 times per run for audits. N is
   still recorded in run provenance, so a run can override it and old runs stay reproducible.
+
+Agreed by the team on 2026-11-06, with the
+[multiple-comparison correction](#multiple-comparison-correction):
+
+- **Detection rate gets an above-chance test,** the same exact binomial test against α as
+  spurious sensitivity, so it joins the run's family of corrected tests.
 
 ### Code
 
@@ -418,9 +435,9 @@ p̃_(i)   = min over j ≥ i of  m · p_(j) ÷ j,  capped at 1   adjusted p-valu
 significant after correction   ⇔   p̃ < q,  q = 0.05
 ```
 
-- **The family** is every test one judge and judge config gets in a run. Today that's spurious
-  sensitivity's exact binomial test, once for each preserving operator and intensity. Detection
-  rate joins it once it has an above-chance test (see "Decisions").
+- **The family** is every test one judge and judge config gets in a run: detection rate's exact
+  binomial test for each degrading operator and intensity, and spurious sensitivity's for each
+  preserving one.
 - **A test without a p-value** (no testable mutant) is left out of m.
 - **q equals α,** so the uncorrected verdict (p < α, spurious sensitivity's "above chance") and
   the corrected one use the same cutoff, and a family of one test gets the same verdict both
@@ -467,24 +484,28 @@ continuous.
 
 ### Worked example
 
-Real spike data: padding and reformatting, each at one intensity, under both configs. Each config
-is its own family of two tests.
+Real spike data: entity swaps, padding and reformatting, each at one intensity, under both
+configs. Each config is its own family of three tests: detection rate's for the swaps and
+spurious sensitivity's for the other two.
 
-| Config | Operator | Flagged | p | Adjusted p | Above chance | After correction |
+| Config | Operator | Detected or flagged | p | Adjusted p | Above chance | After correction |
 |---|---|---|---|---|---|---|
+| default | Entity swap | 12/20 | 2 × 10⁻¹¹ | 6 × 10⁻¹¹ | yes | yes |
 | default | Padding | 3/20 | 0.0755 | 0.0755 | no | no |
-| default | Reformatting | 5/20 | 0.0026 | 0.0051 | yes | yes |
+| default | Reformatting | 5/20 | 0.0026 | 0.0039 | yes | yes |
+| penalize | Entity swap | 11/20 | 5 × 10⁻¹⁰ | 2 × 10⁻⁹ | yes | yes |
 | penalize | Padding | 5/20 | 0.0026 | 0.0026 | yes | yes |
 | penalize | Reformatting | 5/20 | 0.0026 | 0.0026 | yes | yes |
 
 What the example shows:
 
-- **With two tests per family, the correction changes no verdict.** Reformatting's 0.0026 on the
-  default config doubles to 0.0051, still far below 0.05.
-- **When every test in a family is significant, nothing changes.** On the penalize config both
-  p-values are 0.0026, and the larger one is adjusted by m ÷ m = 1.
-- **Correcting both configs as one family** gives 0.0034 for the three results above chance, and
-  the same verdicts.
+- **With three tests per family, the correction changes no verdict.** Reformatting's 0.0026 on
+  the default config, second of three, becomes 3 × 0.0026 ÷ 2 = 0.0039, still far below 0.05.
+- **When every test in a family is significant, nothing changes.** On the penalize config the two
+  0.0026 p-values rank second and third of three, and the third's 3 × 0.0026 ÷ 3 = 0.0026 caps
+  the second's as well.
+- **Correcting both configs as one family** of six tests gives 0.0031 for the four results at
+  0.0026, and the same verdicts.
 
 An illustration with made-up p-values shows when it does matter. A family of four tests with p
 = 0.01, 0.03, 0.04 and 0.20 has three results below 0.05. After correction only the first is
@@ -510,14 +531,14 @@ Agreed by the team on 2026-11-06:
 - **Benjamini-Hochberg at q = 0.05,** with uncorrected and corrected values both reported.
 - **One family per judge and judge config in a run.**
 - **Detection rate gets an above-chance test and joins the family.** The exact binomial test
-  against α that spurious sensitivity uses says whether a judge catches an operator at all. Today
-  a detection rate has an interval but no verdict; the test is not in this change and follows
-  separately.
+  against α that spurious sensitivity uses says whether a judge catches an operator at all.
+  Before this, a detection rate had an interval but no verdict.
 
 ### Code
 
 `src/mtlj/stats/correction.py` implements this. `benjamini_hochberg` corrects any family of
-p-values with SciPy's `false_discovery_control`, and `correct_spurious_sensitivity` corrects one
-family of spurious sensitivity results. `tests/stats/test_correction.py` checks it against the
-paper's example and statsmodels, checks the false discovery rate on simulated families, and
-reproduces the worked example above.
+p-values with SciPy's `false_discovery_control`, and `correct_above_chance` corrects one family
+of detection rate and spurious sensitivity results. `tests/stats/test_correction.py` checks it
+against the paper's example and statsmodels, checks the false discovery rate on simulated
+families, and reproduces the worked example above. The binomial test on a detection rate is in
+`src/mtlj/stats/detection.py`, checked by `tests/stats/test_detection.py`.

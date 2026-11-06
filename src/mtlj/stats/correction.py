@@ -5,11 +5,11 @@ that ignores every change still comes out "significant" on about alpha * m of th
 Hochberg adjusts each p-value for the size of the family, so that among the results called
 significant the expected share of false ones (the false discovery rate) is at most q.
 
-Today the only per-operator test is spurious sensitivity's exact binomial test against alpha
-(``mtlj.stats.spurious``), so the family is a run's preserving operators at every intensity, for
-one judge and judge config. ``benjamini_hochberg`` corrects any family of p-values, so a test
-added later joins the same family. docs/metrics.md ("Multiple-comparison correction") explains
-the choices.
+The tests are the exact binomial tests against alpha: detection rate's for each degrading
+operator and intensity (``mtlj.stats.detection``) and spurious sensitivity's for each preserving
+one (``mtlj.stats.spurious``). The family is all of them for one judge and judge config in a
+run. ``benjamini_hochberg`` corrects any family of p-values, so a test added later joins the
+same family. docs/metrics.md ("Multiple-comparison correction") explains the choices.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from scipy.stats import false_discovery_control
 
-from mtlj.stats.detection import DEFAULT_ALPHA
+from mtlj.stats.detection import DEFAULT_ALPHA, DetectionRate
 from mtlj.stats.spurious import SpuriousSensitivity
 
 METHOD = "benjamini-hochberg"
@@ -91,14 +91,14 @@ def benjamini_hochberg[K: Hashable](
     return Correction(tests, q, len(keys))
 
 
-def correct_spurious_sensitivity[K: Hashable](
-    results: Mapping[K, SpuriousSensitivity],
+def correct_above_chance[K: Hashable](
+    results: Mapping[K, DetectionRate | SpuriousSensitivity],
 ) -> Correction[K]:
-    """Correct spurious sensitivity's above-chance tests across one family of results.
+    """Correct the above-chance tests of one family of detection and spurious results.
 
-    Pass every preserving operator and intensity of one judge and judge config in a run, keyed
-    however the report needs (``variance.Condition`` fits). ``q`` is the results' alpha, so the
-    uncorrected verdict is each result's ``above_chance``.
+    Pass every operator and intensity of one judge and judge config in a run, degrading and
+    preserving alike, keyed however the report needs (``variance.Condition`` fits). ``q`` is the
+    results' alpha, so the uncorrected verdict is each result's ``above_chance``.
 
     Raises:
         ValueError: if the results don't all use the same alpha.
