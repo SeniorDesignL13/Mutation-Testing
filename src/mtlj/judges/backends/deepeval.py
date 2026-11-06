@@ -56,3 +56,31 @@ class BackendDeepEvalModel:
             schema,
         )
         return result
+
+
+def create_deepeval_model(backend: InferenceBackend):
+    """Create a DeepEval model backed by any inference provider.
+
+    DeepEval is imported only when this integration is requested.
+    """
+    from deepeval.models import DeepEvalBaseLLM
+
+    class BackendModel(DeepEvalBaseLLM):
+        def load_model(self):
+            return backend
+
+        def generate(self, prompt: str, schema=None):
+            response = backend.generate(prompt)
+
+            if schema is not None:
+                return schema.model_validate_json(response)
+
+            return response
+
+        async def a_generate(self, prompt: str, schema=None):
+            return await asyncio.to_thread(self.generate, prompt, schema)
+
+        def get_model_name(self):
+            return backend.metadata.model
+
+    return BackendModel()
