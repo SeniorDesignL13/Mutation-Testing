@@ -393,7 +393,7 @@ worked example for both configs and both preserving operators. `spike/spurious_s
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
 
 ## Dose-response curve
-MTLJ-37 · Ethan Goedelman · 2026-11-04 · **Status: proposed, awaiting team review**
+MTLJ-37 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
 
 For an operator scored at several intensities: **a curve through its rate at each intensity,
 and the onset, the intensity at which the judge's rate has risen 10% of the way from chance to
@@ -529,14 +529,15 @@ one, it's not before about 390 words.
 
 ### Decisions
 
-Proposed for the team to agree:
+Agreed by the team on 2026-11-06:
 
 - **Log-logistic curve with its floor at α,** fitted by maximum likelihood, with a slope of at
   least 1.
 - **The onset at 10% extra hit rate, with a profile-likelihood interval.** One definition for
   both operator families.
-- **Open question: a ceiling.** Letting the curve level off below 1 would fit judges like the
-  spike's, but with four or five intensities a third parameter is hard to pin down.
+- **No ceiling for now.** Letting the curve level off below 1 would fit judges like the spike's,
+  but with four or five intensities a third parameter is hard to pin down. The fit test flags
+  such judges. Revisit once real runs show how common the plateau is.
 
 ### Code
 
