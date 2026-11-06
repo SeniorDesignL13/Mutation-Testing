@@ -514,9 +514,13 @@ Agreed by the team on 2026-11-06:
   document (§9.4) names the bootstrap as the only interval, so this changes it.
 - **Percentile method, 10,000 resamples, seed 0,** with the level configurable and 0.95 by
   default.
-- **Open question: which interval the CLI and dashboard show first.** One option is Wilson below
-  100 testable mutants and the bootstrap from 100 up, where it covers as well and includes τ's
-  uncertainty. Whichever is chosen, `results.json` needs room for both (see MTLJ-32).
+- **One headline interval, chosen by sample size** (settled after the meeting, on the team's
+  delegation). The CLI and dashboard show the bootstrap interval when a result has 100 or more
+  testable mutants, where it covers as well as Wilson and includes τ's uncertainty, and the
+  Wilson interval below that, where the bootstrap under-covers. The display says which one it
+  is, so intervals from runs of different sizes aren't mistaken for the same thing. The results
+  file (MTLJ-32) carries both, as `wilson_ci` and `bootstrap_ci`, so the other is always a
+  click away.
 
 ### Code
 
