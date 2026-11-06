@@ -393,7 +393,7 @@ worked example for both configs and both preserving operators. `spike/spurious_s
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
 
 ## Multiple-comparison correction
-MTLJ-36 · Ethan Goedelman · 2026-11-04 · **Status: proposed, awaiting team review**
+MTLJ-36 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
 
 An audit runs many tests at once, so some come out significant by chance. **Each test is
 reported with its p-value as it is and with its Benjamini-Hochberg adjusted p-value, and a
@@ -420,7 +420,7 @@ significant after correction   ⇔   p̃ < q,  q = 0.05
 
 - **The family** is every test one judge and judge config gets in a run. Today that's spurious
   sensitivity's exact binomial test, once for each preserving operator and intensity. Detection
-  rate has no test (see "Decisions").
+  rate joins it once it has an above-chance test (see "Decisions").
 - **A test without a p-value** (no testable mutant) is left out of m.
 - **q equals α,** so the uncorrected verdict (p < α, spurious sensitivity's "above chance") and
   the corrected one use the same cutoff, and a family of one test gets the same verdict both
@@ -505,13 +505,14 @@ significant (adjusted 0.04); the second and third both adjust to 0.053.
 
 ### Decisions
 
-Proposed for the team to agree:
+Agreed by the team on 2026-11-06:
 
 - **Benjamini-Hochberg at q = 0.05,** with uncorrected and corrected values both reported.
 - **One family per judge and judge config in a run.**
-- **Open question: should detection rate get an above-chance test?** The exact binomial test
-  against α that spurious sensitivity uses would say whether a judge catches an operator at all,
-  and would join the family. Today a detection rate has an interval but no verdict.
+- **Detection rate gets an above-chance test and joins the family.** The exact binomial test
+  against α that spurious sensitivity uses says whether a judge catches an operator at all. Today
+  a detection rate has an interval but no verdict; the test is not in this change and follows
+  separately.
 
 ### Code
 
