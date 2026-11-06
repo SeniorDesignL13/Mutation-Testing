@@ -391,3 +391,160 @@ Proposed for the team to agree:
 Wilson interval and mutant types. `tests/stats/test_spurious.py` checks that it reproduces the
 worked example for both configs and both preserving operators. `spike/spurious_sensitivity.py` is
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
+
+## Dose-response curve
+MTLJ-37 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
+
+For an operator scored at several intensities: **a curve through its rate at each intensity,
+and the onset, the intensity at which the judge's rate has risen 10% of the way from chance to
+1, with its interval.** For a preserving operator, the onset is where the judge starts reacting
+to an edit it should ignore. For a degrading one, it's the smallest edit the judge starts to
+catch, and the judge misses edits below it.
+
+### Why a curve
+
+Each intensity already gets its own rate and interval. Read one at a time, they say whether
+the judge reacted at 50 words of padding, at 100 and so on, each from a quarter of the mutants.
+A curve uses every intensity's mutants at once and answers the question the intensities are
+there for: how much of an edit the judge can take before it slips. It gives one number per
+operator that can be compared across judges and configs, and it's what the dashboard's
+dose-response view (MTLJ-53) plots.
+
+### Definition
+
+Computed for each judge, judge config and operator scored at two or more intensities, from the
+same verdicts as the operator's rate.
+
+```
+h_d, n_d = hits and testable mutants at intensity d        hit = detected or flagged
+P(d)     = α + (1 − α) · ER(d)                              hit rate at intensity d
+ER(d)    = 1 ÷ (1 + exp(−(logit(r) + b · ln(d ÷ D))))       extra hit rate over chance
+D        = onset, where ER(D) = r,  r = 0.10                P(D) = 14.5% at α = 0.05
+b ≥ 1                                                       slope on log intensity
+D̂, b̂     = maximum likelihood, h_d ~ Binomial(n_d, P(d))
+CI       = every D with  2 · (ℓ(D̂, b̂) − max_b ℓ(D, b)) ≤ χ²₁(0.95) = 3.84
+```
+
+- **A hit** is a detected mutant for a degrading operator and a flagged one for a preserving
+  operator, decided against τ as for the rate. Only testable mutants count.
+- **Intensity** is the mutant's `intensity`, in [0, 1], and its meaning is the operator's.
+  Padding's four levels, 50, 100, 200 and 400 words, are intensities 0.125, 0.25, 0.5 and 1.0.
+  An entity swap at intensity d changes up to ⌈5d⌉ claims.
+- **The floor is α.** A judge that ignores the edit is hit on about α of mutants at any
+  intensity, so the curve starts there: P(0) = α.
+- **The onset** is where the hit rate has risen r = 10% of the way from α to 1: 14.5% at
+  α = 0.05.
+- **The interval** is the profile-likelihood interval. Its upper end is ∞ when the data can't
+  rule out a judge that never responds. Its lower end is 0 when they can't rule out an onset
+  below every tested intensity.
+- **The judge responds** to the operator when the upper end is finite.
+- **The fit test** is a Pearson χ² test of the fitted rates against the observed ones, with
+  intensities − 2 degrees of freedom. A small p says the rates don't follow this shape. There's
+  no test with two intensities, where the curve can pass through both.
+
+### When the judge doesn't respond
+
+- **Not at any intensity.** If the best fit is a judge at chance everywhere, there's no onset.
+  The interval is [L, ∞), and L still says something: if the judge responds at all, its onset
+  isn't before L.
+- **Not clearly.** If the best fit has an onset but the interval's upper end is ∞, the onset
+  isn't established, and the result says the judge doesn't respond.
+- **At every intensity.** If every mutant at every intensity is a hit, the onset is reported as
+  0: it lies below anything tested.
+
+### Reported with it
+
+The onset, its interval, whether the judge responds, whether the onset lies within the tested
+intensities, the slope, the fit test's p, α, r and the confidence level. Also each intensity's
+hits, testable mutants and fitted rate, which the dose-response view plots. The audit's result
+file (MTLJ-32) doesn't exist yet; when it does, it should carry all of these.
+
+### Choices behind the definition
+
+**An onset at 10%, not the midpoint.** The midpoint of the curve (ER = 50%) is where it's best
+determined, but it's where the judge reacts to half the edits, well past where problems start.
+The ticket asks where the judge begins to fail. A 10% extra rate is also the usual default for
+data like these in benchmark-dose practice, where this model comes from.
+
+**The floor is α, not fitted.** Estimating the floor needs mutants at an intensity near 0, which
+a run doesn't have. α is the rate the threshold is built to give, so it's the floor a judge that
+ignores the edit has. Spurious sensitivity's open question, an identity control, would let the
+floor be measured instead. Until then, a judge that's steadier on mutants than on originals
+(fewer hits than α) doesn't fit the curve, and the fit test says so.
+
+**Log-logistic, on log intensity.** It's the standard model for hit counts like these in
+benchmark-dose software. On log intensity, padding's levels, which double each step, are evenly
+spaced, and P(0) = α follows from the model.
+
+**A slope of at least 1.** At small intensities the extra hit rate then grows no faster than the
+intensity itself. This is the usual restriction for this model, and without it the onset can
+run off towards 0 whenever the data can't place it. The fit also caps the slope at 30, which
+still allows a near-step: from 10% to 90% within a 16% change in intensity.
+
+**A profile-likelihood interval.** It's the standard interval for a benchmark dose, it gives the
+same interval every time, and it handles "never responds" directly: the upper end becomes
+infinite. On simulated runs drawn from known curves, it covered the true onset 94.5% to 95.8% of
+the time at 100 and at 900 mutants per intensity, and called a judge at chance responsive 3% to
+4% of the time.
+
+**The curve rises to 1.** It has no ceiling. A judge that never catches more than some share of
+an operator's mutants, however strong the edit (the spike's judge called 40% of contradictions
+"unclear"), is fitted with a shallower slope instead, which can move the onset earlier. With
+enough mutants the fit test catches it: 5%, 5%, 60% and 60% at 200 mutants each fails it.
+
+### Worked example
+
+Made-up data: no run has scored an operator at several intensities yet. Padding at its four
+levels, 100 testable mutants at each, drawn at random from a curve whose onset is 80 words
+(intensity 0.2) with slope 2.
+
+| Words | Intensity | Flagged | Rate of the true curve | Fitted rate |
+|---|---|---|---|---|
+| 50 | 0.125 | 10 / 100 | 9% | 9% |
+| 100 | 0.25 | 17 / 100 | 19% | 19% |
+| 200 | 0.5 | 45 / 100 | 44% | 42% |
+| 400 | 1.0 | 71 / 100 | 75% | 72% |
+
+**Onset: 78 words** (intensity 0.196), 95% CI **[56, 102] words**. Slope 1.89, fit test
+p = 0.70. The judge responds, and the true onset, 80 words, is inside the interval. In words:
+this judge starts reacting to padding at around 80 words.
+
+A judge that ignores padding, drawn at chance (5% at every level), flagged 5, 9, 3 and 9 of
+100. Its best fit puts an onset at 413 words, beyond the longest padding tested, and the
+interval is [393 words, ∞). The judge doesn't respond: no onset is established, and if it has
+one, it's not before about 390 words.
+
+### What the curve doesn't tell you
+
+- **Anything beyond the tested intensities.** An onset outside them is read off the assumed
+  shape, not observed, and the result flags it.
+- **How intensities compare across operators.** Each operator's intensity means something
+  different, so an onset of 0.2 for padding and for entity swaps aren't the same size of edit.
+- **The uncertainty in σ.** Every intensity's hits are decided against the same τ, and the
+  interval treats those verdicts as fixed, as the Wilson interval does.
+- **That intensities are independent.** The same records are mutated at every intensity, so a
+  record the judge is noisy on tends to be hit at all of them. The binomial likelihood assumes
+  independent mutants, so the interval may be too narrow when records differ a lot.
+- **Why the judge fails.** The per-mutant verdicts and scores say that.
+
+### Decisions
+
+Agreed by the team on 2026-11-06:
+
+- **Log-logistic curve with its floor at α,** fitted by maximum likelihood, with a slope of at
+  least 1.
+- **The onset at 10% extra hit rate, with a profile-likelihood interval.** One definition for
+  both operator families.
+- **No ceiling for now.** Letting the curve level off below 1 would fit judges like the spike's,
+  but with four or five intensities a third parameter is hard to pin down. The fit test flags
+  such judges. Revisit once real runs show how common the plateau is.
+
+### Code
+
+`src/mtlj/stats/dose_response.py` implements this. `fit_dose_response` fits one operator's hit
+counts, `fit_operator` takes its rates by intensity (detection rates or spurious sensitivities),
+and `fit_operators` fits every operator in a run scored at two or more intensities.
+`tests/stats/test_dose_response.py` checks that it recovers known curves, that its interval
+covers the true onset at the nominal rate on simulated runs, the cases where the judge doesn't
+respond or responds to everything, a step, a plateau the curve can't follow, and the worked
+example above.
