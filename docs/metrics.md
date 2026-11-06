@@ -400,7 +400,7 @@ worked example for both configs and both preserving operators. `spike/spurious_s
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
 
 ## Bootstrap intervals
-MTLJ-39 · Ethan Goedelman · 2026-11-04 · **Status: proposed, awaiting team review**
+MTLJ-39 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
 
 Every detection rate and spurious sensitivity also carries a **bootstrap interval: resample the
 run's records with replacement, recompute σ, τ and every verdict in each resample, and take the
@@ -508,7 +508,7 @@ What the example shows:
 
 ### Decisions
 
-Proposed for the team to agree:
+Agreed by the team on 2026-11-06:
 
 - **Report the bootstrap interval alongside Wilson,** not in place of it. The preliminary design
   document (§9.4) names the bootstrap as the only interval, so this changes it.
@@ -516,7 +516,7 @@ Proposed for the team to agree:
   default.
 - **Open question: which interval the CLI and dashboard show first.** One option is Wilson below
   100 testable mutants and the bootstrap from 100 up, where it covers as well and includes τ's
-  uncertainty.
+  uncertainty. Whichever is chosen, `results.json` needs room for both (see MTLJ-32).
 
 ### Code
 
