@@ -72,6 +72,8 @@ formatted when you save.
 | A web page | `frontend/app/pages/` | Try it in the browser |
 | A quick experiment | `scratch/` (never committed) | — |
 
+What each operator does and its default intensities: [operators.md](operators.md).
+
 Make a folder under `tests/` the first time you need it. Tests don't need `__init__.py` files.
 
 ### Example: an operator and its test
