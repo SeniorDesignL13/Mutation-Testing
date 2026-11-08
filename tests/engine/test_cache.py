@@ -284,7 +284,11 @@ async def test_a_rerun_is_answered_from_the_cache_without_calling_the_judge(cach
     for e in second_sink.evaluations:
         original = by_key[(e.target_id, e.sample_index)]
         assert e.cached and e.status == OK
-        assert e.model_dump(exclude={"cached"}) == original.model_dump(exclude={"cached"})
+        # No call was made, so the cached row's attempts is 0 where the original's is 1.
+        assert (e.attempts, original.attempts) == (0, 1)
+        assert e.model_dump(exclude={"cached", "attempts"}) == original.model_dump(
+            exclude={"cached", "attempts"}
+        )
 
 
 async def test_each_sample_is_its_own_call_and_comes_back_as_it_was(cache) -> None:
