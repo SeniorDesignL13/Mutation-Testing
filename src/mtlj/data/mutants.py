@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from functools import lru_cache
 from typing import Any, Self
 
 from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
@@ -27,15 +26,7 @@ from mtlj.operators.base import (
     MutationResult,
     OperatorFamily,
 )
-
-
-@lru_cache
-def _operators() -> dict[str, type[MutationOperator]]:
-    """Map operator name to class. Imported here so spaCy isn't loaded at import time."""
-    from mtlj.operators.degrading.entity_swap import EntitySwapOperator
-    from mtlj.operators.preserving.verbosity_padding import VerbosityPaddingOperator
-
-    return {op.metadata.name: op for op in (EntitySwapOperator, VerbosityPaddingOperator)}
+from mtlj.operators.registry import UnknownOperatorError, get_operator, get_operator_class
 
 
 def _check_inputs(intensity: float, parameters: Mapping[str, float]) -> None:
@@ -205,9 +196,11 @@ class Mutant(BaseModel):
             raise ValueError(f"changed={self.changed} doesn't match the texts")
         # Not part of the id, so check them against the operator when we know it. Detection
         # relies on expected_direction to decide whether a score change is a catch or a miss.
-        operator_cls = _operators().get(self.operator_name)
-        if operator_cls is not None:
-            meta = operator_cls.metadata
+        try:
+            meta = get_operator_class(self.operator_name).metadata
+        except UnknownOperatorError:
+            pass
+        else:
             if (self.operator_family, self.expected_direction) != (
                 meta.family,
                 meta.expected_direction,
@@ -291,7 +284,7 @@ class Mutant(BaseModel):
         """Rebuild this mutant from its provenance. Equal to ``self`` if reproducible."""
         self.check_record(record)
         try:
-            operator_cls = _operators()[self.operator_name]
-        except KeyError:
-            raise ValueError(f"unknown operator {self.operator_name!r}") from None
-        return Mutant.generate(record, operator_cls(), self.intensity, self.seed, self.parameters)
+            operator = get_operator(self.operator_name)
+        except UnknownOperatorError as e:
+            raise ValueError(str(e)) from None
+        return Mutant.generate(record, operator, self.intensity, self.seed, self.parameters)

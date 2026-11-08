@@ -21,6 +21,18 @@ from statistics import NormalDist
 
 from scipy.stats import binomtest
 
+from mtlj.stats.bootstrap import (
+    DEFAULT_RESAMPLES,
+    DEFAULT_SEED,
+    BootstrapInterval,
+    Flags,
+    Floats,
+    RecordSummaries,
+    Verdict,
+    bootstrap_rate,
+    summarize,
+)
+
 DEFAULT_ALPHA = 0.05
 CI_LEVEL = 0.95
 # A drop must beat tau by more than this to count. It only absorbs floating-point rounding in
@@ -64,16 +76,19 @@ class MutantOutcome:
 class DetectionRate:
     """Detection rate for one judge, judge config and operator, with what's reported with it.
 
-    ``rate``, ``ci`` and ``p_value`` are None when no mutant is testable, since 0 of 0 isn't a
-    rate. ``p_value`` is the one-sided exact binomial test of ``detected`` against ``alpha``: the
-    chance that a judge blind to the operator detects at least this many mutants through noise
-    alone. ``above_chance`` is True when it's below ``alpha``. ``tau`` is the threshold at
-    ``n_samples`` scores on both sides. A mutant or original with fewer successful scores gets
-    its own, larger threshold, recorded in its outcome.
+    ``ci`` is the Wilson interval at ``level``. ``bootstrap`` is the record-level bootstrap
+    interval at the same level, which also covers the uncertainty in sigma and so in tau (see
+    ``mtlj.stats.bootstrap``). ``rate``, ``ci``, ``bootstrap`` and ``p_value`` are None when no
+    mutant is testable, since 0 of 0 isn't a rate. ``p_value`` is the one-sided exact binomial
+    test of ``detected`` against ``alpha``: the chance that a judge blind to the operator detects
+    at least this many mutants through noise alone. ``above_chance`` is True when it's below
+    ``alpha``. ``tau`` is the threshold at ``n_samples`` scores on both sides. A mutant or
+    original with fewer successful scores gets its own, larger threshold, recorded in its outcome.
     """
 
     rate: float | None
     ci: tuple[float, float] | None
+    bootstrap: BootstrapInterval | None
     p_value: float | None
     above_chance: bool
     detected: int
@@ -83,6 +98,7 @@ class DetectionRate:
     tau: float
     n_samples: int
     alpha: float
+    level: float
     outcomes: tuple[MutantOutcome, ...]
 
 
@@ -128,6 +144,8 @@ def wilson_interval(k: int, n: int, level: float = CI_LEVEL) -> tuple[float, flo
     """
     if n < 1 or not 0 <= k <= n:
         raise ValueError(f"need 0 <= k <= n and n >= 1, got k={k}, n={n}")
+    if not 0 < level < 1:
+        raise ValueError(f"level must be in (0, 1), got {level}")
     z = NormalDist().inv_cdf(1 - (1 - level) / 2)
     p = k / n
     scale = 1 + z * z / n
@@ -166,10 +184,31 @@ def detect_mutant(
     return MutantOutcome(mutant.record_id, delta > tau + EPSILON, None, delta, tau)
 
 
+def resampled_verdict(alpha: float = DEFAULT_ALPHA) -> Verdict:
+    """``detect_mutant``'s rule, vectorized over bootstrap resamples (``mtlj.stats.bootstrap``).
+
+    Each resample has its own sigma, so its own tau and its own headroom exclusions.
+    """
+    z = NormalDist().inv_cdf(1 - alpha)
+
+    def verdict(sigma: Floats, mutants: RecordSummaries) -> tuple[Flags, Flags]:
+        # Same order of operations as ``threshold``, so a resample equal to the original sample
+        # reproduces its verdicts. sigma = 0 gives tau = 0 here too.
+        tau = (z * sigma)[:, None] * mutants.spread
+        testable = mutants.scored & (mutants.original_mean > tau)
+        return mutants.delta > tau + EPSILON, testable
+
+    return verdict
+
+
 def detection_rate(
     originals: Mapping[str, Sequence[float]],
     mutants: Iterable[MutantScores],
     alpha: float = DEFAULT_ALPHA,
+    *,
+    level: float = CI_LEVEL,
+    n_resamples: int = DEFAULT_RESAMPLES,
+    seed: int = DEFAULT_SEED,
 ) -> DetectionRate:
     """Detection rate of one degrading operator's mutants, for one judge and judge config.
 
@@ -180,11 +219,15 @@ def detection_rate(
         mutants: the operator's mutants.
         alpha: one-sided false-detection rate, also the rate the result is tested against.
             docs/metrics.md fixes it at 0.05.
+        level: confidence level of both intervals.
+        n_resamples: bootstrap resamples (see ``mtlj.stats.bootstrap``).
+        seed: bootstrap seed, so the same scores always give the same interval.
 
     Returns:
-        The rate with its 95% Wilson interval and the binomial test against alpha, the counts
-        behind it, and sigma, tau, N and alpha. ``n_samples`` is the most scores any text
-        received: the N the run asked for, since failed scorings only lower a text's count.
+        The rate with its Wilson and bootstrap intervals and the binomial test against alpha,
+        the counts behind it, and sigma, tau, N, alpha and the level. ``n_samples`` is the most
+        scores any text received: the N the run asked for, since failed scorings only lower a
+        text's count.
 
     Raises:
         ValueError: if no original has two or more scores (see ``noise_floor``).
@@ -204,10 +247,18 @@ def detection_rate(
         else None
     )
     n_samples = max(len(s) for s in [*originals.values(), *(m.scores for m in mutants)])
+    bootstrap = (
+        bootstrap_rate(
+            summarize(originals, mutants), resampled_verdict(alpha), level, n_resamples, seed
+        )
+        if testable
+        else None
+    )
 
     return DetectionRate(
         rate=detected / testable if testable else None,
-        ci=wilson_interval(detected, testable) if testable else None,
+        ci=wilson_interval(detected, testable, level) if testable else None,
+        bootstrap=bootstrap,
         p_value=p_value,
         above_chance=p_value is not None and p_value < alpha,
         detected=detected,
@@ -217,5 +268,6 @@ def detection_rate(
         tau=threshold(sigma, n_samples, n_samples, alpha),
         n_samples=n_samples,
         alpha=alpha,
+        level=level,
         outcomes=outcomes,
     )
