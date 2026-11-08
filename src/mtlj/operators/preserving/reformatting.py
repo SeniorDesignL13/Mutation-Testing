@@ -52,11 +52,17 @@ class Format(StrEnum):
     MARKDOWN = "markdown"
 
 
-# A list item: "-", "*", "+" or "•" bullets, or "1." / "1)" numbering, then a space.
-_LIST_ITEM = re.compile(r"^(?:[-*+•]|\d+[.)])\s+")
+# A bulleted item: "-", "*", "+" or "•", then a space.
+_BULLET = re.compile(r"^[-*+•]\s+")
+# A numbered item: "1." or "1)", then a space. Whether it really is one depends on its number
+# (see ``_parse``), so a wrapped line like "1932. It cost..." stays prose.
+_NUMBERED = re.compile(r"^(\d{1,3})[.)]\s+")
 _HEADING = re.compile(r"^#{1,6}\s+")
-# The next number of a numbered list written on one line, after a sentence ends.
-_INLINE_NUMBER = re.compile(r"(?<=[.!?])\s+\d+[.)]\s+")
+# A possible next number of a numbered list written on one line, after a sentence ends.
+_INLINE_NUMBER = re.compile(r"(?<=[.!?])\s+(\d{1,3})[.)]\s+")
+# Bold: a pair of "**" around text that doesn't start or end with a space. A lone "**" (as in
+# "2**3") isn't bold and is kept.
+_BOLD = re.compile(r"(?<!\\)\*\*(?=\S)(.+?)(?<=\S)(?<!\\)\*\*")
 # A backslash escape that this module (or any markdown writer) puts before punctuation.
 _ESCAPE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!>|])")
 # Closing punctuation: a unit ending in one of these already ends as a sentence. The curly
@@ -76,30 +82,42 @@ def _words(text: str) -> list[str]:
 
 
 def _clean(text: str) -> str:
-    """Remove inline markup (bold, escapes) and collapse whitespace."""
-    text = text.replace("**", "")
+    """Remove inline markup (bold pairs, escapes) and collapse whitespace."""
+    text = _BOLD.sub(r"\1", text)
     text = _ESCAPE.sub(r"\1", text)
     return " ".join(text.split())
 
 
 def detect_format(text: str) -> Format:
-    """Which format ``text`` is in: markdown if it has bold or headings, bullets if a list."""
+    """Which format ``text`` is in.
+
+    Markdown if it has headings, bold, or a numbered list; bullets if it has only bulleted
+    items; prose otherwise.
+    """
+    _, numbers = _parse(text)
     lines = [line.strip() for line in text.splitlines()]
-    if "**" in text or any(_HEADING.match(line) for line in lines):
+    if numbers or _BOLD.search(text) or any(_HEADING.match(line) for line in lines):
         return Format.MARKDOWN
-    if any(_LIST_ITEM.match(line) for line in lines):
+    if any(_BULLET.match(line) for line in lines):
         return Format.BULLETS
     return Format.PROSE
 
 
-def split_units(text: str) -> list[str]:
-    """Split ``text`` into the units a layout is built from.
+def _parse(text: str) -> tuple[list[str], list[str]]:
+    """Split ``text`` into units, and return the list numbers its markup used.
 
     List items and headings are one unit each, whatever they contain. Prose between them is
     split into sentences. Markup is removed from every unit, and its words are kept as they are.
+
+    A numbered line is a list item only if its number is 1 or follows the item before (the way
+    markdown decides whether a number can start a list), so "1932. It cost a lot." on a
+    wrapped line stays a sentence. The numbers that were list markup are returned, so the
+    caller can check that no other word went missing.
     """
     units: list[str] = []
+    numbers: list[str] = []
     paragraph: list[str] = []
+    last_number = 0
 
     def flush() -> None:
         if paragraph:
@@ -109,20 +127,58 @@ def split_units(text: str) -> list[str]:
 
     for raw in text.splitlines():
         line = raw.strip()
-        marker = _LIST_ITEM.match(line) or _HEADING.match(line)
+        numbered = _NUMBERED.match(line)
+        if numbered and int(numbered[1]) not in (1, last_number + 1):
+            numbered = None
+        marker = numbered or _BULLET.match(line) or _HEADING.match(line)
         if not line:
             flush()
         elif marker:
             flush()
-            # "1. Do this. 2. Do that." on one line is a list too: split it at each number.
-            items = [line[marker.end() :]]
-            if line[0].isdigit():
-                items = _INLINE_NUMBER.split(items[0])
-            units.extend(_clean(item) for item in items)
+            item = line[marker.end() :]
+            if numbered:
+                last_number = int(numbered[1])
+                numbers.append(numbered[1])
+                # "1. Do this. 2. Do that." on one line is a list too: split it at each next
+                # number, but only the next one, so "mix. 7. Then" inside an item stays put.
+                start = 0
+                for match in _INLINE_NUMBER.finditer(item):
+                    if int(match[1]) == last_number + 1:
+                        units.append(_clean(item[start : match.start()]))
+                        last_number += 1
+                        numbers.append(match[1])
+                        start = match.end()
+                item = item[start:]
+            units.append(_clean(item))
         else:
+            last_number = 0
             paragraph.append(line)
     flush()
-    return [unit for unit in units if _words(unit)]
+    return [unit for unit in units if _words(unit)], numbers
+
+
+def split_units(text: str) -> list[str]:
+    """Split ``text`` into the units a layout is built from (see ``_parse``)."""
+    return _parse(text)[0]
+
+
+def _words_kept(text: str, units: list[str], numbers: list[str]) -> bool:
+    """Whether ``units`` hold every word of ``text``, in order, apart from its list numbers.
+
+    This reads ``text`` itself, not a parse of it, so a word the parser wrongly took for markup
+    (or two words it wrongly joined) is caught.
+    """
+    expected = iter(_words(" ".join(units)))
+    numbers_left = list(numbers)
+    want = next(expected, None)
+    for word in _words(text):
+        if word == want:
+            want = next(expected, None)
+        elif word in numbers_left:
+            numbers_left.remove(word)
+        else:
+            return False
+    return want is None
 
 
 def _escape_inline(text: str) -> str:
@@ -130,8 +186,13 @@ def _escape_inline(text: str) -> str:
     return text.replace("\\", "\\\\").replace("*", "\\*")
 
 
+def _escape_numbers(text: str) -> str:
+    """Escape "2." after a sentence inside a list item, so it can't read as the next item."""
+    return _INLINE_NUMBER.sub(lambda m: m[0].replace(f"{m[1]}", f"{m[1]}\\", 1), text)
+
+
 def _escape_start(text: str) -> str:
-    """Escape what would make a list item read as a nested list, heading, or quote."""
+    """Escape what would make a line read as a list item, heading, or quote."""
     numbered = re.match(r"^(\d+)([.)])(\s|$)", text)
     if numbered:
         return f"{numbered[1]}\\{numbered[2]}{text[numbered.end(2) :]}"
@@ -140,31 +201,65 @@ def _escape_start(text: str) -> str:
     return text
 
 
-def _bold_lead(unit: str) -> str:
+def _flanks(before: str, lead: str, after: str) -> bool:
+    """Whether ``**lead**`` renders as bold between ``before`` and ``after`` (CommonMark).
+
+    Bold that starts or ends with punctuation needs a space (or the line's edge) outside it:
+    "**U.S.**x" shows its asterisks.
+    """
+    opens = lead[0].isalnum() or not before or before[-1].isspace()
+    closes = lead[-1].isalnum() or not after or after[0].isspace()
+    return opens and closes
+
+
+def _bold_lead(unit: str, doc) -> str:
     """Escape ``unit`` and bold its first noun phrase, if one starts in its first few words."""
-    doc = _nlp()(unit)
     chunk = next(iter(doc.noun_chunks), None)
-    if chunk is None or chunk.start > 2 or chunk.end == len(doc):
-        return _escape_start(_escape_inline(unit))
-    start, end = chunk.start_char, chunk.end_char
-    before = _escape_inline(unit[:start])
-    lead = _escape_inline(unit[start:end])
-    after = _escape_inline(unit[end:])
-    return f"{_escape_start(before) if before else ''}**{lead}**{after}"
+    if chunk is not None and chunk.start <= 2 and chunk.end < len(doc):
+        before, lead, after = (
+            unit[: chunk.start_char],
+            unit[chunk.start_char : chunk.end_char],
+            unit[chunk.end_char :],
+        )
+        if _flanks(before, lead, after):
+            before = _escape_start(_escape_inline(before)) if before else ""
+            return f"{before}**{_escape_inline(lead)}**{_escape_numbers(_escape_inline(after))}"
+    return _escape_start(_escape_numbers(_escape_inline(unit)))
 
 
 def render(units: list[str], target: Format) -> str:
     """Lay ``units`` out in ``target`` format."""
     if target is Format.PROSE:
         sentences = [u if u.endswith(_CLOSING) else f"{u}." for u in units]
-        return " ".join(sentences)
+        return _escape_start(" ".join(sentences))
     if target is Format.BULLETS:
-        return "\n".join(f"- {_escape_start(_escape_inline(u))}" for u in units)
-    return "\n".join(f"{i}. {_bold_lead(u)}" for i, u in enumerate(units, start=1))
+        items = (_escape_start(_escape_numbers(_escape_inline(u))) for u in units)
+        return "\n".join(f"- {item}" for item in items)
+    docs = _nlp().pipe(units)
+    items = (_bold_lead(u, doc) for u, doc in zip(units, docs, strict=True))
+    return "\n".join(f"{i}. {item}" for i, item in enumerate(items, start=1))
 
 
 class ClaimChangedError(RuntimeError):
     """A conversion would have changed the answer's words, so it was refused."""
+
+
+def _convert(text: str, target: Format) -> tuple[str, int]:
+    """``reformat``, plus the number of units the answer was split into."""
+    units, numbers = _parse(text)
+    if not units:
+        return text, 0
+    # Check the parse against the text itself: only list numbers may be missing.
+    if not _words_kept(text, units, numbers):
+        raise ClaimChangedError("splitting the answer into sentences changed its words")
+    output = render(units, Format(target))
+    # Read the output back as an answer: the same words must come back, in the same order.
+    out_units, out_numbers = _parse(output)
+    if _words(" ".join(out_units)) != _words(" ".join(units)) or not _words_kept(
+        output, out_units, out_numbers
+    ):
+        raise ClaimChangedError(f"converting to {target} changed the answer's words")
+    return output, len(units)
 
 
 def reformat(text: str, target: Format) -> str:
@@ -174,15 +269,7 @@ def reformat(text: str, target: Format) -> str:
         ClaimChangedError: the output's words differ from the input's. This is a bug in the
             conversion, and returning the text could change a claim.
     """
-    units = split_units(text)
-    if not units:
-        return text
-    output = render(units, Format(target))
-    # Read the output back as an answer: numbering and markup drop out, and the words must
-    # come back exactly as they went in.
-    if _words(" ".join(split_units(output))) != _words(" ".join(units)):
-        raise ClaimChangedError(f"converting to {target} changed the answer's words")
-    return output
+    return _convert(text, target)[0]
 
 
 class ReformattingOperator(MutationOperator):
@@ -209,20 +296,23 @@ class ReformattingOperator(MutationOperator):
 
         if intensity <= 0:
             details["reason"] = "zero_intensity"
-        elif source is self.target:
+        # Prose is the one target where converting prose would only re-space it.
+        elif source is Format.PROSE and self.target is Format.PROSE:
             details["reason"] = "already_in_target_format"
         else:
-            mutated = reformat(text, self.target)
-            details["units"] = len(split_units(text))
-            logger.debug(
-                "%s: %d units, %s -> %s", self.metadata.name, details["units"], source, self.target
-            )
-            return MutationResult(
-                original_text=text,
-                mutated_text=mutated,
-                changed=mutated != text,
-                details=details,
-            )
+            mutated, details["units"] = _convert(text, self.target)
+            if mutated != text:
+                logger.debug(
+                    "%s: %d units, %s -> %s",
+                    self.metadata.name,
+                    details["units"],
+                    source,
+                    self.target,
+                )
+                return MutationResult(
+                    original_text=text, mutated_text=mutated, changed=True, details=details
+                )
+            details["reason"] = "already_in_target_format"
         return MutationResult(original_text=text, mutated_text=text, changed=False, details=details)
 
 

@@ -159,13 +159,88 @@ def test_detect_format(answer: str, expected: Format) -> None:
 
 @pytest.mark.parametrize("operator", OPERATORS)
 def test_answer_already_in_target_format_is_unchanged(operator) -> None:
-    answer = {Format.PROSE: PROSE, Format.BULLETS: BULLETS, Format.MARKDOWN: MARKDOWN}[
-        operator.target
-    ]
+    answer = reformat(BULLETS, operator.target)
     result = operator().apply(answer, [])
     assert not result.changed
     assert result.mutated_text == answer
     assert result.details["reason"] == "already_in_target_format"
+
+
+def test_prose_is_not_reflowed_into_prose() -> None:
+    answer = "The bridge opened in 1932.\n\nIt cost a lot."
+    result = ReformatToProseOperator().apply(answer, [])
+    assert not result.changed
+    assert result.details["reason"] == "already_in_target_format"
+
+
+def test_a_numbered_list_is_converted_to_bullets() -> None:
+    result = ReformatToBulletsOperator().apply("1. First item\n2. Second item", [])
+    assert result.changed
+    assert result.mutated_text == "- First item\n- Second item"
+
+
+def test_prose_with_bold_is_converted_to_markdown() -> None:
+    result = ReformatToMarkdownOperator().apply("Water is **essential** for life. It flows.", [])
+    assert result.changed
+    assert_valid_markdown(result.mutated_text)
+
+
+# Regressions: each of these once dropped, merged or refused a word.
+
+
+def test_a_wrapped_line_starting_with_a_year_keeps_the_year() -> None:
+    answer = "The bridge opened in\n1932. It cost a lot."
+    assert reformat(answer, Format.BULLETS) == ("- The bridge opened in 1932.\n- It cost a lot.")
+
+
+def test_a_number_that_doesnt_continue_the_list_is_kept() -> None:
+    answer = "1. Mix the flour\n3. place finish was announced"
+    assert split_units(answer) == ["Mix the flour", "3. place finish was announced"]
+
+
+def test_a_lone_double_asterisk_is_not_taken_for_bold() -> None:
+    answer = "Prices fell 2**3 percent. It rose."
+    for target in Format:
+        output = reformat(answer, target)
+        assert "23" not in output
+        assert_same_claims(answer, output)
+
+
+def test_prose_that_starts_like_a_list_item_is_escaped() -> None:
+    output = reformat("- 1. place finish\n- It rose", Format.PROSE)
+    assert output == "1\\. place finish. It rose."
+    assert split_units(output) == ["1. place finish.", "It rose."]
+
+
+def test_prose_that_starts_with_a_hash_is_not_a_heading() -> None:
+    output = reformat("- # of users rose\n- It rose", Format.PROSE)
+    assert output == "\\# of users rose. It rose."
+    assert detect_format(output) is Format.PROSE
+
+
+def test_a_number_inside_an_item_stays_in_that_item() -> None:
+    answer = "- Step one is to mix. 2. Then bake it\n- Serve"
+    for target in (Format.BULLETS, Format.MARKDOWN):
+        output = reformat(answer, target)
+        assert split_units(output) == ["Step one is to mix. 2. Then bake it", "Serve"]
+
+
+def test_bold_is_skipped_where_markdown_would_not_render_it() -> None:
+    assert reformatting._flanks("", "the U.S.", " is big")
+    assert not reformatting._flanks("", "the U.S.", "x is big")  # "**the U.S.**x"
+    assert not reformatting._flanks("a", "(note", " here")  # "a**(note**"
+
+
+def test_a_parser_that_drops_a_word_is_caught(monkeypatch) -> None:
+    real_parse = reformatting._parse
+
+    def drop_first_word(text: str) -> tuple[list[str], list[str]]:
+        units, numbers = real_parse(text)
+        return [units[0].split(" ", 1)[1], *units[1:]], numbers
+
+    monkeypatch.setattr(reformatting, "_parse", drop_first_word)
+    with pytest.raises(ClaimChangedError):
+        reformat(PROSE, Format.BULLETS)
 
 
 def test_zero_intensity_changes_nothing() -> None:
