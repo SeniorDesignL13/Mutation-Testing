@@ -14,6 +14,7 @@ from mtlj.engine.generator import (
     OPERATOR_ERROR,
     REPEATED_DOSE,
     BatteryItem,
+    GenerationResult,
     default_battery,
     derive_seed,
     generate_mutants,
@@ -282,3 +283,36 @@ def test_run_json_is_the_same_for_the_same_run(tmp_path: Path) -> None:
     for name in ("a", "b"):
         write_generation(generate_mutants(RECORDS, battery, base_seed=2), tmp_path / name)
     assert (tmp_path / "a" / "run.json").read_bytes() == (tmp_path / "b" / "run.json").read_bytes()
+
+
+def test_default_battery_is_reproducible_and_depends_on_the_seed() -> None:
+    a = generate_mutants(RECORDS, default_battery(), base_seed=5)
+    b = generate_mutants(RECORDS, default_battery(), base_seed=5)
+    c = generate_mutants(RECORDS, default_battery(), base_seed=6)
+    # Mutant equality compares every field: text, details, seed and provenance.
+    assert a.mutants
+    assert a.mutants == b.mutants
+    assert a.skipped == b.skipped
+
+    def texts(result: GenerationResult) -> dict[tuple[str, str, float], str]:
+        return {(m.record_id, m.operator_name, m.intensity): m.mutated_text for m in result.mutants}
+
+    same_slot = texts(a).keys() & texts(c).keys()
+    for operator in ("verbosity_padding", "entity_swap"):
+        changed = [k for k in same_slot if k[1] == operator and texts(a)[k] != texts(c)[k]]
+        assert changed, f"{operator} gave the same text for a different seed"
+
+
+def test_same_seed_writes_byte_identical_files(tmp_path: Path) -> None:
+    for name, seed in (("a", 5), ("b", 5), ("c", 6)):
+        result = generate_mutants(RECORDS, default_battery(), base_seed=seed)
+        write_generation(result, tmp_path / name)
+
+    files = sorted(p.name for p in (tmp_path / "a").iterdir())
+    assert files == ["mutants.jsonl", "originals.jsonl", "run.json", "skipped.jsonl"]
+    assert sorted(p.name for p in (tmp_path / "b").iterdir()) == files
+    for name in files:
+        assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes(), name
+    assert (tmp_path / "a" / "mutants.jsonl").read_bytes() != (
+        tmp_path / "c" / "mutants.jsonl"
+    ).read_bytes()
