@@ -101,4 +101,8 @@ def _parse_operator(table: dict[str, Any], where: str) -> tuple[str, tuple[float
         if float(value) in intensities:
             raise BatteryConfigError(f"{where}: intensity {value} is listed more than once")
         intensities.append(float(value))
+    # generate_mutants keeps the first mutant at each dose, so the order is what makes a higher
+    # intensity mean a bigger change. Reject rather than sort, so the file means what it says.
+    if intensities != sorted(intensities):
+        raise BatteryConfigError(f"{where}: intensities must be listed low to high, got {raw!r}")
     return name, tuple(intensities)

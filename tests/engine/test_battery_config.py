@@ -96,6 +96,14 @@ def test_duplicate_intensities(tmp_path: Path) -> None:
         load_battery(path)
 
 
+@pytest.mark.parametrize("values", ["[1.0, 0.2]", "[0.2, 1.0, 0.6]"])
+def test_intensities_must_be_listed_low_to_high(tmp_path: Path, values: str) -> None:
+    # The generator keeps the first mutant at each dose, so out of order would keep the wrong one.
+    path = write(tmp_path, f'[[operators]]\nname = "entity_swap"\nintensities = {values}\n')
+    with pytest.raises(BatteryConfigError, match=r"\(entity_swap\): .*listed low to high"):
+        load_battery(path)
+
+
 @pytest.mark.parametrize("value", ["-0.1", "1.5", "nan", "inf"])
 def test_intensity_outside_unit_interval(tmp_path: Path, value: str) -> None:
     path = write(tmp_path, f'[[operators]]\nname = "entity_swap"\nintensities = [{value}]\n')
