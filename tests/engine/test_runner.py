@@ -17,6 +17,7 @@ from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
 from mtlj.engine import runner
 from mtlj.engine.generator import default_battery, generate_mutants
+from mtlj.engine.retry import NO_RETRY
 from mtlj.engine.runner import (
     ERROR,
     MUTANT,
@@ -82,9 +83,12 @@ def judge(score_fn=lambda i, o, c: 0.5, **kwargs) -> CallableJudge:
     return CallableJudge(score_fn, name="stub", model="stub-model", version="1.0", **kwargs)
 
 
-async def run(score_fn=lambda i, o, c: 0.5, *, samples=2, sink=None, **kwargs):
+async def run(score_fn=lambda i, o, c: 0.5, *, samples=2, sink=None, retry=NO_RETRY, **kwargs):
+    # Without retries, so every failure here is final. tests/engine/test_retry.py has those.
     sink = sink if sink is not None else MemorySink()
-    summary = await run_judge(judge(score_fn), RECORDS, MUTANTS, sink, samples=samples, **kwargs)
+    summary = await run_judge(
+        judge(score_fn), RECORDS, MUTANTS, sink, samples=samples, retry=retry, **kwargs
+    )
     return summary, sink
 
 
@@ -413,12 +417,12 @@ async def test_an_unexpected_runner_error_stops_the_run_with_its_summary(monkeyp
     real_evaluate = runner._evaluate
     evaluated = 0
 
-    async def breaks_on_the_third(judge, task, executor):
+    async def breaks_on_the_third(*args):
         nonlocal evaluated
         evaluated += 1
         if evaluated == 3:
             raise RuntimeError("runner bug")
-        return await real_evaluate(judge, task, executor)
+        return await real_evaluate(*args)
 
     monkeypatch.setattr(runner, "_evaluate", breaks_on_the_third)
     before = asyncio.all_tasks()
