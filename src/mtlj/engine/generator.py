@@ -87,11 +87,15 @@ class GenerationResult:
 def default_battery() -> list[BatteryItem]:
     """The operators and intensities used for the study.
 
-    Padding at 0.125 / 0.25 / 0.5 / 1.0 is 50 / 100 / 200 / 400 filler words. Entity swap at
-    0.2 / 0.6 / 1.0 changes 1 / 3 / 5 claims.
+    Padding at 0.125 / 0.25 / 0.5 / 1.0 is 50 / 100 / 200 / 400 filler words. Reformatting is
+    all or nothing, so it runs at 1.0 only. Entity swap at 0.2 / 0.6 / 1.0 changes 1 / 3 / 5
+    claims.
     """
     return [
         BatteryItem(get_operator("verbosity_padding"), (0.125, 0.25, 0.5, 1.0)),
+        BatteryItem(get_operator("reformat_to_bullets"), (1.0,)),
+        BatteryItem(get_operator("reformat_to_markdown"), (1.0,)),
+        BatteryItem(get_operator("reformat_to_prose"), (1.0,)),
         BatteryItem(get_operator("entity_swap"), (0.2, 0.6, 1.0)),
     ]
 
