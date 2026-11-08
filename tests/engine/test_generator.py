@@ -205,6 +205,14 @@ def test_default_battery_runs_the_real_operators_and_regenerates() -> None:
     swaps = [m for m in result.mutants if m.operator_name == "entity_swap"]
     assert len(padding) == len(RECORDS) * 4
     assert swaps  # Paris is in the context, so at least one swap applies
+    # The answers are prose: bullets and markdown convert each one, prose has nothing to do.
+    by_operator = result.summary()["mutants_by_operator"]
+    assert by_operator["reformat_to_bullets"] == len(RECORDS)
+    assert by_operator["reformat_to_markdown"] == len(RECORDS)
+    assert "reformat_to_prose" not in by_operator
+    assert {s.operator_name for s in result.skipped if s.reason == NO_CHANGE} >= {
+        "reformat_to_prose"
+    }
     assert all(m.expected_direction is ExpectedDirection.UNCHANGED for m in padding)
     assert all(m.expected_direction is ExpectedDirection.DECREASE for m in swaps)
     by_id = {r.record_id: r for r in result.originals}

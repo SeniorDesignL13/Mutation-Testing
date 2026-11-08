@@ -10,6 +10,19 @@
 name = "verbosity_padding"
 intensities = [0.125, 0.25, 0.5, 1.0]
 
+# Reformatting is all or nothing, so it runs at 1.0 only.
+[[operators]]
+name = "reformat_to_bullets"
+intensities = [1.0]
+
+[[operators]]
+name = "reformat_to_markdown"
+intensities = [1.0]
+
+[[operators]]
+name = "reformat_to_prose"
+intensities = [1.0]
+
 # 1 / 3 / 5 claims changed.
 [[operators]]
 name = "entity_swap"
