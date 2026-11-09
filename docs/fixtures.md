@@ -69,16 +69,17 @@ uv run python scripts/record_fixtures.py --regenerate            # mutants made 
 The script prints how many calls it will make and asks before spending. Then it:
 
 - **Only pays for what's missing.** Scores already in the file are reused, so re-running after
-  a stop, or after the trial, finishes the job. `--refresh` re-records everything.
+  a stop, or after the trial, finishes the job. `--refresh` re-records everything; a refresh
+  stopped part way resumes too, counting only scores recorded since it began.
 - **Stops at a spending cap**, `--max-cost` dollars (default 3.00) as DeepEval reports it, and
   stops at once if DeepEval can't price a call, rather than spend blind. The full gold set is
   about 765 scorings.
 - **Scores the saved texts.** The first run saves the gold set and its mutants in
   `tests/fixtures/gold-set/`, and later runs reuse them, so finishing a recording scores the same
   texts. `--regenerate` makes the mutants again from the current operators and saves them.
-- **Drops stale scores** after a full run (all records, 5 samples): scores for texts no longer
-  saved, or from another DeepEval version, are removed, so the file only holds what replay uses.
-  A trial (`--limit`, or fewer `--samples`) never drops anything.
+- **Drops stale scores** after a full run (all records, at least 5 samples): scores for texts
+  no longer saved, or from another DeepEval version, are removed. Extra samples you recorded are
+  kept. A trial (`--limit`, or fewer `--samples`) never drops anything.
 - **Only changes the committed file when the recording is complete**, every saved text at 5
   samples. A run stopped by the cap, a crash, Ctrl-C or a trial leaves the file as it was, so
   the replay test never sees a half-finished re-record.
@@ -129,6 +130,6 @@ CI never calls a real judge, and doesn't rely on anyone remembering a marker:
 
 - Tests that call one are marked `integration`, which pytest skips unless you ask for them with
   `-m integration`. In CI (where `CI` is true), `tests/conftest.py` refuses to run them at all.
-- In CI, every test also runs with the outside network blocked: a connection to, or name
-  lookup of, anything but loopback and the test database fails the test. So an unmarked test
-  that would reach a real judge fails instead of spending money.
+- In CI, the whole test process runs with the outside network blocked, from before collection:
+  a connection to, or name lookup of, anything but loopback and the test database fails. So an
+  unmarked test that would reach a real judge fails instead of spending money.

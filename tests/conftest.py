@@ -28,7 +28,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     CI runs entirely on recorded scores (MTLJ-90, docs/fixtures.md): no API keys, no inference
     cost. ``integration`` tests are deselected by default; this stops them being selected in CI
     by accident (e.g. ``-m integration``). An unmarked test that reaches out anyway is stopped by
-    ``_no_outside_network_in_ci``.
+    the network block ``pytest_configure`` installs.
 
     ``trylast``, so it sees the tests left after ``-m`` has deselected the rest. Run earlier, it
     would see every collected test, deselected ones included, and fail every CI run.
@@ -54,8 +54,11 @@ def _allowed_host(host: object) -> bool:
         return False  # any other host name
 
 
-def block_outside_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make any connection to, or name lookup of, another machine fail the test.
+def block_outside_network(set_attribute=setattr) -> None:
+    """Make any connection to, or name lookup of, another machine fail.
+
+    ``set_attribute`` is ``setattr`` to block for the rest of the process, or a monkeypatch's
+    ``setattr`` to block for one test.
 
     Loopback stays allowed: on Windows, asyncio's event loop wakes itself through a socket pair
     that connects to 127.0.0.1, which is no network call.
@@ -77,26 +80,26 @@ def block_outside_network(monkeypatch: pytest.MonkeyPatch) -> None:
             raise AssertionError(f"a network connection was attempted: lookup of {host!r}")
         return real_getaddrinfo(host, *args, **kwargs)
 
-    monkeypatch.setattr(socket.socket, "connect", guard(real_connect))
-    monkeypatch.setattr(socket.socket, "connect_ex", guard(real_connect_ex))
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    set_attribute(socket.socket, "connect", guard(real_connect))
+    set_attribute(socket.socket, "connect_ex", guard(real_connect_ex))
+    set_attribute(socket, "getaddrinfo", getaddrinfo)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """In CI, block the outside network for the whole test process (MTLJ-90).
+
+    Installed before collection, so module-level code and session fixtures are covered as well
+    as tests. "CI runs entirely in replay mode" then doesn't rest on remembering the
+    ``integration`` marker: anything that would call a real judge fails instead of spending.
+    """
+    if in_ci():
+        block_outside_network()
 
 
 @pytest.fixture
 def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail the test if it reaches another machine, wherever it runs."""
-    block_outside_network(monkeypatch)
-
-
-@pytest.fixture(autouse=True)
-def _no_outside_network_in_ci(monkeypatch: pytest.MonkeyPatch) -> None:
-    """In CI, every test runs with the outside network blocked (MTLJ-90).
-
-    So "CI runs entirely in replay mode" doesn't rest on remembering the ``integration``
-    marker: a test that would call a real judge fails here instead of spending money.
-    """
-    if in_ci():
-        block_outside_network(monkeypatch)
+    block_outside_network(monkeypatch.setattr)
 
 
 def _postgres_is_reachable() -> bool:

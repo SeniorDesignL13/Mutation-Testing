@@ -35,8 +35,8 @@ from mtlj.engine.runner import (
     MemorySink,
     RunAbortedError,
     build_tasks,
-    judge_context,
     run_judge_sync,
+    task_key,
 )
 from mtlj.judges.deepeval.faithfulness import (
     DEFAULT_MODEL,
@@ -106,7 +106,7 @@ def gold_set_plan(inputs: Path, regenerate: bool):
 
 
 def plan_keys(keys: CacheKeys, tasks) -> set[str]:
-    return {keys(t.input, t.output, judge_context(t.passages), t.sample_index) for t in tasks}
+    return {task_key(keys, task) for task in tasks}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -134,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     # Before --limit, so the saved inputs are always the whole gold set.
-    records, mutants = gold_set_plan(args.inputs, args.regenerate)
+    all_records, all_mutants = gold_set_plan(args.inputs, args.regenerate)
+    records, mutants = all_records, all_mutants
     if args.limit is not None:
         records = records[: args.limit]
         kept = {r.record_id for r in records}
@@ -152,11 +153,14 @@ def main(argv: list[str] | None = None) -> int:
     keys = CacheKeys(judge)
     tasks = build_tasks(records, mutants, args.samples)
     # Everything the replay test needs: all saved records and mutants, DEFAULT_SAMPLES each.
-    needed = plan_keys(keys, build_tasks(*load_inputs(args.inputs), DEFAULT_SAMPLES))
+    needed = plan_keys(keys, build_tasks(all_records, all_mutants, DEFAULT_SAMPLES))
+    # Only a run over all of that may drop scores; a trial (--limit, fewer --samples) never does.
+    whole = args.limit is None and args.samples >= DEFAULT_SAMPLES
     store = FixtureStore(args.out, mode="record", refresh=args.refresh)
     complete = False
     try:
-        todo = sum(1 for key in plan_keys(keys, tasks) if args.refresh or key not in store)
+        # `in` follows --refresh: only scores recorded since the refresh began count.
+        todo = sum(1 for key in plan_keys(keys, tasks) if key not in store)
         print(
             f"{len(records)} records + {len(mutants)} mutants x {args.samples} samples = "
             f"{len(tasks)} scorings with {judge.name} ({judge.model}, deepeval {judge.version})"
@@ -188,8 +192,9 @@ def main(argv: list[str] | None = None) -> int:
         # The committed file only changes from one complete recording to another: a re-record
         # stopped part way (by the cap, say) would leave it mixing judge versions, which replay
         # refuses. Until then the new scores wait in the journal, and the next run resumes.
-        complete = needed <= {key for key in needed if key in store}
-        dropped = store.retain(needed) if complete else 0
+        complete = all(key in store for key in needed)
+        # Keep this run's scores too: extra --samples were paid for.
+        dropped = store.retain(needed | plan_keys(keys, tasks)) if complete and whole else 0
     finally:
         store.close(save=complete)
 

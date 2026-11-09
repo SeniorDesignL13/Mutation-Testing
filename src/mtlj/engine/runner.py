@@ -231,12 +231,16 @@ class ScoreStore(Protocol):
 MAX_MISSING_NAMED = 5
 
 
+def task_key(keys: CacheKeys, task: EvalTask) -> str:
+    """The cache or fixture key of one scoring. Every lookup and every check uses this."""
+    return keys(task.input, task.output, judge_context(task.passages), task.sample_index)
+
+
 def _check_replay(store: ScoreStore, keys: CacheKeys, tasks: TaskPlan) -> None:
     """Raise ``FixtureMissingError`` unless ``store`` holds a score for every task."""
     missing = []
     for task in tasks:
-        key = keys(task.input, task.output, judge_context(task.passages), task.sample_index)
-        if store.get(key) is None:
+        if store.get(task_key(keys, task)) is None:
             missing.append(task)
     if not missing:
         return
@@ -630,7 +634,7 @@ async def run_judge(
     keys = CacheKeys(judge) if cache is not None else None
     if not tasks:
         return summary
-    if cache is not None and keys is not None and cache.strict:
+    if keys is not None and cache is not None and cache.strict:
         _check_replay(cache, keys, tasks)
     if cache is not None:
         logger.info("response cache: %s%s", cache.path, " (refreshing)" if cache.refresh else "")
@@ -671,8 +675,7 @@ async def run_judge(
             try:
                 key = hit = None
                 if keys is not None and cache is not None:
-                    context = judge_context(task.passages)
-                    key = keys(task.input, task.output, context, task.sample_index)
+                    key = task_key(keys, task)
                     hit = cache.get(key)
                 if hit is not None:
                     evaluation = _from_cache(judge, task, hit)

@@ -110,3 +110,53 @@ def test_a_trial_never_writes_the_file(recorder):
 
     assert not out.exists()
     assert out.with_name(out.name + ".partial").exists()
+
+
+def test_a_stopped_refresh_leaves_the_file_and_resumes_without_paying_twice(recorder):
+    run, out, calls = recorder
+    assert run("--yes") == 0
+    before = out.read_bytes()
+    first = len(calls)
+
+    # The old scores are in the file, but a refresh mustn't count them as re-recorded.
+    assert run("--yes", "--refresh", "--max-cost", str(3 * COST), "--max-concurrency", "1") == 1
+    assert out.read_bytes() == before
+    refreshed = len(calls) - first
+
+    assert run("--yes", "--refresh") == 0
+    assert len(calls) - first - refreshed == SCORINGS - refreshed  # only what was left
+
+
+def test_extra_samples_are_kept(recorder):
+    run, out, calls = recorder
+
+    assert run("--yes", "--samples", "7") == 0
+
+    assert len(FixtureStore(out, mode="replay")) == len(calls) == 7 * (len(RECORDS) + len(MUTANTS))
+
+
+def test_only_a_whole_run_drops_stale_scores(recorder):
+    run, out, _ = recorder
+    assert run("--yes") == 0
+    with FixtureStore(out, mode="record") as store:
+        store.put("stale", _older_judge(), _score())
+
+    assert run("--yes", "--limit", "1", "--samples", "1") == 0  # a trial: nothing to call
+    assert "stale" in FixtureStore(out, mode="replay")
+
+    assert run("--yes") == 0  # a whole run with nothing to call still tidies up
+    assert "stale" not in FixtureStore(out, mode="replay")
+
+
+def _older_judge():
+    from mtlj.judges.deepeval.faithfulness import DeepEvalFaithfulnessJudge
+
+    judge = DeepEvalFaithfulnessJudge(measure=lambda *_: 0.5)
+    judge.version = "0.0.1"  # a score left over from an older DeepEval
+    return judge
+
+
+def _score():
+    from mtlj.engine.cache import CachedScore
+
+    return CachedScore(score=0.5, raw_score=0.5, latency_ms=1.0)

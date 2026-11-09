@@ -64,3 +64,25 @@ def test_ci_false_is_not_ci():
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "call a real judge" not in result.stdout + result.stderr
+
+
+def test_outside_network_is_blocked_for_the_whole_run_in_ci():
+    if os.environ.get("CI", "").strip().lower() not in {"1", "true", "yes"}:
+        pytest.skip("checks the block CI installs; run by the next test")
+    with pytest.raises(AssertionError, match="network connection was attempted"):
+        socket.getaddrinfo("api.openai.com", 443)
+
+
+def test_ci_blocks_the_network_without_any_fixture():
+    node = "tests/test_ci_guard.py::test_outside_network_is_blocked_for_the_whole_run_in_ci"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", node],
+        cwd=ROOT,
+        env={**os.environ, "CI": "true"},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1 passed" in result.stdout

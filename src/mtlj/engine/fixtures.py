@@ -124,10 +124,6 @@ def _line_of(model: BaseModel) -> str:
     return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
 
-def _line(fixture: Fixture) -> str:
-    return _line_of(fixture)
-
-
 class FixtureStore:
     """Judge scores by cache key, read from and recorded to the JSONL file at ``path``.
 
@@ -139,8 +135,9 @@ class FixtureStore:
         path: the fixture file. In replay mode it must exist. In record mode it's created, with
             its folder, on ``close()`` if it doesn't.
         mode: ``"record"`` or ``"replay"`` (see the module docstring).
-        refresh: record mode only: never answer from the file, but record every score, in place
-            of what was there.
+        refresh: record mode only: answer only from scores recorded since the refresh began
+            (this store's, and a stopped refresh's journal), never from the file, and record
+            every other score in place of what was there.
 
     Raises:
         FileNotFoundError: in replay mode, if the file doesn't exist.
@@ -161,6 +158,8 @@ class FixtureStore:
         self._fixtures: dict[str, Fixture] = {}
         self._recorded = 0
         self._dropped = 0
+        # Keys recorded since the last save: this store's, and a stopped run's journal.
+        self._fresh: set[str] = set()
         self._journal: IO[str] | None = None
 
         if mode == "replay" and not self.path.exists():
@@ -172,17 +171,19 @@ class FixtureStore:
         if mode == "record" and self.partial_path.exists():
             # A record run that died left scores it paid for; keep them.
             found = self._load(self.partial_path, newer=True)
-            logger.info("picked up %d recorded scores from %s", found, self.partial_path)
-            self._recorded += found
+            logger.info("picked up %d recorded scores from %s", len(found), self.partial_path)
+            self._recorded += len(found)
+            self._fresh.update(found)
 
     @property
     def strict(self) -> bool:
         """True in replay mode: the runner must never call the judge."""
         return self.mode == "replay"
 
-    def _load(self, path: Path, *, newer: bool = False) -> int:
-        """Read ``path`` into the store. ``newer`` lines replace older scores for the same key."""
-        count = 0
+    def _load(self, path: Path, *, newer: bool = False) -> list[str]:
+        """Read ``path`` into the store, returning the keys read. ``newer`` lines replace older
+        scores for the same key."""
+        loaded: list[str] = []
         seen: set[str] = set()
         complete = 0  # bytes up to the end of the last whole line
         torn = False
@@ -207,25 +208,29 @@ class FixtureStore:
                     )
                 seen.add(fixture.key)
                 self._fixtures[fixture.key] = fixture
-                count += 1
+                loaded.append(fixture.key)
         if torn:
             # Cut it off, or the next score appended would be glued onto it, and the journal
             # would hold a line that never reads again.
             with path.open("r+b") as file:
                 file.truncate(complete)
-        return count
+        return loaded
 
     def get(self, key: str) -> CachedScore | None:
-        """The score recorded under ``key``, or None. Always None with ``refresh``."""
-        if self.refresh:
-            return None
+        """The score recorded under ``key``, or None.
+
+        With ``refresh``, only a score recorded since the refresh began counts, so resuming a
+        stopped refresh doesn't pay again for what it already recorded.
+        """
         with self._lock:
+            if self.refresh and key not in self._fresh:
+                return None
             fixture = self._fixtures.get(key)
         return fixture.result if fixture is not None else None
 
     def __contains__(self, key: str) -> bool:
-        with self._lock:
-            return key in self._fixtures
+        """Whether ``get`` answers ``key``: with ``refresh``, only if recorded since."""
+        return self.get(key) is not None
 
     def put(self, key: str, judge: Judge, score: CachedScore) -> None:
         """Record ``score`` under ``key``, appending it to the journal at once.
@@ -241,9 +246,10 @@ class FixtureStore:
                 self.partial_path.parent.mkdir(parents=True, exist_ok=True)
                 self._journal = self.partial_path.open("a", encoding="utf-8", newline="\n")
             # One write per line, flushed, so a crash loses at most the line being written.
-            self._journal.write(_line(fixture) + "\n")
+            self._journal.write(_line_of(fixture) + "\n")
             self._journal.flush()
             self._fixtures[key] = fixture
+            self._fresh.add(key)
             self._recorded += 1
 
     @property
@@ -335,13 +341,14 @@ class FixtureStore:
             temporary = self.path.with_name(self.path.name + ".tmp")
             with temporary.open("w", encoding="utf-8", newline="\n") as file:
                 for key in sorted(self._fixtures):
-                    file.write(_line(self._fixtures[key]) + "\n")
+                    file.write(_line_of(self._fixtures[key]) + "\n")
                 file.flush()
                 os.fsync(file.fileno())
             os.replace(temporary, self.path)
             self.partial_path.unlink(missing_ok=True)
             self._recorded = 0
             self._dropped = 0
+            self._fresh.clear()
 
     def close(self, *, save: bool = True) -> None:
         """Save what was recorded (see ``save``), or with ``save=False`` only close the journal.
