@@ -9,7 +9,13 @@ import pytest
 
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
-from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, GenerationResult, SkippedMutant
+from mtlj.engine.generator import (
+    NO_CHANGE,
+    OPERATOR_ERROR,
+    REPEATED_DOSE,
+    GenerationResult,
+    SkippedMutant,
+)
 from mtlj.engine.results import (
     BOOTSTRAP_HEADLINE_MIN,
     RESULTS_FILE,
@@ -673,3 +679,35 @@ def test_a_missing_field_is_still_rejected(tmp_path: Path):
 
     with pytest.raises(ValueError, match="wilson_ci"):
         read_results(path)
+
+
+def test_no_bootstrap_interval_means_wilson_is_the_headline():
+    assert headline_interval(BOOTSTRAP_HEADLINE_MIN, has_bootstrap=False) == "wilson"
+    assert headline_interval(0, has_bootstrap=False) is None
+
+
+def test_headline_ci_falls_back_to_wilson_when_the_bootstrap_has_no_interval():
+    result = operator(build(*make_run()), SWAP).by_intensity[0].result
+    empty = result.bootstrap_ci.model_copy(update={"ci": None, "n_valid": 0})
+
+    broken = result.model_copy(update={"headline_interval": "bootstrap", "bootstrap_ci": empty})
+
+    assert broken.headline_ci == result.wilson_ci
+
+
+def test_repeated_doses_are_counted_at_their_intensity_and_shown():
+    generation, rows = make_run()
+    generation.skipped.append(SkippedMutant("r0", SWAP, 1.0, 1, REPEATED_DOSE))
+
+    results = build(generation, rows)
+
+    swap = operator(results, SWAP)
+    assert [i.repeated_doses for i in swap.by_intensity] == [0, 1]
+    assert swap.repeated_doses == 1
+    assert operator(results, PAD).repeated_doses == 0
+    assert swap.overall.excluded == {"no_change": 0, "no_scores": 0, "no_headroom": 0}
+    summary = format_summary(results)
+    assert "intensity 1: " in summary
+    assert "1 repeated doses left out" in next(
+        line for line in summary.splitlines() if line.startswith("    intensity 1:")
+    )

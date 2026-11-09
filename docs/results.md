@@ -71,11 +71,20 @@ every time, so a run of just those flags a padded answer for one lower score in 
 
 ### `operators`
 
-One entry per operator, sorted by name: `operator`, `family`, `operator_errors`, `overall`,
-`by_intensity` and `dose_response`. `operator_errors` counts mutants the operator crashed on,
-which are in no rate's denominator and no `excluded` count. A rate with a high count is
-measured on a smaller sample than it looks. `by_intensity` lists `{"intensity", "result"}` for
-each intensity in the battery, including ones with no mutants.
+One entry per operator, sorted by name: `operator`, `family`, `operator_errors`,
+`repeated_doses`, `overall`, `by_intensity` and `dose_response`. `operator_errors` counts
+mutants the operator crashed on, which are in no rate's denominator and no `excluded` count. A
+rate with a high count is measured on a smaller sample than it looks. `by_intensity` lists
+`{"intensity", "repeated_doses", "result"}` for each intensity in the battery, including ones
+with no mutants.
+
+`repeated_doses` counts mutants dropped because they changed no more than the same record's
+mutant at a lower intensity. Entity swap at 1.0 asks for 5 swaps, but a record with only 2
+entities gets 2, the same as at 0.6, so its 1.0 mutant is dropped and a higher intensity always
+means a bigger change. Those records are in no denominator at that intensity. A high count
+means the intensity is measured on fewer records, and on different ones (those with more
+entities) than the intensities below it, which matters when comparing rates across intensities
+and for `dose_response`.
 
 `overall` pools the operator's intensities. A record appears once per intensity there, and those
 mutants share one original, so one unlucky draw can move them together. Its Wilson interval

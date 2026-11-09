@@ -34,7 +34,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, GenerationResult
+from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, REPEATED_DOSE, GenerationResult
 from mtlj.engine.runner import OK, ORIGINAL, Evaluation
 from mtlj.judges.base import Judge
 from mtlj.operators.base import OperatorFamily
@@ -151,7 +151,8 @@ class _Rate(_Model):
 
     ``rate``, ``wilson_ci``, ``bootstrap_ci`` and ``headline_interval`` are None when no mutant
     is testable. ``headline_interval`` names the interval to show first: ``bootstrap`` from
-    ``BOOTSTRAP_HEADLINE_MIN`` testable mutants, ``wilson`` below that.
+    ``BOOTSTRAP_HEADLINE_MIN`` testable mutants, ``wilson`` below that or when no bootstrap
+    resample had a rate.
 
     ``p_value`` and ``above_chance`` are the one-sided exact binomial test of the hits against
     alpha. ``p_adjusted`` and ``above_chance_corrected`` are the same test after the
@@ -179,7 +180,7 @@ class _Rate(_Model):
     def headline_ci(self) -> Interval | None:
         """The interval ``headline_interval`` names."""
         if self.headline_interval == BOOTSTRAP and self.bootstrap_ci is not None:
-            return self.bootstrap_ci.ci
+            return self.bootstrap_ci.ci or self.wilson_ci
         return self.wilson_ci
 
 
@@ -200,9 +201,16 @@ class SpuriousResult(_Rate):
 
 
 class IntensityResult(_Model):
-    """One operator's result at one intensity."""
+    """One operator's result at one intensity.
+
+    ``repeated_doses`` counts records whose mutant here was dropped because it changed no more
+    than the same record's mutant at a lower intensity (see ``mtlj.engine.generator``). Like
+    ``operator_errors``, they're in no denominator, so a high count means this intensity is
+    measured on fewer, and different, records than the ones below it.
+    """
 
     intensity: float
+    repeated_doses: int
     result: DetectionResult | SpuriousResult
 
 
@@ -238,13 +246,16 @@ class DoseResponseResult(_Model):
 class OperatorResult(_Model):
     """One operator's result, pooled across its intensities and at each one.
 
-    ``operator_errors`` counts mutants the operator crashed on. They're in no rate's denominator.
-    ``dose_response`` is None unless two or more intensities above 0 have a testable mutant.
+    ``operator_errors`` counts mutants the operator crashed on, and ``repeated_doses`` the
+    mutants dropped as repeated doses across all its intensities (see ``IntensityResult``).
+    Neither is in any rate's denominator. ``dose_response`` is None unless two or more
+    intensities above 0 have a testable mutant.
     """
 
     operator: str
     family: OperatorFamily
     operator_errors: int
+    repeated_doses: int
     overall: DetectionResult | SpuriousResult
     by_intensity: list[IntensityResult]
     dose_response: DoseResponseResult | None
@@ -288,11 +299,17 @@ def _bootstrap(interval: BootstrapInterval | None) -> BootstrapResult | None:
     )
 
 
-def headline_interval(testable: int) -> Literal["bootstrap", "wilson"] | None:
-    """Which interval to show first for a rate over ``testable`` mutants."""
+def headline_interval(
+    testable: int, has_bootstrap: bool = True
+) -> Literal["bootstrap", "wilson"] | None:
+    """Which interval to show first for a rate over ``testable`` mutants.
+
+    ``has_bootstrap`` is False when no resample had a rate, so there's no bootstrap interval to
+    show, and Wilson is the headline whatever the count.
+    """
     if not testable:
         return None
-    return BOOTSTRAP if testable >= BOOTSTRAP_HEADLINE_MIN else WILSON
+    return BOOTSTRAP if testable >= BOOTSTRAP_HEADLINE_MIN and has_bootstrap else WILSON
 
 
 def _result(rate: Rate, test: CorrectedTest | None) -> DetectionResult | SpuriousResult:
@@ -303,7 +320,9 @@ def _result(rate: Rate, test: CorrectedTest | None) -> DetectionResult | Spuriou
         "rate": rate.rate,
         "wilson_ci": rate.ci,
         "bootstrap_ci": _bootstrap(rate.bootstrap),
-        "headline_interval": headline_interval(rate.testable),
+        "headline_interval": headline_interval(
+            rate.testable, rate.bootstrap is not None and rate.bootstrap.ci is not None
+        ),
         "testable": rate.testable,
         "excluded": {reason.value: count for reason, count in rate.excluded.items()},
         "tau": rate.tau,
@@ -406,6 +425,9 @@ def _operator_results(
     groups = _group_mutants(generation, scores)
     families = operator_families(generation)
     crashes = Counter(s.operator_name for s in generation.skipped if s.reason == OPERATOR_ERROR)
+    repeated = Counter(
+        (s.operator_name, s.intensity) for s in generation.skipped if s.reason == REPEATED_DOSE
+    )
     rates = {key: _rate(families[key[0]], originals, group, alpha) for key, group in groups.items()}
     # One family: every operator's test at every intensity, degrading and preserving alike
     # (docs/metrics.md, "Multiple-comparison correction"). Pooled figures aren't tested.
@@ -435,10 +457,12 @@ def _operator_results(
                 operator=operator,
                 family=family,
                 operator_errors=crashes[operator],
+                repeated_doses=sum(repeated[(operator, i)] for i in intensities),
                 overall=overall,
                 by_intensity=[
                     IntensityResult(
                         intensity=intensity,
+                        repeated_doses=repeated[(operator, intensity)],
                         result=_result(
                             rates[(operator, intensity)], correction.tests[(operator, intensity)]
                         ),
@@ -619,6 +643,10 @@ def _rate_line(label: str, result: DetectionResult | SpuriousResult) -> str:
     return f"{label}: {rate}, {counts}{_verdict(result)}{delta}{skipped}"
 
 
+def _repeated(count: int) -> str:
+    return f", {count} repeated doses left out" if count else ""
+
+
 def _dose_line(curve: DoseResponseResult) -> str:
     if curve.onset is None:
         return "dose-response: no response at the tested intensities"
@@ -664,9 +692,12 @@ def format_summary(results: AuditResults) -> str:
         for operator in operators:
             crashed = f", {operator.operator_errors} operator errors"
             suffix = crashed if operator.operator_errors else ""
+            suffix += _repeated(operator.repeated_doses)
             lines.append("  " + _rate_line(operator.operator, operator.overall) + suffix)
             lines += [
-                "    " + _rate_line(f"intensity {i.intensity:g}", i.result)
+                "    "
+                + _rate_line(f"intensity {i.intensity:g}", i.result)
+                + _repeated(i.repeated_doses)
                 for i in operator.by_intensity
             ]
             if operator.dose_response is not None:
