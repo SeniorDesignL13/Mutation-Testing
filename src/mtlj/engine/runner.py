@@ -374,7 +374,7 @@ def _error_message(exc: Exception) -> str:
     return message
 
 
-def _check_identity(judge: Judge) -> None:
+def check_identity(judge: Judge) -> None:
     """Reject a judge whose name, model or version isn't a non-empty string, before any call."""
     for attr in ("name", "model", "version"):
         value = getattr(judge, attr, None)
@@ -570,7 +570,7 @@ async def run_judge(
         raise ValueError(f"max_concurrency must be at least 1, got {max_concurrency}")
     if max_consecutive_errors is not None and max_consecutive_errors < 1:
         raise ValueError(f"max_consecutive_errors must be at least 1, got {max_consecutive_errors}")
-    _check_identity(judge)
+    check_identity(judge)
     tasks = build_tasks(records, mutants, samples)
     summary = RunSummary(judge.name, judge.model, judge.version, samples)
     # Works out the judge's part of every key now, so a judge that can't be cached costs nothing.

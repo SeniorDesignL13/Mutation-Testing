@@ -1,0 +1,22 @@
+# CI only, layered over compose.yaml by the "docker compose up works" job, which sets
+# COMPOSE_FILE=compose.yaml:.github/compose.ci.yaml.
+#
+# Each CI run starts on a fresh machine, so without this every run rebuilds both images from
+# nothing and downloads every dependency again. That includes the spaCy model, which isn't on
+# PyPI and comes straight from a GitHub release, so a GitHub outage failed CI even when no
+# dependency had changed. With the layers kept in the GitHub Actions cache, the dependency step
+# only runs again when uv.lock, package-lock.json or a Dockerfile changes. Branches read main's
+# cache, so a pull request that doesn't touch dependencies doesn't download them either.
+services:
+  api:
+    build:
+      cache_from:
+        - "type=gha,scope=api"
+      cache_to:
+        - "type=gha,scope=api,mode=max"
+  frontend:
+    build:
+      cache_from:
+        - "type=gha,scope=frontend"
+      cache_to:
+        - "type=gha,scope=frontend,mode=max"
