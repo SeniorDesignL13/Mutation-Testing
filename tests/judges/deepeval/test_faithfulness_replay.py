@@ -9,12 +9,8 @@ docs/fixtures.md.
 
 from __future__ import annotations
 
-import ipaddress
-import socket
 from pathlib import Path
 from statistics import mean
-
-import pytest
 
 from mtlj.engine.fixtures import FixtureStore, load_inputs
 from mtlj.engine.runner import DEFAULT_SAMPLES, MemorySink, run_judge_sync
@@ -30,72 +26,13 @@ def never_called(input, output, passages):
 
 
 def replay_judge(store: FixtureStore) -> DeepEvalFaithfulnessJudge:
-    """The recorded judge, as it was recorded, with a measure that refuses to run.
-
-    Its version is the recorded DeepEval version, not the installed one: replay never runs
-    DeepEval, so an upgrade must not change which scores it looks up.
+    """The judge the fixtures were recorded with, built from its recorded settings, with a
+    measure that refuses to run. ``replay_as`` checks it matches and sets the recorded version.
     """
     recorded = store.judge
     assert recorded is not None, f"{store.path} holds no fixtures"
-    judge = DeepEvalFaithfulnessJudge(
-        recorded.model,
-        penalize_ambiguous_claims=recorded.name.endswith("-penalized"),
-        measure=never_called,
-    )
-    judge.version = recorded.version
-    assert judge.name == recorded.name
-    return judge
-
-
-def _is_loopback(host: object) -> bool:
-    if host == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(str(host)).is_loopback
-    except ValueError:
-        return False  # any other host name
-
-
-@pytest.fixture
-def no_network(monkeypatch):
-    """Fail any attempt to reach another machine during the test.
-
-    Loopback stays allowed: on Windows, asyncio's event loop wakes itself through a socket pair
-    that connects to 127.0.0.1, which is no network call.
-    """
-    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
-    real_getaddrinfo = socket.getaddrinfo
-
-    def guard(real):
-        def connect(sock, address, *args, **kwargs):
-            host = address[0] if isinstance(address, tuple) else address
-            if not _is_loopback(host):
-                raise AssertionError(f"a network connection was attempted: {address!r}")
-            return real(sock, address, *args, **kwargs)
-
-        return connect
-
-    def getaddrinfo(host, *args, **kwargs):
-        if host is not None and not _is_loopback(host):
-            raise AssertionError(f"a network connection was attempted: lookup of {host!r}")
-        return real_getaddrinfo(host, *args, **kwargs)
-
-    monkeypatch.setattr(socket.socket, "connect", guard(real_connect))
-    monkeypatch.setattr(socket.socket, "connect_ex", guard(real_connect_ex))
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
-
-
-def test_the_network_guard_refuses_other_machines(no_network):
-    with pytest.raises(AssertionError, match="network connection was attempted"):
-        socket.create_connection(("api.openai.com", 443), timeout=1)
-    with pytest.raises(AssertionError, match="network connection was attempted"):
-        socket.create_connection(("93.184.216.34", 443), timeout=1)
-
-
-def test_the_network_guard_lets_asyncio_run(no_network):
-    a, b = socket.socketpair()  # what asyncio's event loop needs, on every platform
-    a.close()
-    b.close()
+    judge = DeepEvalFaithfulnessJudge(recorded.model, **recorded.settings, measure=never_called)
+    return store.replay_as(judge)
 
 
 def test_gold_set_replays_from_fixtures_with_no_judge_call_and_no_network(no_network):

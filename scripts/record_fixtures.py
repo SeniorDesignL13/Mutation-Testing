@@ -68,15 +68,22 @@ class Budget:
         self.spent = 0.0
         self.calls = 0
         self.unknown = 0  # calls DeepEval couldn't price
+        self.refused = 0  # calls refused because of the cap
+        self.reason = ""
         self._lock = threading.Lock()
 
     def check(self) -> None:
         with self._lock:
+            reason = None
             if self.spent >= self.cap:
-                raise BudgetExceededError(f"spending cap of ${self.cap:.2f} reached")
-            if self.unknown:
+                reason = f"spending cap of ${self.cap:.2f} reached"
+            elif self.unknown:
                 # Without prices the cap can't be enforced, so stop rather than spend blind.
-                raise BudgetExceededError("DeepEval didn't report what a call cost")
+                reason = "DeepEval didn't report what a call cost"
+            if reason is not None:
+                self.refused += 1
+                self.reason = reason
+                raise BudgetExceededError(reason)
 
     def add(self, cost: float | None) -> None:
         with self._lock:
@@ -134,9 +141,6 @@ def main(argv: list[str] | None = None) -> int:
         mutants = [m for m in mutants if m.record_id in kept]
 
     budget = Budget(args.max_cost)
-    # Only a run over everything the replay test needs may drop scores: a trial (--limit, or
-    # fewer --samples) covers part of it, and would otherwise drop the rest.
-    whole = args.limit is None and args.samples == DEFAULT_SAMPLES
 
     def measure(input, output, passages):
         budget.check()
@@ -145,62 +149,71 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     judge = DeepEvalFaithfulnessJudge(DEFAULT_MODEL, measure=measure)
-    with FixtureStore(args.out, mode="record", refresh=args.refresh) as store:
-        keys = CacheKeys(judge)
-        tasks = build_tasks(records, mutants, args.samples)
-        todo = sum(
-            1
-            for t in tasks
-            if args.refresh
-            or store.get(keys(t.input, t.output, judge_context(t.passages), t.sample_index)) is None
-        )
+    keys = CacheKeys(judge)
+    tasks = build_tasks(records, mutants, args.samples)
+    # Everything the replay test needs: all saved records and mutants, DEFAULT_SAMPLES each.
+    needed = plan_keys(keys, build_tasks(*load_inputs(args.inputs), DEFAULT_SAMPLES))
+    store = FixtureStore(args.out, mode="record", refresh=args.refresh)
+    complete = False
+    try:
+        todo = sum(1 for key in plan_keys(keys, tasks) if args.refresh or key not in store)
         print(
             f"{len(records)} records + {len(mutants)} mutants x {args.samples} samples = "
             f"{len(tasks)} scorings with {judge.name} ({judge.model}, deepeval {judge.version})"
         )
         print(f"{len(tasks) - todo} already recorded in {args.out}; {todo} to call.")
         print(f"Spending cap: ${args.max_cost:.2f}")
-        if not todo:
-            dropped = store.retain(plan_keys(keys, tasks)) if whole else 0
-            if dropped:
-                print(f"Dropped {dropped} scores for texts or judges no longer recorded.")
-            return 0
-        if not args.yes and input("Spend on these calls? [y/N] ").strip().lower() != "y":
+        asked = todo and not args.yes
+        if asked and input("Spend on these calls? [y/N] ").strip().lower() != "y":
             print("Nothing was spent.")
             return 1
 
-        try:
-            summary = run_judge_sync(
-                judge,
-                records,
-                mutants,
-                MemorySink(),
-                cache=store,
-                samples=args.samples,
-                max_concurrency=args.max_concurrency,
-                # Once the cap is hit every call fails at once; stop soon after.
-                max_consecutive_errors=2 * args.max_concurrency,
-            )
-            stopped = None
-        except RunAbortedError as exc:
-            summary, stopped = exc.summary, str(exc)
-        recorded = store.recorded
-        # Only after a whole run: then every score worth keeping is the plan's.
-        dropped = 0
-        if whole and stopped is None and summary.errors == 0:
-            dropped = store.retain(plan_keys(keys, tasks))
+        summary, stopped = None, None
+        if todo:
+            try:
+                summary = run_judge_sync(
+                    judge,
+                    records,
+                    mutants,
+                    MemorySink(),
+                    cache=store,
+                    samples=args.samples,
+                    max_concurrency=args.max_concurrency,
+                    # Once the cap is hit every call fails at once; stop soon after.
+                    max_consecutive_errors=2 * args.max_concurrency,
+                )
+            except RunAbortedError as exc:
+                summary, stopped = exc.summary, str(exc)
 
-    print(f"\nCalled the judge {budget.calls} times; DeepEval reports ${budget.spent:.4f} spent.")
-    print(f"Recorded {recorded} new scores; {summary.errors} scorings failed.")
-    if dropped:
-        print(f"Dropped {dropped} scores for texts or judges no longer recorded.")
-    if budget.calls:
-        print(f"Average ${budget.spent / budget.calls:.5f} per scoring.")
+        # The committed file only changes from one complete recording to another: a re-record
+        # stopped part way (by the cap, say) would leave it mixing judge versions, which replay
+        # refuses. Until then the new scores wait in the journal, and the next run resumes.
+        complete = needed <= {key for key in needed if key in store}
+        dropped = store.retain(needed) if complete else 0
+    finally:
+        store.close(save=complete)
+
+    if summary is not None:
+        print()
+        print(f"Called the judge {budget.calls} times; DeepEval reports ${budget.spent:.4f} spent.")
+        print(f"{summary.errors} scorings failed.")
+        if budget.calls:
+            print(f"Average ${budget.spent / budget.calls:.5f} per scoring.")
+    if budget.refused:
+        print(f"The spending cap stopped {budget.refused} calls: {budget.reason}.")
     if stopped:
         print(f"Stopped early: {stopped}")
-        print("Run again (with a higher --max-cost if the cap was the reason) to finish.")
-        return 1
-    return 0 if summary.errors == 0 else 1
+    if dropped:
+        print(f"Dropped {dropped} scores for texts or judges no longer recorded.")
+    if complete:
+        print(f"{args.out} holds everything the replay test needs.")
+        return 0
+    print(
+        f"{args.out} is unchanged: the recording isn't complete yet, and the new scores wait in "
+        f"{store.partial_path.name}. Run this again (with a higher --max-cost if the cap was the "
+        "reason) to finish."
+    )
+    return 1
 
 
 if __name__ == "__main__":

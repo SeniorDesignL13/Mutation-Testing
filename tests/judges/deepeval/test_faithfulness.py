@@ -241,3 +241,24 @@ def test_runner_context_is_what_the_adapter_reads():
     DeepEvalFaithfulnessJudge(measure=lambda _i, _o, p: seen.extend(p) or 1.0)("q", "a", context)
 
     assert seen == ["Some text."]
+
+
+def test_on_cost_is_called_even_when_the_metric_raises(monkeypatch):
+    import deepeval.metrics
+
+    class Failing:
+        evaluation_cost = 0.002
+
+        def __init__(self, **kwargs):
+            pass
+
+        def measure(self, case, **kwargs):
+            raise ConnectionError("dropped after the first LLM call")
+
+    monkeypatch.setattr(deepeval.metrics, "FaithfulnessMetric", Failing)
+    costs = []
+
+    with pytest.raises(ConnectionError):
+        measure_faithfulness("q", "a", ["p"], model=FakeLLM(["yes"]), on_cost=costs.append)
+
+    assert costs == [0.002]

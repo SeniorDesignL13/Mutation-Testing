@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import ipaddress
 import os
 import socket
 from collections.abc import AsyncIterator
@@ -15,18 +16,24 @@ from mtlj.api.db import engine
 from mtlj.api.main import app
 
 
+def in_ci() -> bool:
+    """Whether ``CI`` is set to a true value, as GitHub Actions sets it (``CI=true``)."""
+    return os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """In CI, refuse to run tests that call a real judge.
 
     CI runs entirely on recorded scores (MTLJ-90, docs/fixtures.md): no API keys, no inference
     cost. ``integration`` tests are deselected by default; this stops them being selected in CI
-    by accident (e.g. ``-m integration``, or a test node id).
+    by accident (e.g. ``-m integration``). An unmarked test that reaches out anyway is stopped by
+    ``_no_outside_network_in_ci``.
 
     ``trylast``, so it sees the tests left after ``-m`` has deselected the rest. Run earlier, it
     would see every collected test, deselected ones included, and fail every CI run.
     """
-    if not os.environ.get("CI"):
+    if not in_ci():
         return
     live = [item.nodeid for item in items if item.get_closest_marker("integration")]
     if live:
@@ -35,6 +42,61 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             + ", ".join(live[:5])
             + ". Replay from fixtures instead (see docs/fixtures.md)."
         )
+
+
+def _allowed_host(host: object) -> bool:
+    """Loopback, and the test database's host: the only machines a test may reach."""
+    if host in ("localhost", make_url(get_settings().database_url).host):
+        return True
+    try:
+        return ipaddress.ip_address(str(host)).is_loopback
+    except ValueError:
+        return False  # any other host name
+
+
+def block_outside_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make any connection to, or name lookup of, another machine fail the test.
+
+    Loopback stays allowed: on Windows, asyncio's event loop wakes itself through a socket pair
+    that connects to 127.0.0.1, which is no network call.
+    """
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+    real_getaddrinfo = socket.getaddrinfo
+
+    def guard(real):
+        def connect(sock, address, *args, **kwargs):
+            host = address[0] if isinstance(address, tuple) else address
+            if not _allowed_host(host):
+                raise AssertionError(f"a network connection was attempted: {address!r}")
+            return real(sock, address, *args, **kwargs)
+
+        return connect
+
+    def getaddrinfo(host, *args, **kwargs):
+        if host not in (None, "") and not _allowed_host(host):
+            raise AssertionError(f"a network connection was attempted: lookup of {host!r}")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guard(real_connect))
+    monkeypatch.setattr(socket.socket, "connect_ex", guard(real_connect_ex))
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+
+
+@pytest.fixture
+def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if it reaches another machine, wherever it runs."""
+    block_outside_network(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def _no_outside_network_in_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """In CI, every test runs with the outside network blocked (MTLJ-90).
+
+    So "CI runs entirely in replay mode" doesn't rest on remembering the ``integration``
+    marker: a test that would call a real judge fails here instead of spending money.
+    """
+    if in_ci():
+        block_outside_network(monkeypatch)
 
 
 def _postgres_is_reachable() -> bool:

@@ -120,7 +120,15 @@ async def test_record_calls_the_judge_and_saves_every_score(tmp_path: Path) -> N
     lines = path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == SCORINGS
     first = json.loads(lines[0])
-    assert first["judge"] == {"name": "j", "model": "m", "version": "1"}
+    assert first["judge"] == {
+        "class": "mtlj.judges.callable.CallableJudge",
+        "name": "j",
+        "model": "m",
+        "version": "1",
+        "score_range": [0.0, 1.0],
+        "higher_is_better": True,
+        "settings": {},
+    }
     assert first["result"]["verdict_yes"] == 3
     assert not (tmp_path / "fx" / "judge.jsonl.partial").exists()
 
@@ -531,3 +539,58 @@ def test_a_bad_input_line_is_refused_with_its_line_number(tmp_path: Path) -> Non
 
     with pytest.raises(FixtureFileError, match=f"line {len(MUTANTS) + 1}"):
         load_inputs(tmp_path)
+
+
+def test_a_torn_journal_line_is_cut_off_so_new_scores_stay_readable(tmp_path: Path) -> None:
+    path = tmp_path / "judge.jsonl"
+    store = FixtureStore(path, mode="record")
+    store.put("k1", judge(), score())
+    store.close(save=False)
+    with store.partial_path.open("a", encoding="utf-8", newline="\n") as journal:
+        journal.write('{"v":1,"key":"k2"')  # the process died part way through this line
+
+    resumed = FixtureStore(path, mode="record")
+    resumed.put("k3", judge(), score())
+    resumed.close(save=False)  # and died again before saving
+
+    again = FixtureStore(path, mode="record")
+    assert "k1" in again and "k3" in again
+    assert "k2" not in again
+
+
+async def test_closing_without_saving_leaves_the_file_and_keeps_the_journal(tmp_path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record(path)
+    before = path.read_bytes()
+
+    store = FixtureStore(path, mode="record")
+    store.put("new", judge(), score())
+    store.close(save=False)
+
+    assert path.read_bytes() == before
+    assert "new" in FixtureStore(path, mode="record")  # picked up from the journal
+    assert "new" not in FixtureStore(path, mode="replay")
+
+
+async def test_replay_as_takes_the_recorded_version(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record_as(path, "1")
+
+    replayed = FixtureStore(path, mode="replay").replay_as(versioned(never_called, "9"))
+
+    assert replayed.version == "1"
+
+
+async def test_replay_as_refuses_a_judge_that_differs_in_more_than_its_version(tmp_path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record_as(path, "1")
+    other = versioned(never_called, "1")
+    other.model = "another-model"
+
+    with pytest.raises(FixtureFileError, match="model: 'm' != 'another-model'"):
+        FixtureStore(path, mode="replay").replay_as(other)
+
+
+def test_replay_as_needs_fixtures(tmp_path: Path) -> None:
+    with pytest.raises(FixtureFileError, match="holds no fixtures"):
+        FixtureStore(tmp_path / "fx.jsonl", mode="record").replay_as(judge())

@@ -41,13 +41,13 @@ import os
 import threading
 from pathlib import Path
 from types import TracebackType
-from typing import IO, Literal, Self
+from typing import IO, Any, Literal, Self
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
-from mtlj.engine.cache import CachedScore
+from mtlj.engine.cache import CachedScore, judge_identity
 from mtlj.judges.base import Judge
 
 logger = logging.getLogger(__name__)
@@ -77,13 +77,34 @@ class FixtureFileError(ValueError):
 
 
 class FixtureJudge(BaseModel):
-    """Which judge a fixture came from. For people reading the file; the key already covers it."""
+    """Everything about the judge that went into a fixture's key (``cache.judge_identity``).
 
-    model_config = {"extra": "forbid", "frozen": True}
+    Replay reads it back to play the judge as it was recorded (``FixtureStore.replay_as``), so
+    it holds the whole identity, not just what a reader needs to see.
+    """
 
+    model_config = {"extra": "forbid", "frozen": True, "populate_by_name": True}
+
+    judge_class: str = Field(alias="class")
     name: str
     model: str
     version: str
+    score_range: tuple[float, float]
+    higher_is_better: bool
+    settings: dict[str, Any]
+
+    @classmethod
+    def of(cls, judge: Judge) -> FixtureJudge:
+        return cls.model_validate(judge_identity(judge))
+
+    def differences(self, other: FixtureJudge, *, ignore: frozenset[str] = frozenset()) -> str:
+        """The fields that differ, as ``field: ours != theirs``, or "" when none do."""
+        ours, theirs = self.model_dump(by_alias=True), other.model_dump(by_alias=True)
+        return "; ".join(
+            f"{field}: {ours[field]!r} != {theirs[field]!r}"
+            for field in ours
+            if field not in ignore and ours[field] != theirs[field]
+        )
 
 
 class Fixture(BaseModel):
@@ -91,15 +112,20 @@ class Fixture(BaseModel):
 
     model_config = {"extra": "forbid", "frozen": True}
 
-    v: Literal[1] = FIXTURE_FORMAT_VERSION
+    v: Literal[FIXTURE_FORMAT_VERSION] = FIXTURE_FORMAT_VERSION  # type: ignore[valid-type]
     key: str
     judge: FixtureJudge
     result: CachedScore
 
 
+def _line_of(model: BaseModel) -> str:
+    # Sorted keys and no spaces: one spelling per value, so diffs show only real changes.
+    data = model.model_dump(mode="json", by_alias=True)
+    return json.dumps(data, sort_keys=True, separators=(",", ":"))
+
+
 def _line(fixture: Fixture) -> str:
-    # Sorted keys and no spaces: one spelling per fixture, so diffs show only real changes.
-    return json.dumps(fixture.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return _line_of(fixture)
 
 
 class FixtureStore:
@@ -158,14 +184,18 @@ class FixtureStore:
         """Read ``path`` into the store. ``newer`` lines replace older scores for the same key."""
         count = 0
         seen: set[str] = set()
+        complete = 0  # bytes up to the end of the last whole line
+        torn = False
         with path.open(encoding="utf-8", newline="\n") as lines:
             for number, line in enumerate(lines, start=1):
-                if not line.strip():
-                    continue
                 if newer and not line.endswith("\n"):
                     # The last line of a journal the process died while appending to.
-                    logger.warning("skipped a partly written last line in %s", path)
+                    logger.warning("dropped a partly written last line in %s", path)
+                    torn = True
                     break
+                complete += len(line.encode("utf-8"))
+                if not line.strip():
+                    continue
                 try:
                     fixture = Fixture.model_validate_json(line)
                 except ValidationError as exc:
@@ -178,6 +208,11 @@ class FixtureStore:
                 seen.add(fixture.key)
                 self._fixtures[fixture.key] = fixture
                 count += 1
+        if torn:
+            # Cut it off, or the next score appended would be glued onto it, and the journal
+            # would hold a line that never reads again.
+            with path.open("r+b") as file:
+                file.truncate(complete)
         return count
 
     def get(self, key: str) -> CachedScore | None:
@@ -200,11 +235,7 @@ class FixtureStore:
         """
         if self.mode != "record":
             raise RuntimeError("a replay fixture store doesn't record scores")
-        fixture = Fixture(
-            key=key,
-            judge=FixtureJudge(name=judge.name, model=judge.model, version=judge.version),
-            result=score,
-        )
+        fixture = Fixture(key=key, judge=FixtureJudge.of(judge), result=score)
         with self._lock:
             if self._journal is None:
                 self.partial_path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,14 +263,39 @@ class FixtureStore:
                 recording that stopped part way through a re-record leaves them.
         """
         with self._lock:
-            judges = {fixture.judge for fixture in self._fixtures.values()}
+            # By their JSON: the settings are a dict, so FixtureJudge itself can't be hashed.
+            judges = {_line_of(f.judge): f.judge for f in self._fixtures.values()}
         if len(judges) > 1:
-            found = ", ".join(sorted(f"{j.name} {j.model} {j.version}" for j in judges))
+            found = ", ".join(sorted(f"{j.name} {j.model} {j.version}" for j in judges.values()))
             raise FixtureFileError(
                 f"{self.path} mixes scores from several judges or versions ({found}). "
                 "Finish recording it (see docs/fixtures.md)."
             )
-        return next(iter(judges), None)
+        return next(iter(judges.values()), None)
+
+    def replay_as[J: Judge](self, judge: J) -> J:
+        """Make ``judge`` the judge these fixtures were recorded with, and return it.
+
+        ``judge`` must match the recorded identity in everything but its version: class, name,
+        model, score range and ``cache_settings()``. Its version is set to the recorded one,
+        since replay never runs the library behind it (DeepEval, say), so an upgrade mustn't
+        change which scores replay looks up. Build ``judge`` so it can't score anything.
+
+        Raises:
+            FixtureFileError: if there are no fixtures, they mix judges (see ``judge``), or
+                ``judge`` differs from the recorded one in more than its version.
+        """
+        recorded = self.judge
+        if recorded is None:
+            raise FixtureFileError(f"{self.path} holds no fixtures to replay")
+        different = recorded.differences(FixtureJudge.of(judge), ignore=frozenset({"version"}))
+        if different:
+            raise FixtureFileError(
+                f"{self.path} was recorded with another judge ({different}). Build the replay "
+                "judge from the recorded one (see docs/fixtures.md)."
+            )
+        judge.version = recorded.version
+        return judge
 
     def retain(self, keys: set[str]) -> int:
         """Drop every fixture whose key isn't in ``keys``; saved on ``close()``.
@@ -287,9 +343,20 @@ class FixtureStore:
             self._recorded = 0
             self._dropped = 0
 
-    def close(self) -> None:
-        """Save what was recorded (see ``save``)."""
-        self.save()
+    def close(self, *, save: bool = True) -> None:
+        """Save what was recorded (see ``save``), or with ``save=False`` only close the journal.
+
+        Unsaved scores stay in ``<path>.partial``, and the next record store opened on ``path``
+        picks them up. The recorder uses this for a run that didn't finish, so the committed
+        file only ever changes from one complete recording to another.
+        """
+        if save:
+            self.save()
+            return
+        with self._lock:
+            if self._journal is not None:
+                self._journal.close()
+                self._journal = None
 
     def __enter__(self) -> Self:
         return self

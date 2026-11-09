@@ -1,24 +1,28 @@
-"""CI's guard against tests that call a real judge (tests/conftest.py, MTLJ-90).
+"""CI's guards against tests that call a real judge (tests/conftest.py, MTLJ-90).
 
-Each case runs pytest in a fresh process with ``CI`` set, only collecting, so nothing is called.
+The marker guard is tested by running pytest in a fresh process with ``CI`` set, only collecting,
+so nothing is called. The network guard is tested in place.
 """
 
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE = "tests/judges/deepeval/test_faithfulness_live.py"
 
 
-def collect_in_ci(*args: str) -> subprocess.CompletedProcess[str]:
+def collect_in_ci(*args: str, ci: str = "true") -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", *args],
         cwd=ROOT,
-        env={**os.environ, "CI": "true"},
+        env={**os.environ, "CI": ci},
         capture_output=True,
         text=True,
         timeout=120,
@@ -39,3 +43,24 @@ def test_ci_refuses_live_tests_selected_on_purpose():
 
     assert result.returncode != 0
     assert "call a real judge" in result.stdout + result.stderr
+
+
+def test_the_network_guard_refuses_other_machines(no_network):
+    with pytest.raises(AssertionError, match="network connection was attempted"):
+        socket.create_connection(("api.openai.com", 443), timeout=1)
+    with pytest.raises(AssertionError, match="network connection was attempted"):
+        socket.create_connection(("93.184.216.34", 443), timeout=1)
+
+
+def test_the_network_guard_lets_asyncio_run(no_network):
+    a, b = socket.socketpair()  # what asyncio's event loop needs, on every platform
+    a.close()
+    b.close()
+
+
+def test_ci_false_is_not_ci():
+    # A developer who exports CI=false can still run the live tests on purpose.
+    result = collect_in_ci("-m", "integration", LIVE, ci="false")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "call a real judge" not in result.stdout + result.stderr

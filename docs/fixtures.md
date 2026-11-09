@@ -50,8 +50,11 @@ scores, or a DeepEval upgrade whose behaviour you want to check.
   `mtlj.engine.cache`): the judge's class, name, model, version and settings, the exact
   question, answer and passages, and the sample index. Usually a recording stopped before the
   end: run the recorder again to finish it.
-- **"mixes scores from several judges or versions"** means a re-record (after a DeepEval
-  upgrade, say) stopped part way. Run it again to finish; the old scores are dropped at the end.
+- **"mixes scores from several judges or versions"** shouldn't happen with the recorder, which
+  only writes the file once a recording is complete. It means the file was edited or recorded
+  some other way: record it again.
+- **"was recorded with another judge"** means the replay judge differs from the recorded one in
+  more than its version. Build it from `FixtureStore.judge` (see below).
 
 ## Recording
 
@@ -76,9 +79,13 @@ The script prints how many calls it will make and asks before spending. Then it:
 - **Drops stale scores** after a full run (all records, 5 samples): scores for texts no longer
   saved, or from another DeepEval version, are removed, so the file only holds what replay uses.
   A trial (`--limit`, or fewer `--samples`) never drops anything.
-- **Keeps every score it paid for**, even if it crashes or you press Ctrl-C: each one is written
-  to `<file>.partial` as it arrives, and merged into the file when the run ends (or the next run
-  starts).
+- **Only changes the committed file when the recording is complete**, every saved text at 5
+  samples. A run stopped by the cap, a crash, Ctrl-C or a trial leaves the file as it was, so
+  the replay test never sees a half-finished re-record.
+- **Keeps every score it paid for** meanwhile: each one is written to `<file>.partial` as it
+  arrives (git-ignored), and the next run picks them up and pays only for the rest.
+- **Counts what failed calls cost too.** The cap covers LLM calls billed before a scoring
+  failed, and a call DeepEval can't price stops the run.
 
 Then run `uv run pytest tests/judges/deepeval/test_faithfulness_replay.py` and commit the
 scores file together with `tests/fixtures/gold-set/`.
@@ -86,15 +93,23 @@ scores file together with `tests/fixtures/gold-set/`.
 ## Recording in your own code
 
 ```python
-from mtlj.engine.fixtures import FixtureStore
+from mtlj.engine.fixtures import FixtureStore, load_inputs, save_inputs
 from mtlj.engine.runner import JsonlSink, run_judge_sync
 
 with FixtureStore(path, mode="record") as fixtures, JsonlSink(results) as sink:
     run_judge_sync(judge, records, mutants, sink, cache=fixtures)
+save_inputs(inputs_dir, records, mutants)
 
-# Later, offline:
-run_judge_sync(judge, records, mutants, sink, cache=FixtureStore(path, mode="replay"))
+# Later, offline, as the judge that was recorded:
+store = FixtureStore(path, mode="replay")
+recorded = store.judge
+replay = store.replay_as(MyJudge(recorded.model, **recorded.settings, measure=refuse))
+run_judge_sync(replay, *load_inputs(inputs_dir), sink, cache=store)
 ```
+
+Each line stores the judge's whole identity (class, name, model, version, score range and
+settings), so the replay judge can be built from it. `replay_as` checks it matches in everything
+but the version, and gives it the recorded version.
 
 Failed scorings are never recorded. Replay checks every key before the run starts, so a
 missing score fails at once, naming what's missing, instead of part way through.
@@ -110,6 +125,10 @@ Both skip calls the judge already answered, and use the same keys.
 
 ## CI
 
-CI never calls a real judge. Tests that do are marked `integration`, which pytest skips unless
-you ask for them with `-m integration`. In CI (where `CI` is set), `tests/conftest.py` refuses to
-run them at all, so selecting one by accident fails the build instead of spending money.
+CI never calls a real judge, and doesn't rely on anyone remembering a marker:
+
+- Tests that call one are marked `integration`, which pytest skips unless you ask for them with
+  `-m integration`. In CI (where `CI` is true), `tests/conftest.py` refuses to run them at all.
+- In CI, every test also runs with the outside network blocked: a connection to, or name
+  lookup of, anything but loopback and the test database fails the test. So an unmarked test
+  that would reach a real judge fails instead of spending money.
