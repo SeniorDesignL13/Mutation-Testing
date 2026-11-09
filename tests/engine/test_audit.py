@@ -332,3 +332,47 @@ def test_ctrl_c_is_handled_from_scoring_until_results_are_saved(
     assert len(seen) == 2 and seen[0] is seen[1]
     assert isinstance(seen[0], audit._Stopper)
     assert signal.getsignal(signal.SIGINT) is before
+
+
+def test_a_stop_after_the_last_scoring_keeps_the_run_complete(
+    generation, tmp_path: Path, monkeypatch
+):
+    real_score = audit.run_judge_sync
+
+    def finished_then_stopped(*args, **kwargs):
+        real_score(*args, **kwargs)
+        raise KeyboardInterrupt  # as if the signal landed just after the last scoring
+
+    monkeypatch.setattr(audit, "run_judge_sync", finished_then_stopped)
+    judge = stub_judge([r.answer for r in generation.originals])
+
+    results = run_audit(generation, judge, tmp_path / "run", dataset="test", samples=2)
+
+    assert results.run.status == "complete"
+    assert results.run.reason is None
+    assert results.operators
+
+
+def test_a_stop_with_one_scoring_missing_is_still_aborted(generation, tmp_path: Path, monkeypatch):
+    real_score = audit.run_judge_sync
+
+    def all_but_one_then_stopped(judge, originals, mutants, sink, **kwargs):
+        class DropLast:
+            def __init__(self):
+                self.left = count_scorings(generation, kwargs["samples"])
+
+            async def write(self, evaluation):
+                self.left -= 1
+                if self.left:
+                    await sink.write(evaluation)
+
+        real_score(judge, originals, mutants, DropLast(), **kwargs)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(audit, "run_judge_sync", all_but_one_then_stopped)
+    judge = stub_judge([r.answer for r in generation.originals])
+
+    results = run_audit(generation, judge, tmp_path / "run", dataset="test", samples=2)
+
+    assert results.run.status == "aborted"
+    assert results.run.reason == INTERRUPTED

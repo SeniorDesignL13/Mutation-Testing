@@ -30,6 +30,7 @@ from mtlj.engine.runner import (
     Evaluation,
     JsonlSink,
     RunAbortedError,
+    TaskPlan,
     build_tasks,
     check_identity,
     read_evaluations,
@@ -58,6 +59,32 @@ def check_run_dir(run_dir: Path) -> None:
     """
     if run_dir.exists() and (not run_dir.is_dir() or any(run_dir.iterdir())):
         raise FileExistsError(f"{run_dir} already exists and isn't empty")
+
+
+def check_can_start(
+    generation: GenerationResult,
+    judge: Judge,
+    run_dir: Path,
+    *,
+    samples: int = DEFAULT_SAMPLES,
+    max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+) -> TaskPlan:
+    """Everything run_audit checks before it writes anything or calls the judge.
+
+    Returns the run's scorings, so a caller can show what it will cost first.
+
+    Raises:
+        FileExistsError: if ``run_dir`` isn't empty (see ``check_run_dir``).
+        ValueError: if the run can't start, such as a judge with no version, mutants that
+            can't be scored or an operator with no family.
+    """
+    check_run_dir(run_dir)
+    check_identity(judge)
+    if max_concurrency < 1:
+        raise ValueError(f"max_concurrency must be at least 1, got {max_concurrency}")
+    plan = build_tasks(generation.originals, generation.mutants, samples)
+    operator_families(generation)
+    return plan
 
 
 @contextmanager
@@ -106,6 +133,17 @@ def _stored_evaluations(path: Path) -> list[Evaluation]:
     return read_evaluations(path) if path.exists() else []
 
 
+def _every_scoring_stored(plan: TaskPlan, evaluations: list[Evaluation]) -> bool:
+    """Whether every planned scoring has its row, failed or not: the run got to the end.
+
+    A stop that lands after the last scoring returns but before run_audit notices still raises
+    ``KeyboardInterrupt``. Checking what was stored, not when the signal came, keeps such a run
+    complete instead of throwing away results that were all paid for.
+    """
+    stored = {(e.target_id, e.sample_index) for e in evaluations}
+    return all((task.target_id, task.sample_index) in stored for task in plan)
+
+
 def run_audit(
     generation: GenerationResult,
     judge: Judge,
@@ -125,12 +163,9 @@ def run_audit(
         ValueError: if the run can't start, such as a judge with no version or mutants that
             can't be scored. Nothing is written, so the same directory can be used again.
     """
-    check_run_dir(run_dir)
-    check_identity(judge)
-    if max_concurrency < 1:
-        raise ValueError(f"max_concurrency must be at least 1, got {max_concurrency}")
-    build_tasks(generation.originals, generation.mutants, samples)
-    operator_families(generation)
+    plan = check_can_start(
+        generation, judge, run_dir, samples=samples, max_concurrency=max_concurrency
+    )
     write_generation(generation, run_dir)
     path = run_dir / EVALUATIONS_FILE
 
@@ -155,12 +190,17 @@ def run_audit(
             logger.error("run stopped early: %s", exc)
             aborted = str(exc)
         except KeyboardInterrupt:
-            logger.error("run stopped")
             aborted = INTERRUPTED
 
+        evaluations = _stored_evaluations(path)
+        if aborted == INTERRUPTED and _every_scoring_stored(plan, evaluations):
+            logger.warning("stopped after the last scoring, so the run is complete")
+            aborted = None
+        elif aborted == INTERRUPTED:
+            logger.error("run stopped")
         results = build_results(
             generation,
-            _stored_evaluations(path),
+            evaluations,
             judge=judge,
             dataset=dataset,
             samples=samples,

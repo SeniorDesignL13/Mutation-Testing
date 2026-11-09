@@ -101,6 +101,7 @@ def test_audit_run_exits_1_when_the_judge_is_down(monkeypatch, tmp_path: Path) -
 
     assert result.exit_code == 1
     assert "Status: aborted" in result.stdout
+    assert "scorings failed" in result.stderr
     assert read_results(tmp_path / "run").run.status == "aborted"
 
 
@@ -248,3 +249,16 @@ def test_commands_start_without_loading_deepeval_or_scipy() -> None:
     )
 
     assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0
+
+
+def test_a_run_that_cannot_start_exits_2_without_a_traceback(monkeypatch, tmp_path: Path) -> None:
+    unversioned = CallableJudge(lambda *_: 0.9, name="stub", model="m", version="")
+    monkeypatch.setitem(JUDGES, "stub", lambda model: unversioned)
+
+    result = runner.invoke(app, audit_args(tmp_path))
+
+    assert result.exit_code == 2
+    assert "the run can't start" in result.stderr
+    assert "version" in result.stderr
+    assert "Planned:" not in result.stdout
+    assert not (tmp_path / "run").exists()

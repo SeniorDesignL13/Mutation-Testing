@@ -134,7 +134,7 @@ def audit_run(
     can't measure the judge's noise.
     """
     # Imported here because they load scipy, which no other command should wait for.
-    from mtlj.engine.audit import check_run_dir, count_scorings, run_audit
+    from mtlj.engine.audit import check_can_start, check_run_dir, run_audit
     from mtlj.engine.results import COMPLETE, format_summary
 
     chosen = _select_judge(judge, model)
@@ -147,7 +147,17 @@ def audit_run(
     items = _select_battery(battery)
 
     generation = generate_mutants(records, items, base_seed=seed)
-    scorings = count_scorings(generation, samples)
+    try:
+        plan = check_can_start(
+            generation, chosen, run_dir, samples=samples, max_concurrency=concurrency
+        )
+    except FileExistsError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--output") from exc
+    except ValueError as exc:
+        # Nothing has been written or paid for, so this is a usage error, not a crash.
+        typer.echo(f"Error: the run can't start: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    scorings = len(plan)
     typer.echo(
         f"Planned: {len(generation.originals)} originals and {len(generation.mutants)} mutants, "
         f"{samples} scorings each: {scorings} scorings with {chosen.name} ({chosen.model})."
@@ -165,10 +175,11 @@ def audit_run(
     )
 
     typer.echo(f"\n{format_summary(results)}\n\nSaved to {run_dir}")
-    if results.run.status != COMPLETE:
-        raise typer.Exit(code=1)
+    # Before the exit: when a run doesn't complete, failed scorings are usually why.
     if results.run.scorings.errors:
         typer.echo(f"Warning: {results.run.scorings.errors} scorings failed.", err=True)
+    if results.run.status != COMPLETE:
+        raise typer.Exit(code=1)
 
 
 @audit_app.command("show")
