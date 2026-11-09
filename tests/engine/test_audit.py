@@ -293,3 +293,42 @@ def test_count_scorings_counts_originals_and_mutants(generation):
     texts = len(generation.originals) + len(generation.mutants)
 
     assert count_scorings(generation, 5) == texts * 5
+
+
+def test_stop_handler_stops_scoring_and_is_ignored_after():
+    stopper = audit._Stopper()
+
+    stopper(signal.SIGINT, None)  # not scoring: ignored
+    stopper.scoring = True
+    with pytest.raises(KeyboardInterrupt):
+        stopper(signal.SIGINT, None)
+
+
+def test_ctrl_c_is_handled_from_scoring_until_results_are_saved(
+    generation, tmp_path: Path, monkeypatch
+):
+    seen = []
+    real_build = audit.build_results
+
+    def score(*args, **kwargs):
+        seen.append(signal.getsignal(signal.SIGINT))
+        return real_score(*args, **kwargs)
+
+    def build(*args, **kwargs):
+        handler = signal.getsignal(signal.SIGINT)
+        seen.append(handler)
+        handler(signal.SIGINT, None)  # a Ctrl+C now must not raise
+        return real_build(*args, **kwargs)
+
+    real_score = audit.run_judge_sync
+    monkeypatch.setattr(audit, "run_judge_sync", score)
+    monkeypatch.setattr(audit, "build_results", build)
+    before = signal.getsignal(signal.SIGINT)
+    judge = stub_judge([r.answer for r in generation.originals])
+
+    results = run_audit(generation, judge, tmp_path / "run", dataset="test", samples=2)
+
+    assert results.run.status == "complete"
+    assert len(seen) == 2 and seen[0] is seen[1]
+    assert isinstance(seen[0], audit._Stopper)
+    assert signal.getsignal(signal.SIGINT) is before

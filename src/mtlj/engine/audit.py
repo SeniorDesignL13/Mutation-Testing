@@ -84,8 +84,21 @@ def _handling(names: tuple[str, ...], handler: Callable[..., Any] | int) -> Iter
             signal.signal(signum, current)
 
 
-def _interrupt(signum: int, frame: FrameType | None) -> None:
-    raise KeyboardInterrupt
+class _Stopper:
+    """Stops scoring on a signal, and ignores the signal once scoring is over.
+
+    It's installed once, before scoring starts, and stays until the results are written, so
+    there's no moment where a signal finds its default handler and ends the process between the
+    two. It raises ``KeyboardInterrupt`` only while ``scoring`` is set, which run_audit does
+    inside the ``try`` that catches it.
+    """
+
+    def __init__(self) -> None:
+        self.scoring = False
+
+    def __call__(self, signum: int, frame: FrameType | None) -> None:
+        if self.scoring:
+            raise KeyboardInterrupt
 
 
 def _stored_evaluations(path: Path) -> list[Evaluation]:
@@ -122,24 +135,29 @@ def run_audit(
     path = run_dir / EVALUATIONS_FILE
 
     aborted = None
-    try:
-        with _handling(STOP_SIGNALS, _interrupt), JsonlSink(path) as sink:
-            run_judge_sync(
-                judge,
-                generation.originals,
-                generation.mutants,
-                sink,
-                samples=samples,
-                max_concurrency=max_concurrency,
-            )
-    except RunAbortedError as exc:
-        logger.error("run stopped early: %s", exc)
-        aborted = str(exc)
-    except KeyboardInterrupt:
-        logger.error("run stopped")
-        aborted = INTERRUPTED
+    stopper = _Stopper()
+    with _handling(("SIGINT", *STOP_SIGNALS), stopper):
+        try:
+            with JsonlSink(path) as sink:
+                stopper.scoring = True
+                try:
+                    run_judge_sync(
+                        judge,
+                        generation.originals,
+                        generation.mutants,
+                        sink,
+                        samples=samples,
+                        max_concurrency=max_concurrency,
+                    )
+                finally:
+                    stopper.scoring = False
+        except RunAbortedError as exc:
+            logger.error("run stopped early: %s", exc)
+            aborted = str(exc)
+        except KeyboardInterrupt:
+            logger.error("run stopped")
+            aborted = INTERRUPTED
 
-    with _handling(("SIGINT", *STOP_SIGNALS), signal.SIG_IGN):
         results = build_results(
             generation,
             _stored_evaluations(path),
