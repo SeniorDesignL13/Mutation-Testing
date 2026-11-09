@@ -92,10 +92,18 @@ jobs:
     name: docker compose up works
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Every docker compose command in this job also reads the CI override.
+      COMPOSE_FILE: compose.yaml:.github/compose.ci.yaml
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # A BuildKit builder that can keep image layers in the GitHub Actions cache, and the
+      # runtime token docker compose needs to reach that cache (see .github/compose.ci.yaml).
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
 
       - name: Start the stack
         run: docker compose up --detach --wait
