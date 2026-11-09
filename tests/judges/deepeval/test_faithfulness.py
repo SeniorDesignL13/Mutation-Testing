@@ -102,6 +102,17 @@ def test_claims_with_no_verdicts_are_an_error_not_a_perfect_score():
         judge_with(FakeLLM([], claims=["a", "b"]))("q", "a", CONTEXT)
 
 
+def test_on_cost_gets_the_metrics_cost_once_per_call_even_when_rejected():
+    costs = []
+
+    measure_faithfulness("q", "a", ["passage"], model=FakeLLM(["yes"]), on_cost=costs.append)
+    with pytest.raises(ValueError, match="no verdicts"):
+        measure_faithfulness("q", "a", ["p"], model=FakeLLM([], claims=["a"]), on_cost=costs.append)
+
+    # A custom model has no prices, so DeepEval reports None; the recorder refuses to go on.
+    assert costs == [None, None]
+
+
 def test_model_name_always_means_openai_at_temperature_zero(monkeypatch):
     built = []
 

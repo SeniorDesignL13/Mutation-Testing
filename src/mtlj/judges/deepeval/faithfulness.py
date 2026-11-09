@@ -39,8 +39,13 @@ def measure_faithfulness(
     *,
     model: str | DeepEvalBaseLLM,
     penalize_ambiguous_claims: bool = False,
+    on_cost: Callable[[float | None], None] | None = None,
 ) -> RawScore:
     """Score ``output`` against ``passages`` with one fresh ``FaithfulnessMetric``.
+
+    ``on_cost``, if given, is called with what DeepEval says the call cost in US dollars (None
+    when it can't tell), after the metric has run, even when the result is then rejected. The
+    fixture recorder uses it to enforce a spending cap.
 
     Raises:
         ValueError: if the answer has claims but no verdict came back. DeepEval scores that
@@ -65,6 +70,8 @@ def measure_faithfulness(
     )
     case = LLMTestCase(input=input, actual_output=output, retrieval_context=passages)
     score = metric.measure(case, _show_indicator=False)
+    if on_cost is not None:
+        on_cost(metric.evaluation_cost)
 
     labels = Counter(str(verdict.verdict) for verdict in metric.verdicts)
     counts = VerdictCounts(labels["yes"], labels["borderline"], labels["no"])

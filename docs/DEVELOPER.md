@@ -151,6 +151,8 @@ Components come from [PrimeVue 4](https://v4.primevue.org/) and need no imports.
   reaches it at `http://ollama:11434`. Code on your machine uses `http://localhost:11434`.
 - **spaCy models** are listed in `pyproject.toml` under `[tool.uv.sources]`
   (see `en-core-web-sm`). Add new ones there. Don't use `spacy download`.
+- **Tests never call a real LLM.** They replay recorded judge scores, so they're free and
+  work offline, and CI refuses to run any that would. See [Record and replay](fixtures.md).
 
 ## When something goes wrong
 

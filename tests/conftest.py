@@ -15,6 +15,24 @@ from mtlj.api.db import engine
 from mtlj.api.main import app
 
 
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """In CI, refuse to run tests that call a real judge.
+
+    CI runs entirely on recorded scores (MTLJ-90, docs/fixtures.md): no API keys, no inference
+    cost. ``integration`` tests are deselected by default; this stops them being selected in CI
+    by accident (e.g. ``-m integration``, or a test node id).
+    """
+    if not os.environ.get("CI"):
+        return
+    live = [item.nodeid for item in items if item.get_closest_marker("integration")]
+    if live:
+        raise pytest.UsageError(
+            "CI runs on recorded judge scores only, but these tests call a real judge: "
+            + ", ".join(live[:5])
+            + ". Replay from fixtures instead (see docs/fixtures.md)."
+        )
+
+
 def _postgres_is_reachable() -> bool:
     url = make_url(get_settings().database_url)
     try:
