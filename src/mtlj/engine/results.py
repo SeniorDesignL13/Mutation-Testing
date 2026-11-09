@@ -7,10 +7,16 @@ same run always gives a byte-identical file.
 
 Each operator gets the headline metric of its family (docs/metrics.md): detection rate for
 degrading operators, spurious sensitivity for preserving ones. Each is reported pooled across
-the operator's intensities and at each intensity. A record appears once per intensity in the
-pooled figure, and those mutants share one original, so one unlucky draw can move them together.
-Its interval is therefore narrower than independent mutants would give, and the binomial test,
-which assumes independence, is left out of it.
+the operator's intensities and at each intensity, with a Wilson and a bootstrap interval and
+which of the two is the headline. A record appears once per intensity in the pooled figure, and
+those mutants share one original, so one unlucky draw can move them together. The pooled Wilson
+interval treats those mutants as independent, so it's too narrow, and the binomial test, which
+assumes independence too, is left out of it. The bootstrap resamples whole records, so its pooled
+interval holds.
+
+The binomial tests at each intensity, of every operator in the run, are one family for the
+Benjamini-Hochberg correction (``mtlj.stats.correction``). An operator scored at two or more
+intensities also gets its dose-response curve (``mtlj.stats.dose_response``).
 
 A file is only ever written with metrics for a finished run. An aborted run's rates would mix
 scored mutants with ones that were never reached, so ``operators`` stays empty and the rows
@@ -20,6 +26,7 @@ that were scored stay in ``evaluations.jsonl``.
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -31,6 +38,8 @@ from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, GenerationResult
 from mtlj.engine.runner import OK, ORIGINAL, Evaluation
 from mtlj.judges.base import Judge
 from mtlj.operators.base import OperatorFamily
+from mtlj.stats.bootstrap import BootstrapInterval
+from mtlj.stats.correction import CorrectedTest, correct_above_chance
 from mtlj.stats.detection import (
     CI_LEVEL,
     DEFAULT_ALPHA,
@@ -39,11 +48,14 @@ from mtlj.stats.detection import (
     detection_rate,
     noise_floor,
 )
+from mtlj.stats.dose_response import DoseResponse, fit_operators
 from mtlj.stats.paired import effect_size, paired_delta
 from mtlj.stats.spurious import SpuriousSensitivity, spurious_sensitivity
 from mtlj.stats.variance import Condition, condition_variances
 
-# Bump on any change to the format. read_results rejects every other version.
+# The format's version. read_results rejects every other one. Bump it only for a breaking change:
+# a field removed, renamed or given a new meaning. A new field doesn't bump it; add it to the
+# models and to docs/results.md.
 SCHEMA_VERSION = 1
 # The file a run's results are saved as, in the run's directory.
 RESULTS_FILE = "results.json"
@@ -52,8 +64,15 @@ COMPLETE = "complete"
 ABORTED = "aborted"  # The run stopped early.
 INSUFFICIENT_DATA = "insufficient_data"  # No original has the 2+ scores that measure noise.
 
+# From this many testable mutants, the bootstrap interval is the headline one; below it, Wilson,
+# where the bootstrap under-covers (docs/metrics.md, "Bootstrap intervals").
+BOOTSTRAP_HEADLINE_MIN = 100
+BOOTSTRAP = "bootstrap"
+WILSON = "wilson"
+
 Status = Literal["complete", "aborted", "insufficient_data"]
 Interval = tuple[float, float]
+Rate = DetectionRate | SpuriousSensitivity
 
 
 class _Model(BaseModel):
@@ -110,17 +129,54 @@ class PairedDeltaResult(_Model):
     n: int
 
 
+class BootstrapResult(_Model):
+    """A rate's bootstrap interval, with what's needed to reproduce it (``mtlj.stats.bootstrap``).
+
+    ``ci`` is None when no resample had a rate.
+    """
+
+    ci: Interval | None
+    level: float
+    n_resamples: int
+    n_valid: int
+    seed: int
+
+
 class _Rate(_Model):
-    """What every rate reports. ``rate`` and ``ci`` are None when no mutant is testable."""
+    """What every rate reports.
+
+    ``rate``, ``wilson_ci``, ``bootstrap_ci`` and ``headline_interval`` are None when no mutant
+    is testable. ``headline_interval`` names the interval to show first: ``bootstrap`` from
+    ``BOOTSTRAP_HEADLINE_MIN`` testable mutants, ``wilson`` below that.
+
+    ``p_value`` and ``above_chance`` are the one-sided exact binomial test of the hits against
+    alpha. ``p_adjusted`` and ``above_chance_corrected`` are the same test after the
+    Benjamini-Hochberg correction across the run's tests (``AuditResults.correction``). All four
+    are None when the test wasn't run: when no mutant is testable, and when pooled across
+    intensities, since the test assumes independent mutants.
+    """
 
     rate: float | None
-    ci: Interval | None
+    wilson_ci: Interval | None
+    bootstrap_ci: BootstrapResult | None
+    headline_interval: Literal["bootstrap", "wilson"] | None
     testable: int
     excluded: dict[str, int]
     tau: float
     n_samples: int
     paired_delta: PairedDeltaResult
     effect_size: float | None
+    p_value: float | None
+    above_chance: bool | None
+    p_adjusted: float | None
+    above_chance_corrected: bool | None
+
+    @property
+    def headline_ci(self) -> Interval | None:
+        """The interval ``headline_interval`` names."""
+        if self.headline_interval == BOOTSTRAP and self.bootstrap_ci is not None:
+            return self.bootstrap_ci.ci
+        return self.wilson_ci
 
 
 class DetectionResult(_Rate):
@@ -131,18 +187,12 @@ class DetectionResult(_Rate):
 
 
 class SpuriousResult(_Rate):
-    """Spurious sensitivity of a preserving operator's mutants, read against alpha.
-
-    ``p_value`` and ``above_chance`` are None when the test wasn't run: when no mutant is
-    testable, and when pooled across intensities, since the test assumes independent mutants.
-    """
+    """Spurious sensitivity of a preserving operator's mutants, read against alpha."""
 
     metric: Literal["spurious_sensitivity"] = "spurious_sensitivity"
     flagged: int
     penalized: int
     rewarded: int
-    p_value: float | None
-    above_chance: bool | None
 
 
 class IntensityResult(_Model):
@@ -152,10 +202,40 @@ class IntensityResult(_Model):
     result: DetectionResult | SpuriousResult
 
 
+class DosePointResult(_Model):
+    """One intensity the curve was fitted to, with the curve's rate there."""
+
+    intensity: float
+    hits: int
+    testable: int
+    fitted_rate: float
+
+
+class DoseResponseResult(_Model):
+    """An operator's dose-response curve and onset (``mtlj.stats.dose_response``).
+
+    ``onset`` is None when the best fit is no response at any tested intensity. ``onset_ci``'s
+    upper end is None when the data can't rule out a judge that never responds: it's infinite in
+    ``DoseResponse``, and JSON can't hold that.
+    """
+
+    onset: float | None
+    onset_ci: tuple[float, float | None]
+    slope: float | None
+    responds: bool
+    in_range: bool
+    fit_p_value: float | None
+    alpha: float
+    benchmark: float
+    level: float
+    points: list[DosePointResult]
+
+
 class OperatorResult(_Model):
     """One operator's result, pooled across its intensities and at each one.
 
     ``operator_errors`` counts mutants the operator crashed on. They're in no rate's denominator.
+    ``dose_response`` is None unless two or more intensities above 0 have a testable mutant.
     """
 
     operator: str
@@ -163,57 +243,116 @@ class OperatorResult(_Model):
     operator_errors: int
     overall: DetectionResult | SpuriousResult
     by_intensity: list[IntensityResult]
+    dose_response: DoseResponseResult | None
+
+
+class CorrectionInfo(_Model):
+    """The family of tests corrected together: every operator's test at every intensity.
+
+    ``n_tests`` counts the tests that were run (those with a testable mutant). ``q`` is alpha.
+    """
+
+    method: str
+    q: float
+    n_tests: int
 
 
 class AuditResults(_Model):
-    """A run's results. ``noise`` and ``variance`` are None, and ``operators`` empty, unless the
-    run's status is ``complete``."""
+    """A run's results. ``noise``, ``correction`` and ``variance`` are None, and ``operators``
+    empty, unless the run's status is ``complete``.
+
+    ``variance`` is ``mtlj.stats.variance``'s report as it stands, and that module owns its shape.
+    """
 
     schema_version: int = SCHEMA_VERSION
     run: RunInfo
     noise: Noise | None
     operators: list[OperatorResult]
+    correction: CorrectionInfo | None
     variance: dict[str, Any] | None
 
 
-def _common_fields(rate: DetectionRate | SpuriousSensitivity) -> dict[str, Any]:
+def _bootstrap(interval: BootstrapInterval | None) -> BootstrapResult | None:
+    if interval is None:
+        return None
+    return BootstrapResult(
+        ci=interval.ci,
+        level=interval.level,
+        n_resamples=interval.n_resamples,
+        n_valid=interval.n_valid,
+        seed=interval.seed,
+    )
+
+
+def headline_interval(testable: int) -> Literal["bootstrap", "wilson"] | None:
+    """Which interval to show first for a rate over ``testable`` mutants."""
+    if not testable:
+        return None
+    return BOOTSTRAP if testable >= BOOTSTRAP_HEADLINE_MIN else WILSON
+
+
+def _result(rate: Rate, test: CorrectedTest | None) -> DetectionResult | SpuriousResult:
+    """``rate`` as stored in the file. ``test`` is None when the binomial test is left out."""
     delta = paired_delta(rate.outcomes)
-    return {
+    tested = test is not None and test.p_value is not None
+    fields: dict[str, Any] = {
         "rate": rate.rate,
-        "ci": rate.ci,
+        "wilson_ci": rate.ci,
+        "bootstrap_ci": _bootstrap(rate.bootstrap),
+        "headline_interval": headline_interval(rate.testable),
         "testable": rate.testable,
         "excluded": {reason.value: count for reason, count in rate.excluded.items()},
         "tau": rate.tau,
         "n_samples": rate.n_samples,
         "paired_delta": PairedDeltaResult(mean=delta.mean, ci=delta.ci, sd=delta.sd, n=delta.n),
         "effect_size": effect_size(delta, rate.sigma),
+        "p_value": test.p_value if tested else None,
+        "above_chance": test.significant if tested else None,
+        "p_adjusted": test.adjusted if tested else None,
+        "above_chance_corrected": test.significant_corrected if tested else None,
     }
+    if isinstance(rate, DetectionRate):
+        return DetectionResult(**fields, detected=rate.detected)
+    return SpuriousResult(
+        **fields, flagged=rate.flagged, penalized=rate.penalized, rewarded=rate.rewarded
+    )
 
 
-def _score(
+def _rate(
     family: OperatorFamily,
     originals: dict[str, list[float]],
     mutants: Sequence[MutantScores],
     alpha: float,
-    *,
-    pooled: bool = False,
-) -> DetectionResult | SpuriousResult:
-    """Score one group of mutants with its family's headline metric.
-
-    ``pooled`` means the group spans several intensities, so its mutants aren't independent.
-    """
+) -> Rate:
+    """Score one group of mutants with its family's headline metric."""
     if family is OperatorFamily.DEGRADING:
-        detection = detection_rate(originals, mutants, alpha)
-        return DetectionResult(**_common_fields(detection), detected=detection.detected)
-    spurious = spurious_sensitivity(originals, mutants, alpha)
-    tested = spurious.p_value is not None and not pooled
-    return SpuriousResult(
-        **_common_fields(spurious),
-        flagged=spurious.flagged,
-        penalized=spurious.penalized,
-        rewarded=spurious.rewarded,
-        p_value=spurious.p_value if tested else None,
-        above_chance=spurious.above_chance if tested else None,
+        return detection_rate(originals, mutants, alpha)
+    return spurious_sensitivity(originals, mutants, alpha)
+
+
+def _dose_response(curve: DoseResponse | None) -> DoseResponseResult | None:
+    if curve is None:
+        return None
+    low, high = curve.onset_ci
+    return DoseResponseResult(
+        onset=curve.onset,
+        onset_ci=(low, None if math.isinf(high) else high),
+        slope=curve.slope,
+        responds=curve.responds,
+        in_range=curve.in_range,
+        fit_p_value=curve.fit_p_value,
+        alpha=curve.alpha,
+        benchmark=curve.benchmark,
+        level=curve.level,
+        points=[
+            DosePointResult(
+                intensity=p.intensity,
+                hits=p.hits,
+                testable=p.testable,
+                fitted_rate=curve.rate(p.intensity),
+            )
+            for p in curve.points
+        ],
     )
 
 
@@ -259,31 +398,54 @@ def _operator_results(
     originals: dict[str, list[float]],
     scores: dict[str, list[float]],
     alpha: float,
-) -> list[OperatorResult]:
+) -> tuple[list[OperatorResult], CorrectionInfo]:
     groups = _group_mutants(generation, scores)
     families = operator_families(generation)
     crashes = Counter(s.operator_name for s in generation.skipped if s.reason == OPERATOR_ERROR)
+    rates = {key: _rate(families[key[0]], originals, group, alpha) for key, group in groups.items()}
+    # One family: every operator's test at every intensity, degrading and preserving alike
+    # (docs/metrics.md, "Multiple-comparison correction"). Pooled figures aren't tested.
+    correction = correct_above_chance(rates)
+    operators = sorted({name for name, _ in groups})
+    # Fitted on intensities above 0. At 0 nothing changes, so the curve is at alpha there.
+    curves = fit_operators(
+        {
+            operator: {i: rate for (name, i), rate in rates.items() if name == operator and i > 0}
+            for operator in operators
+        }
+    )
+
     results = []
-    for operator in sorted({name for name, _ in groups}):
+    for operator in operators:
         family = families[operator]
         intensities = sorted(i for name, i in groups if name == operator)
-        pooled = [m for intensity in intensities for m in groups[(operator, intensity)]]
+        if len(intensities) == 1:
+            # Nothing to pool: the overall figure is the one intensity's, test included.
+            key = (operator, intensities[0])
+            overall = _result(rates[key], correction.tests[key])
+        else:
+            pooled = [m for intensity in intensities for m in groups[(operator, intensity)]]
+            overall = _result(_rate(family, originals, pooled, alpha), None)
         results.append(
             OperatorResult(
                 operator=operator,
                 family=family,
                 operator_errors=crashes[operator],
-                overall=_score(family, originals, pooled, alpha, pooled=len(intensities) > 1),
+                overall=overall,
                 by_intensity=[
                     IntensityResult(
                         intensity=intensity,
-                        result=_score(family, originals, groups[(operator, intensity)], alpha),
+                        result=_result(
+                            rates[(operator, intensity)], correction.tests[(operator, intensity)]
+                        ),
                     )
                     for intensity in intensities
                 ],
+                dose_response=_dose_response(curves.get(operator)),
             )
         )
-    return results
+    info = CorrectionInfo(method=correction.method, q=correction.q, n_tests=correction.n_tests)
+    return results, info
 
 
 def _variance(
@@ -376,11 +538,13 @@ def build_results(
         ),
     )
     if status != COMPLETE:
-        return AuditResults(run=run, noise=None, operators=[], variance=None)
+        return AuditResults(run=run, noise=None, operators=[], correction=None, variance=None)
+    operators, correction = _operator_results(generation, originals, scores, alpha)
     return AuditResults(
         run=run,
         noise=Noise(sigma=noise_floor(originals.values()), n_originals=measurable),
-        operators=_operator_results(generation, originals, scores, alpha),
+        operators=operators,
+        correction=correction,
         variance=_variance(generation, originals, scores),
     )
 
@@ -418,12 +582,25 @@ def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.1%}"
 
 
-def _interval(ci: Interval | None) -> str:
-    return "" if ci is None else f" [{ci[0]:.1%}, {ci[1]:.1%}]"
+def _interval(result: DetectionResult | SpuriousResult) -> str:
+    """The headline interval, saying which one it is."""
+    ci = result.headline_ci
+    if ci is None:
+        return ""
+    name = "bootstrap" if result.headline_interval == BOOTSTRAP else "Wilson"
+    return f" [{ci[0]:.1%}, {ci[1]:.1%}] ({name})"
+
+
+def _verdict(result: DetectionResult | SpuriousResult) -> str:
+    if result.above_chance_corrected:
+        return ", above chance"
+    if result.above_chance:
+        return ", above chance before correction only"
+    return ""
 
 
 def _rate_line(label: str, result: DetectionResult | SpuriousResult) -> str:
-    rate = f"{_percent(result.rate)}{_interval(result.ci)}"
+    rate = f"{_percent(result.rate)}{_interval(result)}"
     mean = result.paired_delta.mean
     delta = "" if mean is None else f", mean drop {mean:+.3f}"
     if isinstance(result, DetectionResult):
@@ -433,11 +610,22 @@ def _rate_line(label: str, result: DetectionResult | SpuriousResult) -> str:
             f"{result.flagged}/{result.testable} flagged "
             f"({result.penalized} penalized, {result.rewarded} rewarded)"
         )
-        if result.above_chance:
-            counts += ", above chance"
-    excluded = {reason: n for reason, n in result.excluded.items() if n}
+    excluded = ", ".join(f"{reason} {n}" for reason, n in result.excluded.items() if n)
     skipped = f", excluded {excluded}" if excluded else ""
-    return f"{label}: {rate}, {counts}{delta}{skipped}"
+    return f"{label}: {rate}, {counts}{_verdict(result)}{delta}{skipped}"
+
+
+def _dose_line(curve: DoseResponseResult) -> str:
+    if curve.onset is None:
+        return "dose-response: no response at the tested intensities"
+    low, high = curve.onset_ci
+    upper = "inf)" if high is None else f"{high:.3g}]"
+    line = f"dose-response: onset {curve.onset:.3g} [{low:.3g}, {upper}"
+    if not curve.responds:
+        line += ", response not established"
+    elif not curve.in_range:
+        line += ", outside the tested intensities"
+    return line
 
 
 def format_summary(results: AuditResults) -> str:
@@ -454,6 +642,11 @@ def format_summary(results: AuditResults) -> str:
     ]
     if results.noise is not None:
         lines.append(f"Noise floor: {results.noise.sigma:.3f}")
+    if results.correction is not None:
+        lines.append(
+            f"Above chance: corrected across {results.correction.n_tests} tests "
+            f"({results.correction.method}, q = {results.correction.q})"
+        )
     titles = {
         OperatorFamily.DEGRADING: "Detection rate (degrading operators)",
         OperatorFamily.PRESERVING: (
@@ -472,4 +665,6 @@ def format_summary(results: AuditResults) -> str:
                 "    " + _rate_line(f"intensity {i.intensity:g}", i.result)
                 for i in operator.by_intensity
             ]
+            if operator.dose_response is not None:
+                lines.append("    " + _dose_line(operator.dose_response))
     return "\n".join(lines)

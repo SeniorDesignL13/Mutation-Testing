@@ -11,12 +11,14 @@ from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
 from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, GenerationResult, SkippedMutant
 from mtlj.engine.results import (
+    BOOTSTRAP_HEADLINE_MIN,
     RESULTS_FILE,
     SCHEMA_VERSION,
     DetectionResult,
     SpuriousResult,
     build_results,
     format_summary,
+    headline_interval,
     operator_families,
     read_results,
     write_results,
@@ -26,7 +28,9 @@ from mtlj.judges.callable import CallableJudge
 from mtlj.operators.base import MutationOperator, MutationResult, OperatorFamily
 from mtlj.operators.degrading.entity_swap import EntitySwapOperator
 from mtlj.operators.preserving.verbosity_padding import VerbosityPaddingOperator
+from mtlj.stats.correction import correct_above_chance
 from mtlj.stats.detection import MutantScores, detection_rate
+from mtlj.stats.dose_response import fit_operator
 from mtlj.stats.paired import paired_delta
 from mtlj.stats.spurious import spurious_sensitivity
 from mtlj.stats.variance import Condition, condition_variances
@@ -79,10 +83,10 @@ def scored(target_id: str, record_id: str, scores: list[float]) -> list[Evaluati
 
 
 def make_run(
-    swap_scores: float = 0.2, pad_scores: float = 0.9
+    swap_scores: float = 0.2, pad_scores: float = 0.9, n_records: int = 4
 ) -> tuple[GenerationResult, list[Evaluation]]:
     """Four records, two swap intensities and one padding intensity."""
-    records = [record(i) for i in range(4)]
+    records = [record(i) for i in range(n_records)]
     mutants = [
         *(mutant(r, EntitySwapOperator, 0.2) for r in records),
         *(mutant(r, EntitySwapOperator, 1.0) for r in records),
@@ -138,7 +142,7 @@ def test_rates_match_the_stats_modules():
     overall = operator(results, SWAP).overall
     assert isinstance(overall, DetectionResult)
     assert overall.rate == expected.rate
-    assert overall.ci == expected.ci
+    assert overall.wilson_ci == expected.ci
     assert overall.detected == expected.detected
     assert overall.tau == expected.tau
     assert overall.paired_delta.mean == paired_delta(expected.outcomes).mean
@@ -226,7 +230,8 @@ def test_operator_with_no_mutants_is_still_reported():
 
     empty = swap.by_intensity[1]
     assert empty.intensity == 0.6
-    assert (empty.result.rate, empty.result.ci, empty.result.testable) == (None, None, 0)
+    assert (empty.result.rate, empty.result.wilson_ci, empty.result.testable) == (None, None, 0)
+    assert (empty.result.bootstrap_ci, empty.result.headline_interval) == (None, None)
 
 
 def test_operator_outside_the_built_in_list_is_reported():
@@ -265,7 +270,10 @@ def test_binomial_test_is_left_out_when_pooling_intensities():
     assert pad.overall.rate == 1.0
     assert all(i.result.above_chance is True for i in pad.by_intensity)
     assert all(i.result.p_value is not None for i in pad.by_intensity)
-    assert ", above chance" not in format_summary(results).splitlines()[-3]
+    overall_line = next(
+        line for line in format_summary(results).splitlines() if line.startswith(f"  {PAD}:")
+    )
+    assert "above chance" not in overall_line
 
 
 def test_nothing_testable_means_the_test_was_not_run():
@@ -320,6 +328,7 @@ def test_aborted_run_reports_why_and_no_rates():
     assert results.run.reason == "20 judge calls in a row failed"
     assert results.run.scorings.total == 30
     assert (results.noise, results.operators, results.variance) == (None, [], None)
+    assert results.correction is None
 
 
 def test_single_sample_run_is_insufficient_data_not_a_crash():
@@ -387,7 +396,14 @@ def test_file_is_strict_json_with_the_documented_top_level(tmp_path: Path):
 
     data = json.loads(write_results(build(generation, rows), tmp_path).read_text("utf-8"))
 
-    assert sorted(data) == ["noise", "operators", "run", "schema_version", "variance"]
+    assert sorted(data) == [
+        "correction",
+        "noise",
+        "operators",
+        "run",
+        "schema_version",
+        "variance",
+    ]
 
 
 def test_unknown_schema_version_is_rejected(tmp_path: Path):
@@ -437,3 +453,201 @@ def test_summary_of_an_empty_rate_reads_na():
     generation.battery = {**BATTERY, SWAP: [0.2, 0.6, 1.0]}
 
     assert "intensity 0.6: n/a" in format_summary(build(generation, rows))
+
+
+def raw_rates(generation, rows):
+    """Each (operator, intensity)'s rate, straight from the stats modules."""
+    by_target: dict[str, list[float]] = {}
+    for row in rows:
+        by_target.setdefault(row.target_id, []).append(row.score)
+    originals = {r.record_id: by_target[r.record_id] for r in generation.originals}
+    rates = {}
+    for name, intensities in generation.battery.items():
+        metric = (
+            detection_rate if FAMILIES[name] is OperatorFamily.DEGRADING else spurious_sensitivity
+        )
+        for intensity in intensities:
+            group = [
+                MutantScores(m.record_id, by_target[m.mutant_id])
+                for m in generation.mutants
+                if (m.operator_name, m.intensity) == (name, intensity)
+            ]
+            rates[(name, intensity)] = metric(originals, group)
+    return rates
+
+
+def test_bootstrap_interval_matches_the_stats_module():
+    generation, rows = make_run()
+    expected = raw_rates(generation, rows)[(PAD, 0.5)].bootstrap
+
+    bootstrap = operator(build(generation, rows), PAD).by_intensity[0].result.bootstrap_ci
+
+    assert bootstrap.ci == expected.ci
+    assert (bootstrap.level, bootstrap.n_resamples, bootstrap.n_valid, bootstrap.seed) == (
+        expected.level,
+        expected.n_resamples,
+        expected.n_valid,
+        expected.seed,
+    )
+
+
+def test_pooled_figure_has_a_bootstrap_interval():
+    swap = operator(build(*make_run()), SWAP)
+
+    assert swap.overall.bootstrap_ci is not None
+    assert swap.overall.bootstrap_ci.n_valid > 0
+
+
+@pytest.mark.parametrize(
+    ("testable", "expected"),
+    [
+        (0, None),
+        (1, "wilson"),
+        (BOOTSTRAP_HEADLINE_MIN - 1, "wilson"),
+        (BOOTSTRAP_HEADLINE_MIN, "bootstrap"),
+    ],
+)
+def test_headline_interval_switches_to_the_bootstrap_at_100(testable, expected):
+    assert headline_interval(testable) == expected
+
+
+def test_small_result_headlines_wilson():
+    swap = operator(build(*make_run()), SWAP).by_intensity[0].result
+
+    assert swap.headline_interval == "wilson"
+    assert swap.headline_ci == swap.wilson_ci
+    assert "(Wilson)" in format_summary(build(*make_run()))
+
+
+def test_large_result_headlines_the_bootstrap():
+    results = build(*make_run(n_records=BOOTSTRAP_HEADLINE_MIN))
+
+    swap = operator(results, SWAP).by_intensity[0].result
+    assert swap.testable == BOOTSTRAP_HEADLINE_MIN
+    assert swap.headline_interval == "bootstrap"
+    assert swap.headline_ci == swap.bootstrap_ci.ci
+    assert "(bootstrap)" in format_summary(results)
+
+
+def test_detection_rate_has_the_binomial_test_except_when_pooled():
+    generation, rows = make_run()
+    expected = raw_rates(generation, rows)[(SWAP, 0.2)]
+
+    swap = operator(build(generation, rows), SWAP)
+
+    assert (swap.overall.p_value, swap.overall.above_chance) == (None, None)
+    assert (swap.overall.p_adjusted, swap.overall.above_chance_corrected) == (None, None)
+    first = swap.by_intensity[0].result
+    assert first.p_value == expected.p_value
+    assert first.above_chance is expected.above_chance is True
+
+
+def test_correction_covers_every_operator_at_every_intensity():
+    generation, rows = make_run()
+    expected = correct_above_chance(raw_rates(generation, rows))
+
+    results = build(generation, rows)
+
+    assert results.correction.method == expected.method
+    assert results.correction.q == 0.05
+    assert results.correction.n_tests == expected.n_tests == 3
+    for o in results.operators:
+        for i in o.by_intensity:
+            test = expected.tests[(o.operator, i.intensity)]
+            assert i.result.p_adjusted == test.adjusted
+            assert i.result.above_chance_corrected is test.significant_corrected
+
+
+def test_single_intensity_overall_carries_its_corrected_test():
+    pad = operator(build(*make_run()), PAD)
+
+    assert pad.overall == pad.by_intensity[0].result
+    assert pad.overall.p_adjusted is not None
+
+
+def test_untestable_intensity_is_left_out_of_the_correction():
+    generation, rows = make_run()
+    generation.battery = {**BATTERY, SWAP: [0.2, 0.6, 1.0]}
+
+    results = build(generation, rows)
+
+    assert results.correction.n_tests == 3
+    empty = operator(results, SWAP).by_intensity[1].result
+    assert (empty.p_adjusted, empty.above_chance_corrected) == (None, None)
+
+
+def test_summary_says_when_only_the_uncorrected_test_is_above_chance():
+    results = build(*make_run())
+    pad = operator(results, PAD)
+    marginal = pad.overall.model_copy(
+        update={"above_chance": True, "above_chance_corrected": False}
+    )
+    operators = [
+        o.model_copy(update={"overall": marginal}) if o.operator == PAD else o
+        for o in results.operators
+    ]
+
+    summary = format_summary(results.model_copy(update={"operators": operators}))
+
+    assert "above chance before correction only" in summary
+    assert "Above chance: corrected across 3 tests (benjamini-hochberg, q = 0.05)" in summary
+
+
+def test_dose_response_is_fitted_for_operators_with_several_intensities():
+    generation, rows = make_run()
+    rates = raw_rates(generation, rows)
+    expected = fit_operator({i: rates[(SWAP, i)] for i in BATTERY[SWAP]})
+
+    results = build(generation, rows)
+
+    curve = operator(results, SWAP).dose_response
+    assert operator(results, PAD).dose_response is None
+    assert curve.onset == expected.onset
+    assert curve.onset_ci == expected.onset_ci
+    assert (curve.responds, curve.in_range, curve.slope) == (
+        expected.responds,
+        expected.in_range,
+        expected.slope,
+    )
+    assert [(p.intensity, p.hits, p.testable) for p in curve.points] == [(0.2, 4, 4), (1.0, 4, 4)]
+    assert [p.fitted_rate for p in curve.points] == [expected.rate(0.2), expected.rate(1.0)]
+
+
+def test_judge_that_never_responds_has_an_open_onset_interval(tmp_path: Path):
+    results = build(*make_run(swap_scores=0.9))
+
+    curve = operator(results, SWAP).dose_response
+    assert curve.onset is None
+    assert curve.onset_ci[1] is None
+    assert curve.responds is False
+    write_results(results, tmp_path)
+    assert read_results(tmp_path) == results
+    assert "dose-response: no response at the tested intensities" in format_summary(results)
+
+
+def test_intensity_zero_is_left_out_of_the_curve():
+    generation, rows = make_run()
+    zero = [mutant(r, EntitySwapOperator, 0.0) for r in generation.originals]
+    generation.mutants += zero
+    generation.battery = {**BATTERY, SWAP: [0.0, 0.2, 1.0]}
+    for m in zero:
+        rows += scored(m.mutant_id, m.record_id, ORIGINAL_SCORES)
+
+    swap = operator(build(generation, rows), SWAP)
+
+    assert swap.by_intensity[0].result.testable == 4
+    assert [p.intensity for p in swap.dose_response.points] == [0.2, 1.0]
+
+
+def test_summary_shows_the_dose_response_line():
+    assert "    dose-response: onset " in format_summary(build(*make_run()))
+
+
+def test_summary_lists_exclusions_by_name():
+    generation, rows = make_run()
+    generation.skipped.append(SkippedMutant("r0", SWAP, 0.2, 1, NO_CHANGE))
+
+    summary = format_summary(build(generation, rows))
+
+    assert "excluded no_change 1" in summary
+    assert "{" not in summary
