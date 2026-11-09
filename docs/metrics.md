@@ -33,6 +33,8 @@ s_r²           sample variance of o_r1 … o_rN (n − 1 denominator)
 Δ_r  = mean(o_r) − mean(m_r)                            drop in mean score
 detected_r   ⇔   Δ_r > τ + ε,  ε = 1e-9                floating-point tolerance
 DR   = detected mutants ÷ testable mutants              detection rate
+p    = P( X ≥ detected ),  X ~ Binomial(testable, α)    chance of this many detections from noise
+above chance   ⇔   p < α
 ```
 
 With the usual equal N, these reduce to σ = √(mean of s_r²) and τ = 1.645 · σ · √(2/N).
@@ -52,6 +54,10 @@ With the usual equal N, these reduce to σ = √(mean of s_r²) and τ = 1.645 �
   genuine verdict.
 - **Detection rate** is reported with a 95% Wilson score interval, which behaves at 0% and
   100% and with few mutants.
+- **p** is a one-sided exact binomial test, the same one spurious sensitivity uses: the chance
+  that a judge blind to the operator detects at least this many mutants through noise alone.
+  With 20 testable mutants it takes 4 detections to be above chance. Above chance says the
+  judge catches the operator at all, not that it catches it well.
 
 More samples shrink τ, because each mean is estimated more precisely:
 
@@ -73,8 +79,9 @@ Excluded from the denominator. The report counts each reason:
 
 ### Reported with it
 
-Detection rate, its 95% CI, detected ÷ testable, excluded counts by reason, σ, τ, N and α.
-Run provenance records N and α so the result can be reproduced.
+Detection rate, its 95% Wilson and [bootstrap](#bootstrap-intervals) intervals, detected ÷
+testable, p and whether the rate is above chance, excluded counts by reason, σ, τ, N and α. Run
+provenance records N and α so the result can be reproduced.
 
 ### Choices behind the definition
 
@@ -154,7 +161,8 @@ appendix.
 | 19 | 12018 | four → 5 types of bases | 1.000 | 0.833 | +0.167 | yes |
 | 20 | 16080 | 1% → 3% | 1.000 | 0.750 | +0.250 | yes |
 
-**4. Detection rate.** 12 / 20 = **60%**, 95% CI [39%, 78%].
+**4. Detection rate.** 12 / 20 = **60%**, 95% CI [39%, 78%]. p = 2 × 10⁻¹¹, so the rate is far
+above chance.
 
 What the example shows:
 
@@ -168,8 +176,8 @@ What the example shows:
   lower than the original, and more samples can't change that. This matches the spike's finding.
 - **The same rule rarely fires on preserving mutants.** Padding: 1 of 20. Reformatting: 2 of 20.
 - **The penalize config gives a different result.** With `penalize_ambiguous_claims=True`: σ = 0.062,
-  τ = 0.064, detection rate 11 / 20 = 55% [34%, 74%], with padding and reformatting flagged in
-  5 of 40. Detection rate belongs to a judge *and* its config.
+  τ = 0.064, detection rate 11 / 20 = 55% [34%, 74%] (p = 5 × 10⁻¹⁰), with padding and
+  reformatting flagged in 5 of 40. Detection rate belongs to a judge *and* its config.
 
 ### What detection rate doesn't tell you
 
@@ -178,6 +186,9 @@ What the example shows:
   mutant with a Δ_r counts, including those excluded for no headroom.
 - **Why a mutant was missed.** The spike found most misses were "yes" → "borderline" verdict
   shifts that the score ignores. Record the verdicts separately.
+- **That a judge above chance is good.** Above chance only says the judge catches the operator
+  at all: 4 detections of 20 is above chance and a 20% detection rate. Read the rate and its
+  interval with it.
 - **Anything about preserving operators.** They ask the opposite question (does the score stay
   put?), which [spurious sensitivity](#spurious-sensitivity) answers with the same σ.
 - **Whether the mutant is valid.** The metric assumes every mutant is worse than its original. An
@@ -198,6 +209,12 @@ Agreed by the team on 2026-10-20:
   rate decides mutant by mutant, and N = 5 lowers τ from 1.64σ at N = 2 to 1.04σ. Each extra
   sample also multiplies a run's cost, so 5 leaves a margin without paying for more.
 
+Agreed by the team on 2026-11-06, with the
+[multiple-comparison correction](#multiple-comparison-correction):
+
+- **Detection rate gets an above-chance test,** the same exact binomial test against α as
+  spurious sensitivity, so it joins the run's family of corrected tests.
+
 ### Code
 
 `src/mtlj/stats/detection.py` implements this definition. `tests/stats/test_detection.py`
@@ -207,7 +224,7 @@ is a standard-library-only script that prints the worked example from `spike/sco
 per-mutant outcomes; `tests/stats/test_paired.py` checks it against the spike's results tables.
 
 ## Spurious sensitivity
-MTLJ-33 · Ethan Goedelman · 2026-10-23 · **Status: proposed, awaiting team review**
+MTLJ-33 · Ethan Goedelman · 2026-10-23 · **Status: accepted, ratified by the team (recorded 2026-11-04)**
 
 The headline metric for preserving operators: **the share of preserving mutants whose score
 moves, in either direction, by more than the judge's own run-to-run noise can explain.** A
@@ -267,10 +284,10 @@ rewarded, and one near 1 can still be penalized.
 
 ### Reported with it
 
-Spurious sensitivity, its 95% CI, flagged ÷ testable split into penalized and rewarded, p and
-whether the result is above chance, excluded counts by reason, σ, τ, N and α. Also the paired mean
-Δ with its 95% interval (see "What detection rate doesn't tell you"), which says whether the
-moves lean one way.
+Spurious sensitivity, its 95% Wilson and [bootstrap](#bootstrap-intervals) intervals, flagged ÷
+testable split into penalized and rewarded, p and whether the result is above chance, excluded
+counts by reason, σ, τ, N and α. Also the paired mean Δ with its 95% interval (see "What
+detection rate doesn't tell you"), which says whether the moves lean one way.
 
 ### Choices behind the definition
 
@@ -381,13 +398,19 @@ What the example shows:
 
 ### Decisions
 
-Proposed for the team to agree:
+Agreed by the team. The date of the decision wasn't written down at the time; this note was
+added on 2026-11-04.
 
 - **Count moves in both directions,** not only penalties as the ticket asked (see "Choices").
+  This replaces the penalties-only rule, with detection rate's one-sided threshold, that the
+  preliminary design document (§9.3, dated 2026-10-27) still describes.
 - **A judge is spuriously sensitive to an operator when p < α,** from the exact binomial test.
-- **Open question: an identity control.** Re-scoring each original as a "mutant" that changes
-  nothing would measure the chance flag rate directly, instead of assuming α. It costs N more
-  scorings per record.
+
+Still open:
+
+- **An identity control.** Re-scoring each original as a "mutant" that changes nothing would
+  measure the chance flag rate directly, instead of assuming α. It costs N more scorings per
+  record.
 
 ### Code
 
@@ -395,3 +418,431 @@ Proposed for the team to agree:
 Wilson interval and mutant types. `tests/stats/test_spurious.py` checks that it reproduces the
 worked example for both configs and both preserving operators. `spike/spurious_sensitivity.py` is
 a standard-library-only script that prints the worked example from `spike/scores.csv`.
+
+## Bootstrap intervals
+MTLJ-39 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
+
+Every detection rate and spurious sensitivity also carries a **bootstrap interval: resample the
+run's records with replacement, recompute σ, τ and every verdict in each resample, and take the
+middle 95% of the resampled rates.** It's reported alongside the Wilson interval, not in its place.
+
+### Why a second interval
+
+The Wilson interval treats each mutant's verdict as fixed and asks how much the rate would move
+with a different sample of mutants. But τ isn't fixed. It's a multiple of σ, which is estimated
+from the same records, and noise is concentrated in a few of them (original 17472 contributes 53%
+of the default config's variance). A sample that draws 17472 twice has a larger τ, and one that
+misses it has a smaller one, so marginal verdicts flip with it. The worked examples above have
+several: swap 09 clears τ by 0.001, and reformatted records 13122 and 14352 by 0.0002. The
+bootstrap interval covers both sources of uncertainty.
+
+### Definition
+
+Computed for each judge, judge config and operator, alongside the rate, from the same scores.
+
+```
+for b = 1 … B                                          B = 10,000 resamples, seed 0
+    draw n records with replacement                    n = records in the run
+    σ_b     = noise floor of the drawn originals       as in detection rate
+    τ_rb    = threshold from σ_b, for each drawn mutant
+    rate_b  = hits ÷ testable among the drawn mutants  each metric's own rule
+CI = [ (1 − L)/2 quantile,  (1 + L)/2 quantile ] of the rate_b,   L = 0.95 by default
+```
+
+- **The record is the unit.** A record is one original and its mutants, and drawing it brings
+  both, so each mutant stays paired with its own original. Every original in the run is a
+  record, including those whose mutant is excluded, because all of them feed σ. Detection
+  rate's no-headroom exclusion is decided again in each resample, since it depends on τ.
+- **Only records are resampled, not the N scores within a text.** The within-text noise already
+  shows up as variation between records. Resampling both levels counts it twice and overstates
+  the spread, so with data in levels the usual choice is to resample the top level only.
+- **Percentile interval.** BCa, the usual refinement, corrects for bias using the share of
+  resamples below the observed rate. A rate over 20 mutants moves in steps of 5 points, so many
+  resamples tie with the observed rate, and that correction becomes unreliable.
+- **10,000 resamples from seed 0,** both recorded with the interval, so the same scores always
+  give the same interval. At 10,000 the simulation error in each bound is well under one
+  mutant's step.
+- **Invalid resamples are left out.** A resample with no testable mutant, or with no original
+  that has two or more scores, has no rate. The number kept is reported.
+- **The confidence level is configurable,** 0.95 by default, and sets the Wilson interval too.
+
+### Reported with it
+
+The interval, its level, the number of resamples, the number of valid resamples and the seed.
+The audit's result file (MTLJ-32) doesn't exist yet. When it does, it should carry all five.
+
+### Choices behind the definition
+
+**Alongside Wilson, not instead of it.** At the spike's size, the bootstrap interval is the
+worse of the two where it matters most. Exact coverage of a nominal 95% interval, when τ is
+fixed (the case Wilson is built for), by testable mutants n and true rate p:
+
+| n | p = 0.05 | p = 0.25 | p = 0.60 |
+|---|---|---|---|
+| 20 | 64% / 93% | 96% / 94% | 96% / 96% |
+| 100 | 96% / 97% | 96% / 95% | 96% / 95% |
+| 900 | 95% / 95% | 96% / 95% | 95% / 95% |
+
+Each cell is bootstrap / Wilson, computed over the binomial distribution of the flag count. With
+20 mutants and a true rate of 5%, the bootstrap interval misses a third of the time. When no
+mutant is flagged (36% of such runs), no resample can flag one either, so the interval is
+[0%, 0%]. A rate near 5% is where spurious sensitivity sits for a judge that ignores the change.
+From 100 mutants up, the two cover equally well, and the bootstrap adds τ's uncertainty, which
+Wilson leaves out. A full run on corpus v1 has about 900 records per operator.
+
+**Records, not just the verdicts.** Resampling the per-mutant verdicts with τ held fixed is
+cheaper, but it reproduces Wilson's assumption. On the default config's swaps, the same 10,000
+draws with σ held fixed give [40%, 80%], close to Wilson's [39%, 78%].
+
+### Worked example
+
+The same spike data as the two worked examples above: 20 records, N = 5, default and penalize
+configs.
+
+| Operator | Config | Rate | Wilson 95% | Bootstrap 95% |
+|---|---|---|---|---|
+| Entity swap (detection rate) | default | 12/20 = 60% | [39%, 78%] | [30%, 80%] |
+| Entity swap (detection rate) | penalize | 11/20 = 55% | [34%, 74%] | [35%, 80%] |
+| Padding (spurious sensitivity) | default | 3/20 = 15% | [5%, 36%] | [0%, 30%] |
+| Padding (spurious sensitivity) | penalize | 5/20 = 25% | [11%, 47%] | [15%, 45%] |
+| Reformatting (spurious sensitivity) | default | 5/20 = 25% | [11%, 47%] | [5%, 45%] |
+| Reformatting (spurious sensitivity) | penalize | 5/20 = 25% | [11%, 47%] | [5%, 45%] |
+
+What the example shows:
+
+- **Uncertainty in τ lowers the swaps' bottom bound** from 39% to 30% on the default config.
+  The resamples with a rate of 35% or less draw original 17472 2.1 times on average instead of
+  once, and their σ averages 0.068 instead of 0.052. The larger τ loses the swaps that cleared
+  it narrowly.
+- **Every bound moves in steps of 5 points,** one mutant in 20.
+- **Padding's bottom bound is 0%** although 3 mutants were flagged: 4% of resamples
+  ((17/20)^20) draw none of the three. The exact binomial test (p = 0.08) still decides whether
+  the judge is above chance, as before.
+
+### What the bootstrap interval doesn't tell you
+
+- **It doesn't make a small sample reliable.** At 20 mutants it's coarse, and near 0% it's
+  wrong more often than its level says (see "Choices").
+- **It doesn't correct for testing many operators.** Each interval holds for one judge, config
+  and operator on its own. Multiple-comparison correction is MTLJ-36.
+
+### Decisions
+
+Agreed by the team on 2026-11-06:
+
+- **Report the bootstrap interval alongside Wilson,** not in place of it. The preliminary design
+  document (§9.4) names the bootstrap as the only interval, so this changes it.
+- **Percentile method, 10,000 resamples, seed 0,** with the level configurable and 0.95 by
+  default.
+- **One headline interval, chosen by sample size** (settled after the meeting, on the team's
+  delegation). The CLI and dashboard show the bootstrap interval when a result has 100 or more
+  testable mutants, where it covers as well as Wilson and includes τ's uncertainty, and the
+  Wilson interval below that, where the bootstrap under-covers. The display says which one it
+  is, so intervals from runs of different sizes aren't mistaken for the same thing. The results
+  file (MTLJ-32) carries both, as `wilson_ci` and `bootstrap_ci`, so the other is always a
+  click away.
+
+### Code
+
+`src/mtlj/stats/bootstrap.py` resamples records and takes the percentile interval. It knows
+neither metric's rule: `detection.py` and `spurious.py` each pass the vectorized form of their
+own (`resampled_verdict`), and return the interval as `bootstrap` on their result, with `level`
+beside it. `tests/stats/test_bootstrap.py` checks that:
+
+- when τ can't move, the bootstrap distribution is exactly binomial, at 95% and 90%;
+- on simulated runs with a known rate, the interval covers it about 95% of the time;
+- drawing every record once reproduces each metric's own rate, on the spike data and on edge
+  cases;
+- uncertainty in τ widens the interval;
+- the worked example above is reproduced.
+
+## Multiple-comparison correction
+MTLJ-36 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
+
+An audit runs many tests at once, so some come out significant by chance. **Each test is
+reported with its p-value as it is and with its Benjamini-Hochberg adjusted p-value, and a
+result counts as significant after correction when its adjusted p-value is below q = 0.05.**
+Among the results called significant, the expected share of false ones is then at most 5%.
+
+### Why correct
+
+Each test is set to come out significant by chance at most 5% of the time. A judge that ignores
+padding and formatting completely, audited on padding at its four lengths and on reformatting,
+gets five such chances. If the tests were independent, the chance that at least one says the
+judge is spuriously sensitive would be up to 1 − 0.95⁵ = 23%, and every operator or intensity
+added raises it. The report would then show weaknesses that aren't there.
+
+### Definition
+
+```
+family   = every test in the run for one judge and judge config
+m        = tests in the family that have a p-value
+p_(1) ≤ … ≤ p_(m)                                       the p-values, sorted
+p̃_(i)   = min over j ≥ i of  m · p_(j) ÷ j,  capped at 1   adjusted p-value
+significant after correction   ⇔   p̃ < q,  q = 0.05
+```
+
+- **The family** is every test one judge and judge config gets in a run: detection rate's exact
+  binomial test for each degrading operator and intensity, and spurious sensitivity's for each
+  preserving one.
+- **A test without a p-value** (no testable mutant) is left out of m.
+- **q equals α,** so the uncorrected verdict (p < α, spurious sensitivity's "above chance") and
+  the corrected one use the same cutoff, and a family of one test gets the same verdict both
+  ways.
+- **Strictly below q,** like spurious sensitivity's p < α. The 1995 paper uses ≤. The two differ
+  only when an adjusted p-value equals q exactly.
+
+### Reported with it
+
+For each test: its p-value, its adjusted p-value and its verdict before and after correction.
+For the family: m, q and the method. The uncorrected values stay in the report so a reader can
+see what the correction changed. The audit's result file (MTLJ-32) doesn't exist yet; when it
+does, it should carry all of these.
+
+### Choices behind the definition
+
+**Benjamini-Hochberg, not Bonferroni or Holm.** Bonferroni and Holm limit the chance of even one
+false positive in the family. That makes every test stricter as the family grows: with 20 tests,
+Bonferroni needs p < 0.0025 from each. An audit is a profile of a judge across many operators,
+and what a reader needs is that most of the weaknesses it shows are real. Benjamini-Hochberg
+limits the share of false ones among those shown, and loses less power as tests are added. On
+the paper's own example (15 tests), Bonferroni and Holm find 3 significant results and
+Benjamini-Hochberg finds 4.
+
+**One family per judge and judge config.** Every metric is computed for one judge and judge
+config, and spurious sensitivity "belongs to a judge *and* its config". A run that scores two
+configs therefore makes two families. Correcting across them would make one config's verdicts
+depend on how many other configs the run happened to include. Correcting the whole run instead
+is one call with every test in it; on the spike data it changes no verdict either.
+
+**Benjamini-Hochberg, not Benjamini-Yekutieli.** Benjamini-Hochberg's guarantee is proven for
+independent tests and for a kind of positive dependence between them. Tests in one run aren't
+independent: they share the noise floor σ and the same originals, so a larger σ raises τ and
+lowers every flag rate together. That looks like the positive dependence the guarantee covers,
+though it isn't proven for these tests. Benjamini-Yekutieli holds under any dependence, but
+divides q by 1 + 1/2 + … + 1/m (2.9 for 10 tests), which would make it much stricter.
+
+**Discrete p-values make it conservative.** An exact binomial p-value on 20 mutants takes only a
+few values, and the test comes out significant by chance less often than α: it takes 4 flags of
+20, which happens 1.6% of the time. Benjamini-Hochberg on such p-values keeps the false
+discovery rate further below q than it needs to, so on a small corpus the correction is stricter
+than its 5%. With about 900 mutants per condition in a full run, the p-values are close to
+continuous.
+
+### Worked example
+
+Real spike data: entity swaps, padding and reformatting, each at one intensity, under both
+configs. Each config is its own family of three tests: detection rate's for the swaps and
+spurious sensitivity's for the other two.
+
+| Config | Operator | Detected or flagged | p | Adjusted p | Above chance | After correction |
+|---|---|---|---|---|---|---|
+| default | Entity swap | 12/20 | 2 × 10⁻¹¹ | 6 × 10⁻¹¹ | yes | yes |
+| default | Padding | 3/20 | 0.0755 | 0.0755 | no | no |
+| default | Reformatting | 5/20 | 0.0026 | 0.0039 | yes | yes |
+| penalize | Entity swap | 11/20 | 5 × 10⁻¹⁰ | 2 × 10⁻⁹ | yes | yes |
+| penalize | Padding | 5/20 | 0.0026 | 0.0026 | yes | yes |
+| penalize | Reformatting | 5/20 | 0.0026 | 0.0026 | yes | yes |
+
+What the example shows:
+
+- **With three tests per family, the correction changes no verdict.** Reformatting's 0.0026 on
+  the default config, second of three, becomes 3 × 0.0026 ÷ 2 = 0.0039, still far below 0.05.
+- **When every test in a family is significant, nothing changes.** On the penalize config the two
+  0.0026 p-values rank second and third of three, and the third's 3 × 0.0026 ÷ 3 = 0.0026 caps
+  the second's as well.
+- **Correcting both configs as one family** of six tests gives 0.0031 for the four results at
+  0.0026, and the same verdicts.
+
+An illustration with made-up p-values shows when it does matter. A family of four tests with p
+= 0.01, 0.03, 0.04 and 0.20 has three results below 0.05. After correction only the first is
+significant (adjusted 0.04); the second and third both adjust to 0.053.
+
+### What the correction doesn't tell you
+
+- **Which significant results are the false ones.** It limits their expected share across the
+  family, not any one of them.
+- **Anything about the intervals.** Each Wilson interval covers one condition on its own.
+  Adjusting intervals for being picked out of many is a different procedure (the false coverage
+  rate) and isn't done.
+- **That a result which isn't significant is fine.** Correction makes each test stricter, so
+  with few mutants a real effect can stop being significant. Read the rate and its interval with
+  it.
+- **Anything about the paired mean Δ or the variance ratios** (MTLJ-38). Their intervals aren't
+  corrected either.
+
+### Decisions
+
+Agreed by the team on 2026-11-06:
+
+- **Benjamini-Hochberg at q = 0.05,** with uncorrected and corrected values both reported.
+- **One family per judge and judge config in a run.**
+- **Detection rate gets an above-chance test and joins the family.** The exact binomial test
+  against α that spurious sensitivity uses says whether a judge catches an operator at all.
+  Before this, a detection rate had an interval but no verdict.
+
+### Code
+
+`src/mtlj/stats/correction.py` implements this. `benjamini_hochberg` corrects any family of
+p-values with SciPy's `false_discovery_control`, and `correct_above_chance` corrects one family
+of detection rate and spurious sensitivity results. `tests/stats/test_correction.py` checks it
+against the paper's example and statsmodels, checks the false discovery rate on simulated
+families, and reproduces the worked example above. The binomial test on a detection rate is in
+`src/mtlj/stats/detection.py`, checked by `tests/stats/test_detection.py`.
+
+## Dose-response curve
+MTLJ-37 · Ethan Goedelman · 2026-11-04 · **Status: accepted 2026-11-06, ratified by the team**
+
+For an operator scored at several intensities: **a curve through its rate at each intensity,
+and the onset, the intensity at which the judge's rate has risen 10% of the way from chance to
+1, with its interval.** For a preserving operator, the onset is where the judge starts reacting
+to an edit it should ignore. For a degrading one, it's the smallest edit the judge starts to
+catch, and the judge misses edits below it.
+
+### Why a curve
+
+Each intensity already gets its own rate and interval. Read one at a time, they say whether
+the judge reacted at 50 words of padding, at 100 and so on, each from a quarter of the mutants.
+A curve uses every intensity's mutants at once and answers the question the intensities are
+there for: how much of an edit the judge can take before it slips. It gives one number per
+operator that can be compared across judges and configs, and it's what the dashboard's
+dose-response view (MTLJ-53) plots.
+
+### Definition
+
+Computed for each judge, judge config and operator scored at two or more intensities, from the
+same verdicts as the operator's rate.
+
+```
+h_d, n_d = hits and testable mutants at intensity d        hit = detected or flagged
+P(d)     = α + (1 − α) · ER(d)                              hit rate at intensity d
+ER(d)    = 1 ÷ (1 + exp(−(logit(r) + b · ln(d ÷ D))))       extra hit rate over chance
+D        = onset, where ER(D) = r,  r = 0.10                P(D) = 14.5% at α = 0.05
+b ≥ 1                                                       slope on log intensity
+D̂, b̂     = maximum likelihood, h_d ~ Binomial(n_d, P(d))
+CI       = every D with  2 · (ℓ(D̂, b̂) − max_b ℓ(D, b)) ≤ χ²₁(0.95) = 3.84
+```
+
+- **A hit** is a detected mutant for a degrading operator and a flagged one for a preserving
+  operator, decided against τ as for the rate. Only testable mutants count.
+- **Intensity** is the mutant's `intensity`, in [0, 1], and its meaning is the operator's.
+  Padding's four levels, 50, 100, 200 and 400 words, are intensities 0.125, 0.25, 0.5 and 1.0.
+  An entity swap at intensity d changes up to ⌈5d⌉ claims.
+- **The floor is α.** A judge that ignores the edit is hit on about α of mutants at any
+  intensity, so the curve starts there: P(0) = α.
+- **The onset** is where the hit rate has risen r = 10% of the way from α to 1: 14.5% at
+  α = 0.05.
+- **The interval** is the profile-likelihood interval. Its upper end is ∞ when the data can't
+  rule out a judge that never responds. Its lower end is 0 when they can't rule out an onset
+  below every tested intensity.
+- **The judge responds** to the operator when the upper end is finite.
+- **The fit test** is a Pearson χ² test of the fitted rates against the observed ones, with
+  intensities − 2 degrees of freedom. A small p says the rates don't follow this shape. There's
+  no test with two intensities, where the curve can pass through both.
+
+### When the judge doesn't respond
+
+- **Not at any intensity.** If the best fit is a judge at chance everywhere, there's no onset.
+  The interval is [L, ∞), and L still says something: if the judge responds at all, its onset
+  isn't before L.
+- **Not clearly.** If the best fit has an onset but the interval's upper end is ∞, the onset
+  isn't established, and the result says the judge doesn't respond.
+- **At every intensity.** If every mutant at every intensity is a hit, the onset is reported as
+  0: it lies below anything tested.
+
+### Reported with it
+
+The onset, its interval, whether the judge responds, whether the onset lies within the tested
+intensities, the slope, the fit test's p, α, r and the confidence level. Also each intensity's
+hits, testable mutants and fitted rate, which the dose-response view plots. The audit's result
+file (MTLJ-32) doesn't exist yet; when it does, it should carry all of these.
+
+### Choices behind the definition
+
+**An onset at 10%, not the midpoint.** The midpoint of the curve (ER = 50%) is where it's best
+determined, but it's where the judge reacts to half the edits, well past where problems start.
+The ticket asks where the judge begins to fail. A 10% extra rate is also the usual default for
+data like these in benchmark-dose practice, where this model comes from.
+
+**The floor is α, not fitted.** Estimating the floor needs mutants at an intensity near 0, which
+a run doesn't have. α is the rate the threshold is built to give, so it's the floor a judge that
+ignores the edit has. Spurious sensitivity's open question, an identity control, would let the
+floor be measured instead. Until then, a judge that's steadier on mutants than on originals
+(fewer hits than α) doesn't fit the curve, and the fit test says so.
+
+**Log-logistic, on log intensity.** It's the standard model for hit counts like these in
+benchmark-dose software. On log intensity, padding's levels, which double each step, are evenly
+spaced, and P(0) = α follows from the model.
+
+**A slope of at least 1.** At small intensities the extra hit rate then grows no faster than the
+intensity itself. This is the usual restriction for this model, and without it the onset can
+run off towards 0 whenever the data can't place it. The fit also caps the slope at 30, which
+still allows a near-step: from 10% to 90% within a 16% change in intensity.
+
+**A profile-likelihood interval.** It's the standard interval for a benchmark dose, it gives the
+same interval every time, and it handles "never responds" directly: the upper end becomes
+infinite. On simulated runs drawn from known curves, it covered the true onset 94.5% to 95.8% of
+the time at 100 and at 900 mutants per intensity, and called a judge at chance responsive 3% to
+4% of the time.
+
+**The curve rises to 1.** It has no ceiling. A judge that never catches more than some share of
+an operator's mutants, however strong the edit (the spike's judge called 40% of contradictions
+"unclear"), is fitted with a shallower slope instead, which can move the onset earlier. With
+enough mutants the fit test catches it: 5%, 5%, 60% and 60% at 200 mutants each fails it.
+
+### Worked example
+
+Made-up data: no run has scored an operator at several intensities yet. Padding at its four
+levels, 100 testable mutants at each, drawn at random from a curve whose onset is 80 words
+(intensity 0.2) with slope 2.
+
+| Words | Intensity | Flagged | Rate of the true curve | Fitted rate |
+|---|---|---|---|---|
+| 50 | 0.125 | 10 / 100 | 9% | 9% |
+| 100 | 0.25 | 17 / 100 | 19% | 19% |
+| 200 | 0.5 | 45 / 100 | 44% | 42% |
+| 400 | 1.0 | 71 / 100 | 75% | 72% |
+
+**Onset: 78 words** (intensity 0.196), 95% CI **[56, 102] words**. Slope 1.89, fit test
+p = 0.70. The judge responds, and the true onset, 80 words, is inside the interval. In words:
+this judge starts reacting to padding at around 80 words.
+
+A judge that ignores padding, drawn at chance (5% at every level), flagged 5, 9, 3 and 9 of
+100. Its best fit puts an onset at 413 words, beyond the longest padding tested, and the
+interval is [393 words, ∞). The judge doesn't respond: no onset is established, and if it has
+one, it's not before about 390 words.
+
+### What the curve doesn't tell you
+
+- **Anything beyond the tested intensities.** An onset outside them is read off the assumed
+  shape, not observed, and the result flags it.
+- **How intensities compare across operators.** Each operator's intensity means something
+  different, so an onset of 0.2 for padding and for entity swaps aren't the same size of edit.
+- **The uncertainty in σ.** Every intensity's hits are decided against the same τ, and the
+  interval treats those verdicts as fixed, as the Wilson interval does.
+- **That intensities are independent.** The same records are mutated at every intensity, so a
+  record the judge is noisy on tends to be hit at all of them. The binomial likelihood assumes
+  independent mutants, so the interval may be too narrow when records differ a lot.
+- **Why the judge fails.** The per-mutant verdicts and scores say that.
+
+### Decisions
+
+Agreed by the team on 2026-11-06:
+
+- **Log-logistic curve with its floor at α,** fitted by maximum likelihood, with a slope of at
+  least 1.
+- **The onset at 10% extra hit rate, with a profile-likelihood interval.** One definition for
+  both operator families.
+- **No ceiling for now.** Letting the curve level off below 1 would fit judges like the spike's,
+  but with four or five intensities a third parameter is hard to pin down. The fit test flags
+  such judges. Revisit once real runs show how common the plateau is.
+
+### Code
+
+`src/mtlj/stats/dose_response.py` implements this. `fit_dose_response` fits one operator's hit
+counts, `fit_operator` takes its rates by intensity (detection rates or spurious sensitivities),
+and `fit_operators` fits every operator in a run scored at two or more intensities.
+`tests/stats/test_dose_response.py` checks that it recovers known curves, that its interval
+covers the true onset at the nominal rate on simulated runs, the cases where the judge doesn't
+respond or responds to everything, a step, a plateau the curve can't follow, and the worked
+example above.

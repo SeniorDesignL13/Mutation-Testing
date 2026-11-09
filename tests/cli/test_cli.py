@@ -4,6 +4,7 @@ import threading
 from collections import defaultdict
 from pathlib import Path
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -89,7 +90,8 @@ def test_audit_show_prints_the_same_summary_from_the_file(stub_judge, tmp_path: 
 
 def test_audit_run_exits_1_when_the_judge_is_down(monkeypatch, tmp_path: Path) -> None:
     def down(input, output, context):
-        raise ConnectionError("backend is down")
+        # A permanent failure, so the runner doesn't wait out retries (see mtlj.engine.retry).
+        raise PermissionError("invalid API key")
 
     monkeypatch.setitem(
         JUDGES, "stub", lambda model: CallableJudge(down, name="stub", model="m", version="1")
@@ -114,7 +116,7 @@ def test_audit_run_warns_but_succeeds_when_only_some_scorings_fail(
             seen[0] += 1
             fail = seen[0] % 7 == 0
         if fail:
-            raise ConnectionError("blip")
+            raise ValueError("score out of range")  # permanent, so not retried
         return good.score_raw(input, output, context)
 
     monkeypatch.setitem(
@@ -144,7 +146,7 @@ def test_bad_arguments_exit_2_before_anything_runs(
     result = runner.invoke(app, [*audit_args(tmp_path), *extra])
 
     assert result.exit_code == 2
-    assert option in result.output
+    assert option in click.unstyle(result.output)
     assert not (tmp_path / "run").exists()
 
 

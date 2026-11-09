@@ -27,6 +27,9 @@ from mtlj.engine.results import RESULTS_FILE, read_results
 from mtlj.engine.runner import read_evaluations
 from mtlj.judges.callable import CallableJudge
 
+# SIGHUP doesn't exist on Windows, and os.kill there ends the process outright, signal or not.
+posix_signals = pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX signals")
+
 EXAMPLE_RECORDS = Path(__file__).parent.parent / "data" / "example_records.jsonl"
 OFFSETS = [0.0, 0.02, -0.02, 0.01, -0.01]
 # A run slow enough to stop part way, in its own process so the signal goes to a real main thread.
@@ -86,7 +89,8 @@ def stub_judge(answers: list[str]) -> CallableJudge:
 
 def down_judge() -> CallableJudge:
     def score(input, output, context):
-        raise ConnectionError("backend is down")
+        # A permanent failure, so the runner doesn't wait out retries (see mtlj.engine.retry).
+        raise PermissionError("invalid API key")
 
     return CallableJudge(score, name="stub", model="m", version="1")
 
@@ -124,7 +128,7 @@ def test_judge_going_down_leaves_an_aborted_results_file(generation, tmp_path: P
     assert read_results(run_dir) == results
     rows = read_evaluations(run_dir / EVALUATIONS_FILE)
     assert len(rows) == results.run.scorings.total > 0
-    assert results.run.scorings.errors_by_type == {"ConnectionError": len(rows)}
+    assert results.run.scorings.errors_by_type == {"PermissionError": len(rows)}
 
 
 def test_ctrl_c_leaves_an_aborted_results_file(generation, tmp_path: Path, monkeypatch):
@@ -143,8 +147,9 @@ def test_ctrl_c_leaves_an_aborted_results_file(generation, tmp_path: Path, monke
     assert read_results(run_dir) == results
 
 
-@pytest.mark.parametrize("stop", [signal.SIGTERM, signal.SIGHUP, signal.SIGINT])
-def test_a_stopped_process_leaves_an_aborted_results_file(tmp_path: Path, stop: signal.Signals):
+@posix_signals
+@pytest.mark.parametrize("stop", ["SIGTERM", "SIGHUP", "SIGINT"])
+def test_a_stopped_process_leaves_an_aborted_results_file(tmp_path: Path, stop: str):
     run_dir = tmp_path / "run"
     process = subprocess.Popen(
         [sys.executable, "-c", STOPPABLE_RUN, str(EXAMPLE_RECORDS), str(run_dir)],
@@ -153,7 +158,7 @@ def test_a_stopped_process_leaves_an_aborted_results_file(tmp_path: Path, stop: 
     )
     assert process.stdout.readline().strip() == "started"
 
-    process.send_signal(stop)
+    process.send_signal(getattr(signal, stop))
 
     assert process.wait(timeout=30) == 0
     results = read_results(run_dir)
@@ -216,6 +221,7 @@ def test_operator_with_no_family_is_rejected_before_any_scoring(generation, tmp_
     check_run_dir(tmp_path / "run")
 
 
+@posix_signals
 def test_signal_while_saving_results_does_not_lose_them(generation, tmp_path: Path, monkeypatch):
     real_build = audit.build_results
 
@@ -233,6 +239,7 @@ def test_signal_while_saving_results_does_not_lose_them(generation, tmp_path: Pa
     assert results.run.status == "complete"
 
 
+@posix_signals
 def test_nohup_keeps_working(generation, tmp_path: Path):
     seen = []
     good = stub_judge([r.answer for r in generation.originals])
