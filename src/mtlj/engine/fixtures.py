@@ -16,9 +16,15 @@ hold them all, without calling the judge for any. A replay run makes no judge ca
 
 **Keys** are the response cache's (``mtlj.engine.cache.CacheKeys``): the judge's class, name,
 model, version, score range and ``cache_settings()``, the exact input, output and context, and
-the sample index. A change to any of them (a new DeepEval version, an edited operator) means
-different keys, and replay fails until the fixtures are recorded again. That's on purpose: a
-fixture recorded for other inputs or another judge would test something that no longer exists.
+the sample index.
+
+**Inputs** go with the scores. ``save_inputs`` writes the records and mutants that were scored
+next to the fixture file, and replay loads them with ``load_inputs`` instead of generating
+mutants again. Each line also names the judge that made it, and replay builds its judge with that
+identity (``FixtureStore.judge``). So editing an operator, upgrading DeepEval or spaCy, or a
+platform difference in what an operator produces doesn't break replay: the fixtures keep testing
+the texts and judge they were recorded with. Re-recording is a deliberate step, taken when the
+recorded behaviour should be brought up to date.
 
 **The file** holds one JSON object per line, sorted by key, so recording again gives a small,
 readable diff. While recording, each new score is appended at once to ``<path>.partial``, so a
@@ -39,6 +45,8 @@ from typing import IO, Literal, Self
 
 from pydantic import BaseModel, ValidationError
 
+from mtlj.data.mutants import Mutant
+from mtlj.data.records import DatasetRecord
 from mtlj.engine.cache import CachedScore
 from mtlj.judges.base import Judge
 
@@ -126,6 +134,7 @@ class FixtureStore:
         self._lock = threading.Lock()
         self._fixtures: dict[str, Fixture] = {}
         self._recorded = 0
+        self._dropped = 0
         self._journal: IO[str] | None = None
 
         if mode == "replay" and not self.path.exists():
@@ -211,6 +220,45 @@ class FixtureStore:
         """How many scores this store has recorded that aren't in the file yet."""
         return self._recorded
 
+    @property
+    def judge(self) -> FixtureJudge | None:
+        """The judge every fixture came from, or None when there are none.
+
+        Replay builds its judge with this identity, so the keys match what was recorded even
+        after the library behind the judge (DeepEval, say) has been upgraded.
+
+        Raises:
+            FixtureFileError: if the fixtures came from more than one judge or version, as a
+                recording that stopped part way through a re-record leaves them.
+        """
+        with self._lock:
+            judges = {fixture.judge for fixture in self._fixtures.values()}
+        if len(judges) > 1:
+            found = ", ".join(sorted(f"{j.name} {j.model} {j.version}" for j in judges))
+            raise FixtureFileError(
+                f"{self.path} mixes scores from several judges or versions ({found}). "
+                "Finish recording it (see docs/fixtures.md)."
+            )
+        return next(iter(judges), None)
+
+    def retain(self, keys: set[str]) -> int:
+        """Drop every fixture whose key isn't in ``keys``; saved on ``close()``.
+
+        The recorder calls this after a full run, so scores for texts or judge versions that are
+        no longer recorded don't pile up in the file. Returns how many were dropped.
+
+        Raises:
+            RuntimeError: in replay mode, which never changes the file.
+        """
+        if self.mode != "record":
+            raise RuntimeError("a replay fixture store doesn't change its file")
+        with self._lock:
+            stale = [key for key in self._fixtures if key not in keys]
+            for key in stale:
+                del self._fixtures[key]
+            self._dropped += len(stale)
+        return len(stale)
+
     def __len__(self) -> int:
         with self._lock:
             return len(self._fixtures)
@@ -219,10 +267,10 @@ class FixtureStore:
         """Write every fixture to ``path``, sorted by key, and remove the journal.
 
         The file is written next to ``path`` and renamed over it, so a crash part way leaves
-        the old file whole. Does nothing in replay mode, or when nothing was recorded.
+        the old file whole. Does nothing in replay mode, or when nothing was recorded or dropped.
         """
         with self._lock:
-            if self.mode != "record" or not self._recorded:
+            if self.mode != "record" or not (self._recorded or self._dropped):
                 return
             if self._journal is not None:
                 self._journal.close()
@@ -237,6 +285,7 @@ class FixtureStore:
             os.replace(temporary, self.path)
             self.partial_path.unlink(missing_ok=True)
             self._recorded = 0
+            self._dropped = 0
 
     def close(self) -> None:
         """Save what was recorded (see ``save``)."""
@@ -253,3 +302,49 @@ class FixtureStore:
     ) -> None:
         # Saved even when the run raised (a spending cap, Ctrl-C): those scores were paid for.
         self.close()
+
+
+RECORDS_FILE = "records.jsonl"
+MUTANTS_FILE = "mutants.jsonl"
+
+
+def save_inputs(directory: Path, records: list[DatasetRecord], mutants: list[Mutant]) -> None:
+    """Write the records and mutants a fixture file was recorded on, for ``load_inputs``.
+
+    One JSON object per line, in the order given, so a change shows as a readable diff. Each
+    file is written beside its final name and renamed over it.
+    """
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, rows in ((RECORDS_FILE, records), (MUTANTS_FILE, mutants)):
+        path = directory / name
+        temporary = path.with_name(path.name + ".tmp")
+        with temporary.open("w", encoding="utf-8", newline="\n") as file:
+            for row in rows:
+                file.write(row.model_dump_json() + "\n")
+        os.replace(temporary, path)
+
+
+def load_inputs(directory: Path) -> tuple[list[DatasetRecord], list[Mutant]]:
+    """The records and mutants ``save_inputs`` wrote to ``directory``.
+
+    Raises:
+        FileNotFoundError: if either file is missing.
+        FixtureFileError: if a line doesn't read.
+    """
+    directory = Path(directory)
+
+    def read[T: BaseModel](name: str, model: type[T]) -> list[T]:
+        path = directory / name
+        rows = []
+        with path.open(encoding="utf-8") as lines:
+            for number, line in enumerate(lines, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    rows.append(model.model_validate_json(line))
+                except ValidationError as exc:
+                    raise FixtureFileError(f"{path}, line {number}: {exc}") from None
+        return rows
+
+    return read(RECORDS_FILE, DatasetRecord), read(MUTANTS_FILE, Mutant)

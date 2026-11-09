@@ -15,12 +15,16 @@ from mtlj.api.db import engine
 from mtlj.api.main import app
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """In CI, refuse to run tests that call a real judge.
 
     CI runs entirely on recorded scores (MTLJ-90, docs/fixtures.md): no API keys, no inference
     cost. ``integration`` tests are deselected by default; this stops them being selected in CI
     by accident (e.g. ``-m integration``, or a test node id).
+
+    ``trylast``, so it sees the tests left after ``-m`` has deselected the rest. Run earlier, it
+    would see every collected test, deselected ones included, and fail every CI run.
     """
     if not os.environ.get("CI"):
         return

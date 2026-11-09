@@ -7,11 +7,14 @@ later (raise ``--max-cost`` if needed).
 
     uv run python scripts/record_fixtures.py               # shows the plan, asks before spending
     uv run python scripts/record_fixtures.py --limit 1     # a cheap trial on one record
+    uv run python scripts/record_fixtures.py --regenerate  # new mutants from today's operators
     uv run python scripts/record_fixtures.py --refresh     # re-record every score
 
-What's recorded must match what tests/judges/deepeval/test_faithfulness_replay.py replays:
-the gold set's records, the default battery's mutants with base seed 0, and ``--samples``
-samples each. See docs/fixtures.md.
+The texts scored are the gold set's records and the default battery's mutants of them (base seed
+0), saved in tests/fixtures/gold-set/ the first time and reused after that, so finishing or
+repeating a recording scores exactly the same texts as before. ``--regenerate`` makes the mutants
+again from the current operators and replaces the saved ones. After a full run, scores that no
+longer match a saved text or the installed judge are dropped from the file. See docs/fixtures.md.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from pathlib import Path
 
 from mtlj.data.ragtruth import load_corpus_v1
 from mtlj.engine.cache import CacheKeys
-from mtlj.engine.fixtures import FixtureStore
+from mtlj.engine.fixtures import FixtureStore, load_inputs, save_inputs
 from mtlj.engine.generator import default_battery, generate_mutants
 from mtlj.engine.runner import (
     DEFAULT_SAMPLES,
@@ -43,8 +46,9 @@ from mtlj.judges.deepeval.faithfulness import (
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "tests" / "fixtures" / "judge" / "deepeval-faithfulness.jsonl"
+DEFAULT_INPUTS = ROOT / "tests" / "fixtures" / "gold-set"
 DEFAULT_MAX_COST = 3.00
-# The base seed the replay test generates its mutants with.
+# The base seed the saved mutants are generated with.
 BASE_SEED = 0
 
 
@@ -83,16 +87,30 @@ class Budget:
                 self.spent += cost
 
 
-def gold_set_plan():
-    """The records and mutants the fixtures cover. Must match the replay test."""
+def gold_set_plan(inputs: Path, regenerate: bool):
+    """The records and mutants to score: the saved ones, or new ones, saved for next time."""
+    if not regenerate and (inputs / "records.jsonl").exists():
+        return load_inputs(inputs)
     records = [r for r in load_corpus_v1().records if r.metadata["gold_set"]]
-    generation = generate_mutants(records, default_battery(), base_seed=BASE_SEED)
-    return records, generation.mutants
+    mutants = generate_mutants(records, default_battery(), base_seed=BASE_SEED).mutants
+    save_inputs(inputs, records, mutants)
+    print(f"Saved {len(records)} records and {len(mutants)} mutants to {inputs}")
+    return records, mutants
+
+
+def plan_keys(keys: CacheKeys, tasks) -> set[str]:
+    return {keys(t.input, t.output, judge_context(t.passages), t.sample_index) for t in tasks}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="fixture file")
+    parser.add_argument(
+        "--inputs", type=Path, default=DEFAULT_INPUTS, help="folder of the saved records/mutants"
+    )
+    parser.add_argument(
+        "--regenerate", action="store_true", help="make the mutants again and save them"
+    )
     parser.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
     parser.add_argument("--max-cost", type=float, default=DEFAULT_MAX_COST, help="US dollars")
     parser.add_argument("--max-concurrency", type=int, default=4)
@@ -108,13 +126,17 @@ def main(argv: list[str] | None = None) -> int:
         print("OPENAI_API_KEY is not set (put it in .env). Nothing was spent.", file=sys.stderr)
         return 2
 
-    records, mutants = gold_set_plan()
+    # Before --limit, so the saved inputs are always the whole gold set.
+    records, mutants = gold_set_plan(args.inputs, args.regenerate)
     if args.limit is not None:
         records = records[: args.limit]
         kept = {r.record_id for r in records}
         mutants = [m for m in mutants if m.record_id in kept]
 
     budget = Budget(args.max_cost)
+    # Only a run over everything the replay test needs may drop scores: a trial (--limit, or
+    # fewer --samples) covers part of it, and would otherwise drop the rest.
+    whole = args.limit is None and args.samples == DEFAULT_SAMPLES
 
     def measure(input, output, passages):
         budget.check()
@@ -139,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(tasks) - todo} already recorded in {args.out}; {todo} to call.")
         print(f"Spending cap: ${args.max_cost:.2f}")
         if not todo:
+            dropped = store.retain(plan_keys(keys, tasks)) if whole else 0
+            if dropped:
+                print(f"Dropped {dropped} scores for texts or judges no longer recorded.")
             return 0
         if not args.yes and input("Spend on these calls? [y/N] ").strip().lower() != "y":
             print("Nothing was spent.")
@@ -160,9 +185,15 @@ def main(argv: list[str] | None = None) -> int:
         except RunAbortedError as exc:
             summary, stopped = exc.summary, str(exc)
         recorded = store.recorded
+        # Only after a whole run: then every score worth keeping is the plan's.
+        dropped = 0
+        if whole and stopped is None and summary.errors == 0:
+            dropped = store.retain(plan_keys(keys, tasks))
 
     print(f"\nCalled the judge {budget.calls} times; DeepEval reports ${budget.spent:.4f} spent.")
     print(f"Recorded {recorded} new scores; {summary.errors} scorings failed.")
+    if dropped:
+        print(f"Dropped {dropped} scores for texts or judges no longer recorded.")
     if budget.calls:
         print(f"Average ${budget.spent / budget.calls:.5f} per scoring.")
     if stopped:

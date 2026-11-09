@@ -13,12 +13,15 @@ from mtlj.engine.fixtures import (
     FixtureFileError,
     FixtureMissingError,
     FixtureStore,
+    load_inputs,
+    save_inputs,
 )
 from mtlj.engine.retry import NO_RETRY
 from mtlj.engine.runner import (
     ERROR,
     OK,
     MemorySink,
+    build_tasks,
     judge_context,
     run_judge,
 )
@@ -409,3 +412,122 @@ def test_missing_error_survives_pickling() -> None:
 
     error = pickle.loads(pickle.dumps(FixtureMissingError("gone", missing=3)))
     assert (str(error), error.missing) == ("gone", 3)
+
+
+# --- the recorded judge, stale scores and saved inputs ---------------------------------------
+
+
+def versioned(fn=None, version: str = "1") -> CallableJudge:
+    j = judge(fn)
+    j.version = version
+    return j
+
+
+async def record_as(path: Path, version: str, fn=None) -> None:
+    with FixtureStore(path, mode="record") as store:
+        await run_judge(
+            versioned(fn, version), RECORDS, MUTANTS, MemorySink(), cache=store, samples=SAMPLES
+        )
+
+
+async def test_judge_is_the_identity_the_scores_were_recorded_with(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record(path)
+
+    recorded = FixtureStore(path, mode="replay").judge
+
+    assert (recorded.name, recorded.model, recorded.version) == ("j", "m", "1")
+
+
+def test_judge_is_none_when_nothing_is_recorded(tmp_path: Path) -> None:
+    assert FixtureStore(tmp_path / "fx.jsonl", mode="record").judge is None
+
+
+async def test_scores_from_two_versions_are_refused_as_unfinished(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record_as(path, "1")
+    await record_as(path, "2")  # a re-record after an upgrade, without dropping the old scores
+
+    with pytest.raises(FixtureFileError, match="several judges or versions"):
+        _ = FixtureStore(path, mode="replay").judge
+
+
+async def test_replay_as_the_recorded_judge_survives_an_upgrade(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record_as(path, "1")
+    store = FixtureStore(path, mode="replay")
+
+    # The installed library moved on: its version gives other keys, so replay can't find them.
+    with pytest.raises(FixtureMissingError):
+        await run_judge(versioned(never_called, "2"), RECORDS, MUTANTS, MemorySink(), cache=store)
+    # Replayed as the judge that was recorded, every score is found and nothing is called.
+    sink = MemorySink()
+    summary = await run_judge(
+        versioned(never_called, store.judge.version),
+        RECORDS,
+        MUTANTS,
+        sink,
+        cache=store,
+        samples=SAMPLES,
+    )
+
+    assert summary.cache_hits == SCORINGS
+
+
+async def test_retain_drops_scores_outside_the_plan_and_saves(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record_as(path, "1")
+    await record_as(path, "2")
+    keys = CacheKeys(versioned(version="2"))
+    current = {
+        keys(t.input, t.output, judge_context(t.passages), t.sample_index)
+        for t in build_tasks(RECORDS, MUTANTS, SAMPLES)
+    }
+
+    with FixtureStore(path, mode="record") as store:
+        dropped = store.retain(current)
+
+    assert dropped == SCORINGS  # every version-1 score
+    replay = FixtureStore(path, mode="replay")
+    assert len(replay) == SCORINGS
+    assert replay.judge.version == "2"
+
+
+def test_retain_is_refused_in_replay(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    path.write_text("", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="doesn't change its file"):
+        FixtureStore(path, mode="replay").retain(set())
+
+
+async def test_saved_inputs_replay_exactly_what_was_recorded(tmp_path: Path) -> None:
+    path = tmp_path / "fx.jsonl"
+    await record(path)
+    save_inputs(tmp_path / "inputs", RECORDS, MUTANTS)
+
+    records, mutants = load_inputs(tmp_path / "inputs")
+    summary, _ = await run(
+        FixtureStore(path, mode="replay"), never_called, records=records, mutants=mutants
+    )
+
+    assert (records, mutants) == (RECORDS, MUTANTS)
+    assert summary.cache_hits == SCORINGS
+
+
+def test_mutants_from_the_default_battery_survive_saving(tmp_path: Path) -> None:
+    from mtlj.engine.generator import default_battery, generate_mutants
+
+    mutants = generate_mutants(RECORDS, default_battery(), base_seed=0).mutants
+    save_inputs(tmp_path, RECORDS, mutants)
+
+    assert load_inputs(tmp_path) == (RECORDS, mutants)
+
+
+def test_a_bad_input_line_is_refused_with_its_line_number(tmp_path: Path) -> None:
+    save_inputs(tmp_path, RECORDS, MUTANTS)
+    with (tmp_path / "mutants.jsonl").open("a", encoding="utf-8") as file:
+        file.write("{not json\n")
+
+    with pytest.raises(FixtureFileError, match=f"line {len(MUTANTS) + 1}"):
+        load_inputs(tmp_path)

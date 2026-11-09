@@ -22,28 +22,36 @@ scores (gpt-4o-mini, default config) for:
 - every mutant the default battery makes of them (base seed 0),
 - 5 samples of each (the 2026-10-20 decision).
 
-`tests/judges/deepeval/test_faithfulness_replay.py` replays all of them, with the network blocked.
+The texts themselves are saved next to it, in `tests/fixtures/gold-set/` (`records.jsonl` and
+`mutants.jsonl`). `tests/judges/deepeval/test_faithfulness_replay.py` replays all of them, with
+the network blocked.
 
-Each line is one scoring: its key, the judge it came from, and the score with its verdict
-counts. Lines are sorted by key, so recording again gives a small diff.
+Each line of the scores file is one scoring: its key, the judge it came from, and the score with
+its verdict counts. Lines are sorted by key, so recording again gives a small diff.
+
+## What doesn't break replay
+
+Replay scores the saved texts, not mutants made fresh from today's operators, and it plays the
+judge as it was recorded: same name, model and DeepEval version, read from the file. So none of
+these break it:
+
+- **Changing an operator or the default battery.** The saved mutants are what was scored.
+- **Upgrading DeepEval or spaCy** (Dependabot does every week). Replay never runs DeepEval, and
+  never runs spaCy to make mutants.
+
+The fixtures keep testing the texts and judge they were recorded with. Re-record when you want
+that brought up to date, for example after an operator change you want reflected in the replayed
+scores, or a DeepEval upgrade whose behaviour you want to check.
 
 ## When replay fails
 
-`FixtureMissingError` means the file doesn't hold a scoring the test needs. Each score is keyed
-on everything that decides it (the response cache's key, see `mtlj.engine.cache`):
-
-- the judge's class, name, model and **version** (for DeepEval, the installed DeepEval version),
-- its settings (`cache_settings()`),
-- the exact question, answer and passages,
-- the sample index.
-
-So any of these makes the fixtures stale, on purpose:
-
-- **Upgrading DeepEval.** Re-record in the same PR as the upgrade.
-- **Changing an operator, the default battery, or the corpus.** Different mutants, different texts.
-- **Changing the judge's config or prompt.**
-
-A fixture recorded for other inputs would be testing something that no longer exists.
+- **`FixtureMissingError`** means the scores file doesn't hold a scoring the saved texts need.
+  Each score is keyed on everything that decides it (the response cache's key, see
+  `mtlj.engine.cache`): the judge's class, name, model, version and settings, the exact
+  question, answer and passages, and the sample index. Usually a recording stopped before the
+  end: run the recorder again to finish it.
+- **"mixes scores from several judges or versions"** means a re-record (after a DeepEval
+  upgrade, say) stopped part way. Run it again to finish; the old scores are dropped at the end.
 
 ## Recording
 
@@ -52,6 +60,7 @@ You need `OPENAI_API_KEY` in `.env` (see [How to develop](DEVELOPER.md)).
 ```bash
 uv run python scripts/record_fixtures.py --limit 1 --samples 1   # trial: a few cents at most
 uv run python scripts/record_fixtures.py                         # the rest
+uv run python scripts/record_fixtures.py --regenerate            # mutants made again
 ```
 
 The script prints how many calls it will make and asks before spending. Then it:
@@ -61,12 +70,18 @@ The script prints how many calls it will make and asks before spending. Then it:
 - **Stops at a spending cap**, `--max-cost` dollars (default 3.00) as DeepEval reports it, and
   stops at once if DeepEval can't price a call, rather than spend blind. The full gold set is
   about 765 scorings.
+- **Scores the saved texts.** The first run saves the gold set and its mutants in
+  `tests/fixtures/gold-set/`, and later runs reuse them, so finishing a recording scores the same
+  texts. `--regenerate` makes the mutants again from the current operators and saves them.
+- **Drops stale scores** after a full run (all records, 5 samples): scores for texts no longer
+  saved, or from another DeepEval version, are removed, so the file only holds what replay uses.
+  A trial (`--limit`, or fewer `--samples`) never drops anything.
 - **Keeps every score it paid for**, even if it crashes or you press Ctrl-C: each one is written
   to `<file>.partial` as it arrives, and merged into the file when the run ends (or the next run
   starts).
 
 Then run `uv run pytest tests/judges/deepeval/test_faithfulness_replay.py` and commit the
-fixture file.
+scores file together with `tests/fixtures/gold-set/`.
 
 ## Recording in your own code
 
