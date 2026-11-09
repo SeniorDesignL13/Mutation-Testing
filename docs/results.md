@@ -17,9 +17,12 @@ The file holds no timestamps, so the same run always gives identical bytes.
 ## Versioning
 
 `schema_version` is 1, and `read_results` refuses every version but its own. Bump it only for a
-breaking change: a field removed, renamed or given a new meaning. A new field doesn't bump it. To
-change the format, update the models in `src/mtlj/engine/results.py` and this page, and bump
-`SCHEMA_VERSION` in the same change if it breaks.
+breaking change: a field removed, renamed or given a new meaning. A new field doesn't bump it.
+Readers ignore fields they don't know, so an older `mtlj` still reads a newer file, and a new
+field needs a default so files written before it still read. Other readers, like the dashboard,
+should ignore unknown fields too. To change the format, update the models in
+`src/mtlj/engine/results.py` and this page, and bump `SCHEMA_VERSION` in the same change if it
+breaks.
 
 ## Format
 
@@ -109,9 +112,10 @@ when nothing is testable, and in an `overall` that pools several intensities, be
 assumes independent mutants. A judge blind to the change came out above chance 7.9% of the time
 when pooled, in a simulation with 20 records, 4 intensities and N = 5.
 
-`dose_response` is the operator's fitted curve and onset ([metrics.md](metrics.md#dose-response-curve)).
-It's null unless two or more intensities above 0 have a testable mutant, so it's null for the
-reformatting operators, which run at 1.0 only. Intensity 0 changes nothing and isn't fitted.
+`dose_response` is the operator's fitted curve and onset
+([metrics.md](metrics.md#dose-response-curve)). It's null unless two or more intensities above 0
+have a testable mutant, so it's null for the reformatting operators, which run at 1.0 only.
+Intensity 0 changes nothing and isn't fitted.
 
 | Field | Meaning |
 |---|---|
@@ -127,10 +131,11 @@ reformatting operators, which run at 1.0 only. Intensity 0 changes nothing and i
 ### `correction`
 
 Every `by_intensity` test in the run, of every operator, degrading and preserving alike, is one
-family for the Benjamini-Hochberg correction ([metrics.md](metrics.md#multiple-comparison-correction)).
-`method` is `benjamini-hochberg`, `q` is `alpha`, and `n_tests` counts the tests that were run.
-Pooled figures aren't tested, so they aren't in it. Judge a result by `above_chance_corrected`.
-`above_chance` stays in the file so you can see what the correction changed.
+family for the Benjamini-Hochberg correction
+([metrics.md](metrics.md#multiple-comparison-correction)). `method` is `benjamini-hochberg`,
+`q` is `alpha`, and `n_tests` counts the tests that were run. Pooled figures aren't tested, so
+they aren't in it. Judge a result by `above_chance_corrected`. `above_chance` stays in the file
+so you can see what the correction changed.
 
 ### `variance`
 

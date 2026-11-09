@@ -54,8 +54,9 @@ from mtlj.stats.spurious import SpuriousSensitivity, spurious_sensitivity
 from mtlj.stats.variance import Condition, condition_variances
 
 # The format's version. read_results rejects every other one. Bump it only for a breaking change:
-# a field removed, renamed or given a new meaning. A new field doesn't bump it; add it to the
-# models and to docs/results.md.
+# a field removed, renamed or given a new meaning. A new field doesn't bump it: older readers
+# ignore it, and it needs a default so files written before it still read. Add it to the models
+# and to docs/results.md.
 SCHEMA_VERSION = 1
 # The file a run's results are saved as, in the run's directory.
 RESULTS_FILE = "results.json"
@@ -76,7 +77,10 @@ Rate = DetectionRate | SpuriousSensitivity
 
 
 class _Model(BaseModel):
-    model_config = {"extra": "forbid", "frozen": True}
+    # Fields this version doesn't know are ignored, so a file from a newer version that only
+    # added fields still reads (see SCHEMA_VERSION). Every field here is required, so a misspelled
+    # name in the code that builds results still fails, as a missing field.
+    model_config = {"extra": "ignore", "frozen": True}
 
 
 class JudgeInfo(_Model):

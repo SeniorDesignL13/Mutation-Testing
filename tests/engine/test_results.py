@@ -651,3 +651,25 @@ def test_summary_lists_exclusions_by_name():
 
     assert "excluded no_change 1" in summary
     assert "{" not in summary
+
+
+def test_fields_added_by_a_newer_version_are_ignored(tmp_path: Path):
+    results = build(*make_run())
+    path = write_results(results, tmp_path)
+    data = json.loads(path.read_text("utf-8"))
+    data["added_later"] = {"anything": 1}
+    data["run"]["added_later"] = True
+    data["operators"][0]["overall"]["added_later"] = [1, 2]
+    path.write_text(json.dumps(data), "utf-8")
+
+    assert read_results(path) == results
+
+
+def test_a_missing_field_is_still_rejected(tmp_path: Path):
+    path = write_results(build(*make_run()), tmp_path)
+    data = json.loads(path.read_text("utf-8"))
+    del data["operators"][0]["overall"]["wilson_ci"]
+    path.write_text(json.dumps(data), "utf-8")
+
+    with pytest.raises(ValueError, match="wilson_ci"):
+        read_results(path)
