@@ -36,5 +36,9 @@ Thumbs.db
 .deepeval/
 .claude/settings.local.json
 
+# Working files of a fixture recording (scripts/record_fixtures.py), never committed.
+*.jsonl.partial
+*.jsonl.tmp
+
 # Audit runs: `mtlj audit run` writes here
 runs/

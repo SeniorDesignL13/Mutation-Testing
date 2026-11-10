@@ -186,6 +186,11 @@ class ResponseCache:
                 f"of mtlj reads version {SCHEMA_VERSION}. Use another file."
             )
 
+    @property
+    def strict(self) -> bool:
+        """Always False: a cache miss calls the judge (the runner's ``ScoreStore``)."""
+        return False
+
     def get(self, key: str) -> CachedScore | None:
         """The score stored under ``key``, or None. Always None with ``refresh``.
 

@@ -38,6 +38,10 @@ mutant with its own original and measure the judge's noise (see docs/metrics.md)
   input, output and context, and the sample index: each of a run's samples is still its own
   call, and a re-run gets back the same samples. Failures are never cached. For fresh calls, run
   without a cache or with one opened ``refresh=True``. The summary reports the hit rate.
+* A ``FixtureStore`` (``mtlj.engine.fixtures``) goes in the same place as a cache. Recording, it
+  acts like one, writing to a fixture file meant to be committed. Replaying, it's strict: every
+  scoring's key is checked before the run starts, ``FixtureMissingError`` is raised if any is
+  missing, and the judge is never called.
 * The judge sees the record's question as ``input``, the answer (original or mutated) as
   ``output``, and ``{"passages": [{"passage_id", "text", "title"}, ...]}`` as ``context``: the
   record's passages, in order. This is the shape the adapter contract tests
@@ -64,7 +68,8 @@ from pydantic import BaseModel
 
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord, Passage
-from mtlj.engine.cache import CachedScore, CacheKeys, ResponseCache
+from mtlj.engine.cache import CachedScore, CacheKeys
+from mtlj.engine.fixtures import FixtureMissingError
 from mtlj.engine.retry import (
     DEFAULT_RETRY,
     NO_RETRY,
@@ -201,6 +206,55 @@ class RunSummary:
     retries_by_type: dict[str, int] = field(default_factory=dict)  # each retry's error
     gave_up: int = 0  # failed scorings whose last error was transient (in errors too)
     elapsed_s: float = 0.0
+
+
+class ScoreStore(Protocol):
+    """Where the runner looks up scores before calling the judge, and keeps the new ones.
+
+    ``ResponseCache`` (``mtlj.engine.cache``) and ``FixtureStore`` (``mtlj.engine.fixtures``).
+    A ``strict`` store answers every scoring: the runner checks it holds them all before any
+    call, and never calls the judge.
+    """
+
+    path: Path
+    refresh: bool
+
+    @property
+    def strict(self) -> bool: ...
+
+    def get(self, key: str) -> CachedScore | None: ...
+
+    def put(self, key: str, judge: Judge, score: CachedScore) -> None: ...
+
+
+# How many missing scorings a FixtureMissingError names.
+MAX_MISSING_NAMED = 5
+
+
+def task_key(keys: CacheKeys, task: EvalTask) -> str:
+    """The cache or fixture key of one scoring. Every lookup and every check uses this."""
+    return keys(task.input, task.output, judge_context(task.passages), task.sample_index)
+
+
+def _check_replay(store: ScoreStore, keys: CacheKeys, tasks: TaskPlan) -> None:
+    """Raise ``FixtureMissingError`` unless ``store`` holds a score for every task."""
+    missing = []
+    for task in tasks:
+        if store.get(task_key(keys, task)) is None:
+            missing.append(task)
+    if not missing:
+        return
+    named = "; ".join(
+        f"{t.kind} {t.target_id} sample {t.sample_index}" for t in missing[:MAX_MISSING_NAMED]
+    )
+    extra = len(missing) - MAX_MISSING_NAMED
+    more = f" and {extra} more" if extra > 0 else ""
+    raise FixtureMissingError(
+        f"{store.path} is missing {len(missing)} of {len(tasks)} scorings ({named}{more}). "
+        "The judge, its version or settings, or the texts have changed since it was recorded. "
+        "Record it again: see docs/fixtures.md.",
+        missing=len(missing),
+    )
 
 
 class ResultSink(Protocol):
@@ -530,7 +584,7 @@ async def run_judge(
     mutants: Iterable[Mutant],
     sink: ResultSink,
     *,
-    cache: ResponseCache | None = None,
+    cache: ScoreStore | None = None,
     samples: int = DEFAULT_SAMPLES,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
@@ -549,7 +603,8 @@ async def run_judge(
         mutants: the mutants to score. Each one's record must be in ``records``.
         sink: where evaluations go.
         cache: answer scorings it holds without calling the judge, and store the new ones
-            (see ``mtlj.engine.cache``). ``None``, the default, calls the judge every time.
+            (see ``mtlj.engine.cache``). ``None``, the default, calls the judge every time. A
+            ``FixtureStore`` goes here too; in replay mode the judge is never called.
         samples: how many times each text is scored.
         max_concurrency: the most judge calls in flight at once.
         max_consecutive_errors: stop the run once this many scorings in a row have failed,
@@ -561,6 +616,8 @@ async def run_judge(
         ValueError: for bad arguments (see ``build_tasks``), a judge whose name, model or
             version isn't a non-empty string, or, with a cache, a judge whose
             ``cache_settings()`` can't be written as JSON, before any call is made.
+        FixtureMissingError: replaying from a ``FixtureStore`` that lacks any of the scorings,
+            before any call is made.
         RunAbortedError: once ``max_consecutive_errors`` calls in a row have failed. Every
             result, failures included, has been written by then. Its ``summary`` has the counts.
         Exception: whatever ``sink.write`` raised first (or anything else that went wrong
@@ -577,6 +634,8 @@ async def run_judge(
     keys = CacheKeys(judge) if cache is not None else None
     if not tasks:
         return summary
+    if keys is not None and cache is not None and cache.strict:
+        _check_replay(cache, keys, tasks)
     if cache is not None:
         logger.info("response cache: %s%s", cache.path, " (refreshing)" if cache.refresh else "")
 
@@ -616,11 +675,17 @@ async def run_judge(
             try:
                 key = hit = None
                 if keys is not None and cache is not None:
-                    context = judge_context(task.passages)
-                    key = keys(task.input, task.output, context, task.sample_index)
+                    key = task_key(keys, task)
                     hit = cache.get(key)
                 if hit is not None:
                     evaluation = _from_cache(judge, task, hit)
+                elif cache is not None and cache.strict:
+                    # _check_replay found every key, so only a store changed mid-run gets here.
+                    raise FixtureMissingError(
+                        f"{cache.path} lost the score for {task.kind} {task.target_id} "
+                        f"sample {task.sample_index} during the run",
+                        missing=1,
+                    )
                 else:
                     evaluation = await _evaluate(judge, task, executor, retry, stop)
                     if key is not None and cache is not None and evaluation.status == OK:
@@ -695,7 +760,7 @@ def run_judge_sync(
     mutants: Iterable[Mutant],
     sink: ResultSink,
     *,
-    cache: ResponseCache | None = None,
+    cache: ScoreStore | None = None,
     samples: int = DEFAULT_SAMPLES,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,

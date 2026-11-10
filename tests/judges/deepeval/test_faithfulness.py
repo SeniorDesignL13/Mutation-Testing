@@ -102,6 +102,17 @@ def test_claims_with_no_verdicts_are_an_error_not_a_perfect_score():
         judge_with(FakeLLM([], claims=["a", "b"]))("q", "a", CONTEXT)
 
 
+def test_on_cost_gets_the_metrics_cost_once_per_call_even_when_rejected():
+    costs = []
+
+    measure_faithfulness("q", "a", ["passage"], model=FakeLLM(["yes"]), on_cost=costs.append)
+    with pytest.raises(ValueError, match="no verdicts"):
+        measure_faithfulness("q", "a", ["p"], model=FakeLLM([], claims=["a"]), on_cost=costs.append)
+
+    # A custom model has no prices, so DeepEval reports None; the recorder refuses to go on.
+    assert costs == [None, None]
+
+
 def test_model_name_always_means_openai_at_temperature_zero(monkeypatch):
     built = []
 
@@ -230,3 +241,24 @@ def test_runner_context_is_what_the_adapter_reads():
     DeepEvalFaithfulnessJudge(measure=lambda _i, _o, p: seen.extend(p) or 1.0)("q", "a", context)
 
     assert seen == ["Some text."]
+
+
+def test_on_cost_is_called_even_when_the_metric_raises(monkeypatch):
+    import deepeval.metrics
+
+    class Failing:
+        evaluation_cost = 0.002
+
+        def __init__(self, **kwargs):
+            pass
+
+        def measure(self, case, **kwargs):
+            raise ConnectionError("dropped after the first LLM call")
+
+    monkeypatch.setattr(deepeval.metrics, "FaithfulnessMetric", Failing)
+    costs = []
+
+    with pytest.raises(ConnectionError):
+        measure_faithfulness("q", "a", ["p"], model=FakeLLM(["yes"]), on_cost=costs.append)
+
+    assert costs == [0.002]
