@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import threading
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 
@@ -262,3 +263,249 @@ def test_a_run_that_cannot_start_exits_2_without_a_traceback(monkeypatch, tmp_pa
     assert "version" in result.stderr
     assert "Planned:" not in result.stdout
     assert not (tmp_path / "run").exists()
+
+
+# --------------------------------------------------
+# audit run --config
+# --------------------------------------------------
+
+
+@pytest.fixture
+def wide(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep each error on one line: typer's error box otherwise wraps long paths mid-message."""
+    monkeypatch.setattr("typer.rich_utils.MAX_WIDTH", 1000)
+
+
+def write_config(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "audit.toml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def config_text(tmp_path: Path, extra: str = "") -> str:
+    # Literal strings, so Windows paths need no escaping.
+    return (
+        f"dataset = '{RAGTRUTH_SAMPLE}'\njudge = \"stub\"\nsamples = 3\nseed = 4\n"
+        f"output = '{tmp_path / 'run'}'\n{extra}"
+    )
+
+
+def test_audit_run_takes_its_settings_from_a_config_file(stub_judge, tmp_path: Path) -> None:
+    config = write_config(tmp_path, config_text(tmp_path, 'battery = "verbosity_padding"\n'))
+
+    result = runner.invoke(app, ["audit", "run", "--config", str(config)])
+
+    assert result.exit_code == 0, result.output
+    saved = read_results(tmp_path / "run")
+    assert (saved.run.samples, saved.run.base_seed) == (3, 4)
+    assert saved.run.n_records == 4
+    assert [o.operator for o in saved.operators] == ["verbosity_padding"]
+
+
+def test_options_override_the_config_file(stub_judge, tmp_path: Path) -> None:
+    config = write_config(tmp_path, config_text(tmp_path))
+    other = tmp_path / "other"
+
+    result = runner.invoke(
+        app,
+        [
+            "audit",
+            "run",
+            "--config",
+            str(config),
+            "--samples",
+            "2",
+            "--limit",
+            "1",
+            "--output",
+            str(other),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    saved = read_results(other)
+    assert (saved.run.samples, saved.run.base_seed, saved.run.n_records) == (2, 4, 1)
+    assert not (tmp_path / "run").exists()
+
+
+def test_the_run_saves_its_settings_and_they_run_again(stub_judge, tmp_path: Path) -> None:
+    config = write_config(tmp_path, config_text(tmp_path))
+    first = runner.invoke(app, ["audit", "run", "--config", str(config), "--limit", "2"])
+    assert first.exit_code == 0, first.output
+
+    saved = tmp_path / "run" / "config.toml"
+    again = runner.invoke(
+        app, ["audit", "run", "--config", str(saved), "--output", str(tmp_path / "again")]
+    )
+
+    assert again.exit_code == 0, again.output
+    settings = tomllib.loads(saved.read_text("utf-8"))
+    assert settings["limit"] == 2 and "output" not in settings
+    a, b = read_results(tmp_path / "run"), read_results(tmp_path / "again")
+    assert a.model_dump() == b.model_dump()
+
+
+def test_a_run_from_options_alone_saves_its_settings_too(stub_judge, tmp_path: Path) -> None:
+    result = runner.invoke(app, audit_args(tmp_path, "--samples", "2"))
+
+    assert result.exit_code == 0, result.output
+    settings = tomllib.loads((tmp_path / "run" / "config.toml").read_text("utf-8"))
+    assert (settings["samples"], settings["judge"], settings["model"]) == (2, "stub", "m")
+    assert settings["battery"] == "battery.toml"
+    assert (tmp_path / "run" / "battery.toml").is_file()
+
+
+def test_a_battery_file_can_be_given_as_an_option(stub_judge, tmp_path: Path) -> None:
+    battery = tmp_path / "b.toml"
+    battery.write_text('[[operators]]\nname = "entity_swap"\nintensities = [1.0]\n', "utf-8")
+
+    result = runner.invoke(app, audit_args(tmp_path, "--battery", str(battery)))
+
+    assert result.exit_code == 0, result.output
+    assert [o.operator for o in read_results(tmp_path / "run").operators] == ["entity_swap"]
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ("samples = 1\n", "samples:"),
+        ("colour = 'red'\n", "colour: unknown key"),
+        ('battery = "gone.toml"\n', "battery file not found"),
+        ('battery = "nope"\n', "unknown operators"),
+        ('judge = "no-such-judge"\n', "unknown judge"),
+    ],
+)
+def test_a_bad_config_exits_2_before_anything_runs(
+    monkeypatch, wide, tmp_path: Path, extra: str, message: str
+) -> None:
+    def never(input, output, context):
+        raise AssertionError("the judge was called")
+
+    monkeypatch.setitem(
+        JUDGES, "stub", lambda model: CallableJudge(never, name="stub", model="m", version="1")
+    )
+    # A later key replaces an earlier one only in Python, so drop the default line it changes.
+    lines = [
+        line
+        for line in config_text(tmp_path).splitlines()
+        if line.split(" = ")[0] != extra.split(" = ")[0]
+    ]
+    config = write_config(tmp_path, "\n".join(lines) + "\n" + extra)
+
+    result = runner.invoke(app, ["audit", "run", "--config", str(config)])
+
+    assert result.exit_code == 2
+    output = " ".join(click.unstyle(result.output).split())
+    assert message in output
+    assert "audit.toml" in output
+    assert "Traceback" not in output
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_missing_config_file_exits_2(wide, tmp_path: Path) -> None:
+    result = runner.invoke(app, ["audit", "run", "--config", str(tmp_path / "nope.toml")])
+
+    assert result.exit_code == 2
+    assert "audit file not found" in " ".join(result.output.split())
+
+
+def test_dataset_is_required_without_a_config_file(wide) -> None:
+    result = runner.invoke(app, ["audit", "run", "--judge", "stub"])
+
+    assert result.exit_code == 2
+    assert "required unless --config" in " ".join(click.unstyle(result.output).split())
+
+
+def test_an_option_supplies_what_the_config_file_leaves_out(stub_judge, tmp_path: Path) -> None:
+    config = write_config(tmp_path, 'judge = "stub"\nsamples = 1\n')
+
+    result = runner.invoke(
+        app,
+        [
+            "audit",
+            "run",
+            "--config",
+            str(config),
+            "--dataset",
+            str(RAGTRUTH_SAMPLE),
+            "--samples",
+            "2",
+            "--output",
+            str(tmp_path / "run"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert read_results(tmp_path / "run").run.samples == 2
+
+
+@pytest.mark.parametrize("option", ["--model", "--judge", "--battery", "--dataset"])
+def test_an_empty_option_exits_2_without_a_traceback(
+    stub_judge, wide, tmp_path: Path, option: str
+) -> None:
+    result = runner.invoke(app, [*audit_args(tmp_path), option, ""])
+
+    assert result.exit_code == 2
+    assert f"{option}: string should have at least 1 character" in click.unstyle(result.output)
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_busy_default_directory_names_the_option_not_a_file(
+    stub_judge, wide, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(cli, "DEFAULT_RUNS_DIR", tmp_path)
+    args = ["audit", "run", "--dataset", str(RAGTRUTH_SAMPLE), "--judge", "stub"]
+
+    class Frozen(cli.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cli.datetime(2000, 1, 1)
+
+    monkeypatch.setattr(cli, "datetime", Frozen)
+    busy = tmp_path / "stub-20000101-000000"
+    busy.mkdir()
+    (busy / "file").write_text("x", encoding="utf-8")
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 2
+    output = click.unstyle(result.output)
+    assert "Invalid value for --output" in output
+    assert "None" not in output
+
+
+def test_a_rerun_uses_the_saved_battery_after_the_original_changes(
+    stub_judge, tmp_path: Path
+) -> None:
+    battery = tmp_path / "b.toml"
+    battery.write_text('[[operators]]\nname = "entity_swap"\nintensities = [1.0]\n', "utf-8")
+    config = write_config(tmp_path, config_text(tmp_path, 'battery = "b.toml"\n'))
+    first = runner.invoke(app, ["audit", "run", "--config", str(config)])
+    assert first.exit_code == 0, first.output
+
+    battery.write_text('[[operators]]\nname = "verbosity_padding"\nintensities = [1.0]\n', "utf-8")
+    again = runner.invoke(
+        app,
+        [
+            "audit",
+            "run",
+            "--config",
+            str(tmp_path / "run" / "config.toml"),
+            "--output",
+            str(tmp_path / "again"),
+        ],
+    )
+
+    assert again.exit_code == 0, again.output
+    assert [o.operator for o in read_results(tmp_path / "again").operators] == ["entity_swap"]
+
+
+def test_a_config_file_that_isnt_utf8_exits_2(wide, tmp_path: Path) -> None:
+    config = tmp_path / "audit.toml"
+    config.write_bytes('dataset = "caf\xe9.jsonl"\n'.encode("latin-1"))
+
+    result = runner.invoke(app, ["audit", "run", "--config", str(config)])
+
+    assert result.exit_code == 2
+    assert "the file isn't UTF-8" in click.unstyle(result.output)

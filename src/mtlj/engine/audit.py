@@ -1,7 +1,8 @@
 """One audit, start to finish: score a generated run and leave its results on disk.
 
 A run's directory ends up holding ``originals.jsonl``, ``mutants.jsonl``, ``skipped.jsonl`` and
-``run.json`` from the generator, ``evaluations.jsonl`` from the runner, and ``results.json``.
+``run.json`` from the generator, ``evaluations.jsonl`` from the runner, ``results.json``, and
+the run's settings (``config.toml`` and ``battery.toml``) when it was given them to save.
 Results are written when a run finishes, when the judge goes down, and when the run is stopped
 with Ctrl+C, SIGTERM (``docker stop``, a CI timeout) or SIGHUP (a closed terminal). A signal that
 arrives while they're being written is ignored, so a paid run can't lose them at the last moment.
@@ -16,7 +17,7 @@ from __future__ import annotations
 import logging
 import signal
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from types import FrameType
@@ -152,11 +153,14 @@ def run_audit(
     dataset: str,
     samples: int = DEFAULT_SAMPLES,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+    saved_files: Mapping[str, str] | None = None,
 ) -> AuditResults:
     """Score a generated run with ``judge`` and store everything in ``run_dir``.
 
     A run that stops early, because the judge is down or it was stopped, still gets a
-    ``results.json``, with its status set to ``aborted``.
+    ``results.json``, with its status set to ``aborted``. ``saved_files`` (name -> text) are
+    written to ``run_dir`` before scoring: the run's settings, from
+    ``mtlj.engine.audit_config.AuditConfig.saved_files``.
 
     Raises:
         FileExistsError: if ``run_dir`` isn't empty (see ``check_run_dir``).
@@ -167,6 +171,8 @@ def run_audit(
         generation, judge, run_dir, samples=samples, max_concurrency=max_concurrency
     )
     write_generation(generation, run_dir)
+    for name, text in (saved_files or {}).items():
+        (run_dir / name).write_text(text, encoding="utf-8", newline="\n")
     path = run_dir / EVALUATIONS_FILE
 
     aborted = None
