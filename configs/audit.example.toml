@@ -1,0 +1,35 @@
+# An audit file: the settings of one `mtlj audit run`, so a run can be reviewed and repeated.
+#
+#   uv run mtlj audit run --config configs/audit.example.toml
+#
+# Each key sets the option of the same name, and an option given on the command line overrides
+# it (`--limit 3` for a quick try). Only `dataset` is required. Relative paths are read from this
+# file's directory. Every key is checked before anything runs, and an unknown key is an error.
+# Each run saves the settings it used as config.toml in its directory, with its battery as
+# battery.toml, which --config can rerun.
+
+# 'gold' (the 20 gold records), 'corpus-v1', or the path of a RAGTruth .jsonl file.
+dataset = "gold"
+
+# The judge to audit, and the model it uses. Without `model`, the judge's default
+# (gpt-4o-mini for DeepEval).
+judge = "deepeval-faithfulness"
+# model = "gpt-4o-mini"
+
+# 'default', comma-separated operators of the default battery, or a battery file.
+battery = "battery.example.toml"
+
+# Scorings per text. Noise needs at least 2; 5 per the 2026-10-20 decision.
+samples = 5
+
+# Seed for generating mutants. The same seed and records give the same mutants.
+seed = 0
+
+# Judge calls in flight at once.
+concurrency = 4
+
+# Use only the first N records.
+# limit = 3
+
+# An empty directory for the run. Without it, a new one under runs/ in the current directory.
+# output = "../runs/example"

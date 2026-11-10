@@ -8,6 +8,8 @@ Every `mtlj audit run` leaves one directory:
 | `evaluations.jsonl` | Every scoring, one line each, including failures and verdict counts |
 | `originals.jsonl`, `mutants.jsonl`, `skipped.jsonl` | What was scored, and what was skipped and why |
 | `run.json` | The seed, battery and library versions behind the mutants |
+| `config.toml` | The settings the run used, as an audit file `mtlj audit run --config` can rerun. It names the judge's model even when the run used the default. `output` is left out so a rerun gets its own directory. A dataset file is referenced by its absolute path, not copied |
+| `battery.toml` | The operators and intensities the run used, written from the battery it loaded, so a rerun isn't changed by later edits to a battery file or to the default battery |
 
 `mtlj audit show <run directory>` prints `results.json`. `mtlj.engine.results.read_results` loads
 it in Python. [metrics.md](metrics.md) defines every metric below.

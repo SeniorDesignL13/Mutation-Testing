@@ -84,7 +84,29 @@ nobody can answer, such as under `nohup` or in CI, add `--yes`: without it the q
 answer, and the command prints "Aborted." and exits 1 before any scoring.
 
 `--dataset` also takes a RAGTruth `.jsonl` file. See `uv run mtlj audit run --help` for the rest.
-The command exits 1 if the run stops early. Print a run's results again with
+The command exits 1 if the run stops early.
+
+### From a config file
+
+An audit file sets the same options, so a run can be reviewed and repeated instead of rebuilt
+from shell history. [`configs/audit.example.toml`](configs/audit.example.toml) is the study's
+setup, with each key explained:
+
+```bash
+uv run mtlj audit run --config configs/audit.example.toml --limit 3
+```
+
+Options given on the command line override the file, like `--limit 3` here, and can also supply
+a key the file leaves out. Relative paths in the file are read from the file's directory. Every
+setting is checked before anything runs: a mistyped key, a value of the wrong type or a battery
+that doesn't load stops the command with exit code 2 and a message naming the file and key, or
+the option, it came from.
+
+Each run saves the settings it used as `config.toml` in its directory, including the judge's
+model and, in `battery.toml`, the exact operators and intensities it ran. `--config
+runs/example/config.toml --output runs/again` reruns them. A dataset
+file is referenced by its absolute path rather than copied, so a rerun reads it as it is then;
+`originals.jsonl` holds the exact records the first run used. Print a run's results again with
 `uv run mtlj audit show runs/example`. [Audit results](docs/results.md) explains the files.
 
 ## What's where
