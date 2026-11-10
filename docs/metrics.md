@@ -204,6 +204,10 @@ Agreed by the team on 2026-10-20:
   score ignores (see "What detection rate doesn't tell you") are kept.
 - **Default N is 5.** Every original and every mutant is scored 5 times per run for audits. N is
   still recorded in run provenance, so a run can override it and old runs stay reproducible.
+  [The spike](spike-effect-size.md) ran at N = 5. Its entity swaps implied an N of only 1 to 2
+  (effect size 3.11 by default, 2.48 penalized), but that's for the average drop. Detection
+  rate decides mutant by mutant, and N = 5 lowers τ from 1.64σ at N = 2 to 1.04σ. Each extra
+  sample also multiplies a run's cost, so 5 leaves a margin without paying for more.
 
 Agreed by the team on 2026-11-06, with the
 [multiple-comparison correction](#multiple-comparison-correction):

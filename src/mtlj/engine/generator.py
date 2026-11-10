@@ -27,7 +27,7 @@ from typing import Any
 
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
-from mtlj.operators.base import MutationOperator
+from mtlj.operators.base import MutationOperator, OperatorFamily
 from mtlj.operators.registry import get_operator
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,8 @@ class GenerationResult:
     base_seed: int = 0
     battery: dict[str, list[float]] = field(default_factory=dict)
     drop_repeated_doses: bool = True
+    # Operator name -> family, so an operator with no mutants still has one.
+    families: dict[str, OperatorFamily] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
         """Counts for a quick look at a run."""
@@ -235,6 +237,7 @@ def generate_mutants(
         base_seed=int(base_seed),
         battery={i.operator.metadata.name: [float(x) for x in i.intensities] for i in battery},
         drop_repeated_doses=drop_repeated_doses,
+        families={i.operator.metadata.name: i.operator.metadata.family for i in battery},
     )
     logger.info("generated mutants: %s", result.summary())
     return result
