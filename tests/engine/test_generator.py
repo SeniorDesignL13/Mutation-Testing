@@ -49,6 +49,7 @@ def _meta(name: str) -> OperatorMetadata:
         family=OperatorFamily.DEGRADING,
         expected_direction=ExpectedDirection.DECREASE,
         description="test operator",
+        version=1,
     )
 
 

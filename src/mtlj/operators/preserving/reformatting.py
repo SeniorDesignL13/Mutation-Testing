@@ -326,6 +326,7 @@ def _metadata(target: Format, layout: str) -> OperatorMetadata:
             "added, removed or altered. All or nothing: any intensity above 0 converts the "
             "whole answer."
         ),
+        version=1,
     )
 
 

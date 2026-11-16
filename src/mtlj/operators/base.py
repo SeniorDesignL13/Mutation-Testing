@@ -39,13 +39,27 @@ class ParameterSpec:
 
 @dataclass
 class OperatorMetadata:
-    """Static metadata about an operator, independent of any specific input."""
+    """Static metadata about an operator, independent of any specific input.
+
+    ``version`` is a whole number from 1 up. Bump it with any change that can alter the
+    operator's output for the same input, intensity and seed: it's part of every mutant's id,
+    so mutants made by old and new code never share one (see docs/operators.md).
+    """
 
     name: str
     family: OperatorFamily
     expected_direction: ExpectedDirection
     description: str
+    version: int
     parameters: list[ParameterSpec] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # bool is an int subclass, so True would otherwise pass as version 1.
+        if type(self.version) is not int or self.version < 1:
+            raise ValueError(
+                f"operator {self.name!r} version must be a whole number from 1, "
+                f"got {self.version!r}"
+            )
 
 
 @dataclass
@@ -99,6 +113,7 @@ class MutationOperator(ABC):
             "family": m.family.value,
             "expected_direction": m.expected_direction.value,
             "description": m.description,
+            "version": m.version,
             "parameters": [
                 {
                     "name": p.name,

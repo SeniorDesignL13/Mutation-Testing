@@ -1,6 +1,7 @@
 """Tests for the mutant format and its reproducibility."""
 
 import copy
+import dataclasses
 import json
 import os
 import pickle
@@ -53,6 +54,7 @@ def _id(**overrides) -> str:
         "original_text": "A.",
         "context_sha256": context_sha256(["Some passage."]),
         "operator_name": "entity_swap",
+        "operator_version": 1,
         "intensity": 1.0,
         "parameters": {},
         "seed": 7,
@@ -192,6 +194,66 @@ def test_regenerate_rejects_unknown_operator() -> None:
         Mutant.model_validate(data).regenerate(RECORD)
 
 
+# Operator version
+
+
+def _bump_entity_swap(monkeypatch, version: int = 2) -> None:
+    """Pretend entity swap was changed and its version bumped."""
+    bumped = dataclasses.replace(EntitySwapOperator.metadata, version=version)
+    monkeypatch.setattr(EntitySwapOperator, "metadata", bumped)
+
+
+def test_mutant_records_the_operator_version() -> None:
+    assert _mutant().operator_version == EntitySwapOperator.metadata.version
+
+
+def test_same_inputs_with_another_operator_version_get_a_different_id(monkeypatch) -> None:
+    before = _mutant()
+    _bump_entity_swap(monkeypatch)
+    after = _mutant()
+
+    assert after.operator_version == 2
+    assert after.mutated_text == before.mutated_text
+    assert after.mutant_id != before.mutant_id
+
+
+def test_regenerate_rejects_a_mutant_from_another_operator_version(monkeypatch) -> None:
+    mutant = _mutant()
+    _bump_entity_swap(monkeypatch)
+    with pytest.raises(ValueError, match=r"entity_swap version 1.*is version 2"):
+        mutant.regenerate(RECORD)
+
+
+def test_regenerate_rejects_a_mutant_from_a_newer_operator_version(monkeypatch) -> None:
+    _bump_entity_swap(monkeypatch)
+    mutant = _mutant()
+    monkeypatch.undo()
+    with pytest.raises(ValueError, match=r"entity_swap version 2.*is version 1"):
+        mutant.regenerate(RECORD)
+
+
+def test_mutant_from_another_operator_version_still_loads(monkeypatch) -> None:
+    """Saved mutants stay readable after an operator changes; only regenerating is refused."""
+    dumped = _mutant().model_dump_json()
+    _bump_entity_swap(monkeypatch)
+    assert Mutant.model_validate_json(dumped).operator_version == 1
+
+
+def test_edited_operator_version_rejected() -> None:
+    data = _mutant().model_dump()
+    data["operator_version"] = 2
+    with pytest.raises(ValidationError, match="mutant_id"):
+        Mutant.model_validate(data)
+
+
+@pytest.mark.parametrize("wrong", [0, -1, 1.0, "1", True, None])
+def test_operator_version_must_be_a_whole_number_from_one(wrong) -> None:
+    data = _mutant().model_dump()
+    data["operator_version"] = wrong
+    with pytest.raises(ValidationError, match="operator_version"):
+        Mutant.model_validate(data)
+
+
 # What a mutant records
 
 
@@ -269,6 +331,7 @@ def test_mutant_id_is_deterministic() -> None:
         {"original_text": "B."},
         {"context_sha256": context_sha256(["Another passage."])},
         {"operator_name": "verbosity_padding"},
+        {"operator_version": 2},
         {"intensity": 0.5},
         {"parameters": {"num_swaps": 1}},
         {"seed": 8},
@@ -372,7 +435,9 @@ def test_unknown_direction_rejected() -> None:
         Mutant.model_validate(data)
 
 
-@pytest.mark.parametrize("field", ["mutant_id", "record_id", "operator_name", "mutated_sha256"])
+@pytest.mark.parametrize(
+    "field", ["mutant_id", "record_id", "operator_name", "operator_version", "mutated_sha256"]
+)
 def test_required_fields_missing_rejected(field) -> None:
     data = _mutant().model_dump()
     del data[field]

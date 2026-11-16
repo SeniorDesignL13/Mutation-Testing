@@ -70,7 +70,35 @@ These are maximums: an answer with fewer swappable entities gets fewer changes. 
 intensities end up changing the same number of claims, only the lower one is kept (see
 `generate_mutants`). Intensity 0 changes nothing.
 
+## Versions
+
+Every operator declares a `version` in its metadata, a whole number from 1. Each mutant saves
+the version that made it (`Mutant.operator_version`), and the version is part of its
+`mutant_id`. Old and new code therefore never give two different texts the same id. Crash
+recovery skips work it has already done by mutant id, so it can't mix mutants from before and
+after a change, and a finding can be traced to the exact operator code behind it.
+
+**Bump the version with any change that can alter the operator's output for the same input,
+intensity and seed.** For example: a bug fix, a new or changed word list, a different
+randomness pattern, or a different meaning for intensity. If you're unsure, bump it. A bump
+costs nothing but new ids.
+
+You don't need to bump it for changes that can't alter any output, such as renaming internal
+functions, rewording comments or docstrings, or speeding the code up.
+
+After a bump:
+
+- Saved mutants from the old version still load, but `Mutant.regenerate()` refuses them with
+  an error naming both versions. Generate the mutants again.
+- The judge fixtures replay the texts they saved, so they keep passing. Re-record them (see
+  [Record and replay](fixtures.md)) when you want the new behaviour reflected in the replayed
+  scores.
+
+The version covers the operator's own code. It doesn't cover its environment, such as the
+spaCy model (`en_core_web_sm`) or the `mtlj` package version.
+
 ## Adding an operator
 
 Put it in `src/mtlj/operators/preserving/` or `degrading/`. The operator registry finds it on
-its own. Add a section here with what intensity means for it and its default levels.
+its own. Start its metadata at `version=1`. Add a section here with what intensity means for it
+and its default levels.
