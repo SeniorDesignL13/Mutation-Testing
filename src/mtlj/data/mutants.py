@@ -1,8 +1,8 @@
 """Mutant format: one operator's output for one record, with full provenance.
 
 A mutant carries everything needed to reproduce and explain it: which
-record it came from, which operator made it, with what intensity,
-parameters and seed, and which way a good judge's score should move.
+record it came from, which operator (and which version of it) made it,
+with what intensity, parameters and seed, and which way a good judge's score should move.
 Running the same operator on the same record with the same settings
 gives a byte-identical mutant, which ``Mutant.regenerate`` checks.
 
@@ -44,6 +44,7 @@ def make_mutant_id(
     original_text: str,
     context_sha256: str,
     operator_name: str,
+    operator_version: int,
     intensity: float,
     parameters: Mapping[str, float],
     seed: int,
@@ -52,8 +53,10 @@ def make_mutant_id(
 
     The original text and context are part of the id, so a record whose answer or passages are
     later corrected gets new mutant ids. (Operators read the context: verbosity padding builds
-    its filler from it.) Numbers are normalised first, so intensity ``1`` and ``1.0`` give the
-    same id, matching what the model stores after validation.
+    its filler from it.) So is the operator's version, so a fixed or changed operator never
+    gives a mutant the id of one made by the old code. Numbers are normalised first, so
+    intensity ``1`` and ``1.0`` give the same id, matching what the model stores after
+    validation.
     """
     key = json.dumps(
         {
@@ -61,6 +64,7 @@ def make_mutant_id(
             "original_sha256": _sha256(original_text),
             "context_sha256": context_sha256,
             "operator_name": operator_name,
+            "operator_version": int(operator_version),
             "intensity": float(intensity),
             "parameters": {name: float(value) for name, value in parameters.items()},
             "seed": int(seed),
@@ -129,6 +133,9 @@ class Mutant(BaseModel):
     mutant_id: str = Field(..., description="Derived from the inputs; see make_mutant_id.")
     record_id: str = Field(..., description="The DatasetRecord this mutant was made from.")
     operator_name: str = Field(..., description="Operator that made it, e.g. 'entity_swap'.")
+    operator_version: int = Field(
+        ..., ge=1, strict=True, description="The operator's metadata.version when it made this."
+    )
     operator_family: OperatorFamily = Field(..., description="Degrading or preserving.")
     intensity: float = Field(..., ge=0, le=1, description="Intensity passed to the operator.")
     parameters: Mapping[str, float] = Field(
@@ -184,6 +191,7 @@ class Mutant(BaseModel):
             self.original_text,
             self.context_sha256,
             self.operator_name,
+            self.operator_version,
             self.intensity,
             self.parameters,
             self.seed,
@@ -234,12 +242,14 @@ class Mutant(BaseModel):
                 result.original_text,
                 context_hash,
                 meta.name,
+                meta.version,
                 intensity,
                 parameters,
                 seed,
             ),
             record_id=record.record_id,
             operator_name=meta.name,
+            operator_version=meta.version,
             operator_family=meta.family,
             intensity=intensity,
             parameters=parameters,
@@ -281,10 +291,22 @@ class Mutant(BaseModel):
             raise ValueError(f"record {record.record_id!r}'s context has changed since mutation")
 
     def regenerate(self, record: DatasetRecord) -> Mutant:
-        """Rebuild this mutant from its provenance. Equal to ``self`` if reproducible."""
+        """Rebuild this mutant from its provenance. Equal to ``self`` if reproducible.
+
+        Raises ValueError if the record changed, the operator is unknown, or the installed
+        operator is a different version from the one that made this mutant: its output could
+        differ, so the result wouldn't be this mutant.
+        """
         self.check_record(record)
         try:
             operator = get_operator(self.operator_name)
         except UnknownOperatorError as e:
             raise ValueError(str(e)) from None
+        installed = operator.metadata.version
+        if installed != self.operator_version:
+            raise ValueError(
+                f"mutant {self.mutant_id!r} was made by {self.operator_name} version "
+                f"{self.operator_version}, but the installed {self.operator_name} is version "
+                f"{installed}, so it can't be reproduced. Generate the mutants again."
+            )
         return Mutant.generate(record, operator, self.intensity, self.seed, self.parameters)

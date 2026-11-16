@@ -112,6 +112,7 @@ class EntitySwapOperator(MutationOperator):
             "supports with a different entity of the same type, so the answer "
             "contradicts its source. intensity controls how many claims change."
         ),
+        version=1,
         parameters=[
             ParameterSpec(
                 name="num_swaps",
