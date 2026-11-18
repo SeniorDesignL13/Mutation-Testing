@@ -12,6 +12,7 @@ For every record and every (operator, intensity) in the battery, this makes one 
   same dose at several intensities. Only the first mutant at each dose is kept, so a higher
   intensity always means a bigger change. The rest are skipped with reason ``repeated_dose``.
 * ``write_generation`` also writes ``run.json``, so a run describes how it was made.
+  ``read_generation`` reads all of it back, so a stopped run can be resumed from its files.
 """
 
 import hashlib
@@ -19,7 +20,7 @@ import json
 import logging
 import platform
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from importlib import metadata
 from pathlib import Path
@@ -28,9 +29,16 @@ from typing import Any
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
 from mtlj.operators.base import MutationOperator, OperatorFamily
-from mtlj.operators.registry import get_operator
+from mtlj.operators.registry import get_operator, get_operator_class
 
 logger = logging.getLogger(__name__)
+
+# The files write_generation leaves in a run's directory.
+ORIGINALS_FILE = "originals.jsonl"
+MUTANTS_FILE = "mutants.jsonl"
+SKIPPED_FILE = "skipped.jsonl"
+MANIFEST_FILE = "run.json"
+GENERATION_FILES = (ORIGINALS_FILE, MUTANTS_FILE, SKIPPED_FILE, MANIFEST_FILE)
 
 # Why a mutant was skipped.
 NO_CHANGE = "no_change"
@@ -259,10 +267,15 @@ def run_manifest(result: GenerationResult) -> dict[str, Any]:
     """What it takes to re-run this generation: seed, battery, versions, and the summary.
 
     Nothing here changes from run to run (no timestamps), so the same run writes the same file.
+    The file's keys are sorted, so ``operators`` keeps the battery's order, and ``families``
+    each operator's family, even one that made no mutants, for ``read_generation`` to read the
+    run back exactly as it was made.
     """
     return {
         "base_seed": result.base_seed,
         "battery": result.battery,
+        "operators": list(result.battery),
+        "families": {name: family.value for name, family in result.families.items()},
         "drop_repeated_doses": result.drop_repeated_doses,
         "summary": result.summary(),
         "versions": {
@@ -283,11 +296,92 @@ def write_generation(result: GenerationResult, directory: Path) -> None:
     * ``run.json``: the base seed, battery, summary and library versions (see ``run_manifest``).
     """
     directory.mkdir(parents=True, exist_ok=True)
-    _write_lines(directory / "originals.jsonl", (r.model_dump_json() for r in result.originals))
-    _write_lines(directory / "mutants.jsonl", (m.model_dump_json() for m in result.mutants))
+    _write_lines(directory / ORIGINALS_FILE, (r.model_dump_json() for r in result.originals))
+    _write_lines(directory / MUTANTS_FILE, (m.model_dump_json() for m in result.mutants))
     _write_lines(
-        directory / "skipped.jsonl",
+        directory / SKIPPED_FILE,
         (json.dumps(asdict(s), sort_keys=True) for s in result.skipped),
     )
     manifest = json.dumps(run_manifest(result), indent=2, sort_keys=True)
-    (directory / "run.json").write_text(manifest + "\n", encoding="utf-8", newline="\n")
+    (directory / MANIFEST_FILE).write_text(manifest + "\n", encoding="utf-8", newline="\n")
+
+
+def _read_lines(path: Path) -> Iterator[tuple[int, str]]:
+    with path.open(encoding="utf-8", newline="\n") as lines:
+        for number, line in enumerate(lines, start=1):
+            if line.strip():
+                yield number, line
+
+
+def _registry_family(name: str) -> OperatorFamily | None:
+    try:
+        return get_operator_class(name).metadata.family
+    except (LookupError, AttributeError):
+        return None
+
+
+def read_generation(
+    directory: Path, battery_order: Sequence[str] | None = None
+) -> GenerationResult:
+    """Read back the run ``write_generation`` wrote to ``directory``, exactly as it was.
+
+    Every mutant is validated, so one edited since (its text no longer matching its hash) is
+    refused. ``battery_order`` gives the battery's operator order for a ``run.json`` written
+    before it kept one (its battery's keys are sorted); otherwise the file's own order is used.
+    An operator family missing from such an older file is taken from the operator registry.
+
+    Raises:
+        ValueError: if a file is missing, isn't valid, or doesn't agree with the others; the
+            message names the file and line.
+    """
+    for name in GENERATION_FILES:
+        if not (directory / name).is_file():
+            raise ValueError(f"{directory / name} is missing")
+    path = directory / MANIFEST_FILE
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        battery_in_file: dict[str, list[float]] = {
+            str(name): [float(x) for x in intensities]
+            for name, intensities in manifest["battery"].items()
+        }
+        order = manifest.get("operators", battery_order or list(battery_in_file))
+        if sorted(order) != sorted(battery_in_file):
+            raise ValueError(f"operator order {order} doesn't match the battery")
+        battery = {name: battery_in_file[name] for name in order}
+        base_seed = int(manifest["base_seed"])
+        drop_repeated_doses = bool(manifest["drop_repeated_doses"])
+        families = {
+            name: OperatorFamily(value) for name, value in manifest.get("families", {}).items()
+        }
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"{path} isn't a valid run manifest: {exc}") from exc
+
+    current = directory / ORIGINALS_FILE
+    try:
+        originals = [DatasetRecord.model_validate_json(line) for _, line in _read_lines(current)]
+        current = directory / MUTANTS_FILE
+        mutants = [Mutant.model_validate_json(line) for _, line in _read_lines(current)]
+        current = directory / SKIPPED_FILE
+        skipped = [SkippedMutant(**json.loads(line)) for _, line in _read_lines(current)]
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"{current} can't be read back: {exc}") from exc
+
+    for name in battery:
+        family = families.get(name) or _registry_family(name)
+        if family is not None:
+            families[name] = family
+    for mutant in mutants:
+        if mutant.operator_name not in battery:
+            raise ValueError(
+                f"{directory / MUTANTS_FILE}: mutant {mutant.mutant_id!r} is from operator "
+                f"{mutant.operator_name!r}, which isn't in the battery"
+            )
+    return GenerationResult(
+        originals,
+        mutants,
+        skipped,
+        base_seed=base_seed,
+        battery=battery,
+        drop_repeated_doses=drop_repeated_doses,
+        families=families,
+    )
