@@ -25,12 +25,13 @@ from mtlj.operators.registry import (
 )
 
 
-def _metadata(name: str) -> OperatorMetadata:
+def _metadata(name: str, version: object = 1) -> OperatorMetadata:
     return OperatorMetadata(
         name=name,
         family=OperatorFamily.PRESERVING,
         expected_direction=ExpectedDirection.UNCHANGED,
         description="test operator",
+        version=version,
     )
 
 
@@ -66,6 +67,7 @@ class {cls}(MutationOperator):
         family=OperatorFamily.DEGRADING,
         expected_direction=ExpectedDirection.DECREASE,
         description="fake",
+        version=1,
     )
 
     def apply(self, text, context, intensity=1.0, seed=None):
@@ -123,6 +125,18 @@ def test_describe_matches_each_operator() -> None:
     assert by_name["entity_swap"] == EntitySwapOperator.describe()
     assert by_name["verbosity_padding"] == VerbosityPaddingOperator.describe()
     assert [d["name"] for d in described] == OperatorRegistry().names()
+
+
+def test_every_built_in_operator_declares_a_version() -> None:
+    for described in OperatorRegistry().describe():
+        assert type(described["version"]) is int, described["name"]
+        assert described["version"] >= 1, described["name"]
+
+
+@pytest.mark.parametrize("wrong", [0, -1, 1.5, "1", True, None])
+def test_operator_version_must_be_a_whole_number_from_one(wrong) -> None:
+    with pytest.raises(ValueError, match="version must be a whole number from 1"):
+        _metadata("bad", version=wrong)
 
 
 def test_module_helpers_use_built_in_operators() -> None:
