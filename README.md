@@ -84,7 +84,9 @@ nobody can answer, such as under `nohup` or in CI, add `--yes`: without it the q
 answer, and the command prints "Aborted." and exits 1 before any scoring.
 
 `--dataset` also takes a RAGTruth `.jsonl` file. See `uv run mtlj audit run --help` for the rest.
-The command exits 1 if the run stops early.
+The command exits 1 if the run stops early. A stopped run doesn't have to start over:
+`uv run mtlj audit resume runs/example` scores only what it's missing, and ends with the results
+an uninterrupted run would have given (see [Resuming a run](docs/results.md#resuming-a-run)).
 
 ### From a config file
 
