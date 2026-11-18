@@ -560,7 +560,9 @@ def test_options_override_the_judges_limits_and_zero_means_none(
     assert (settings["concurrency"], settings["rate_limit"]) == (3, 0.0)
 
 
-def test_a_bad_rate_limit_in_the_audit_file_names_the_file(stub_judge, tmp_path: Path) -> None:
+def test_a_bad_rate_limit_in_the_audit_file_names_the_file(
+    stub_judge, wide, tmp_path: Path
+) -> None:
     config = tmp_path / "audit.toml"
     config.write_text(f'dataset = "{RAGTRUTH_SAMPLE.as_posix()}"\nrate_limit = -5\n', "utf-8")
 
