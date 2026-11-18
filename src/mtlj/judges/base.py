@@ -73,6 +73,20 @@ object), or an attribute can't be written as JSON:
 
 The cache refuses a judge whose settings aren't JSON, such as a CallableJudge, whose function
 can't be told apart from another one with the same name.
+
+### Limits
+
+A judge can say how hard the runner may drive it, as class attributes:
+
+    class MyHostedJudge(Judge):
+        default_rate_limit = 120.0  # judge calls a minute, to stay under the API's limit
+        default_max_concurrency = 1  # e.g. a local model with room for one request at a time
+
+A run uses them when it isn't given its own (``--rate-limit``, ``--concurrency``). Without
+them, a run has no rate limit and makes 4 calls at a time. The rate limit counts calls to the
+judge, so a judge whose call makes several backend requests sets it at a share of the API's
+limit. They don't change scores, so cache_settings() leaves them out, even when an instance
+sets its own.
 """
 
 from __future__ import annotations
@@ -168,6 +182,10 @@ class Judge(ABC):
     version: str
     score_range: ScoreRange
     higher_is_better: bool = True
+    # How hard a run may drive this judge when it isn't told (see "Limits" above). None leaves
+    # it to the runner: no rate limit, and its default concurrency.
+    default_rate_limit: float | None = None  # judge calls a minute
+    default_max_concurrency: int | None = None  # calls in flight at once
 
     @abstractmethod
     def score_raw(self, input: str, output: str, context: Context) -> float | RawScore:
@@ -182,11 +200,13 @@ class Judge(ABC):
         this module's docstring); the values must be JSON for the judge to be cached.
         """
         identity = {"name", "model", "version", "score_range", "higher_is_better"}
+        # A judge's limits don't change its scores, even when an instance sets its own.
+        limits = {"default_rate_limit", "default_max_concurrency"}
         attributes = getattr(self, "__dict__", {})
         return {
             key: value
             for key, value in attributes.items()
-            if not key.startswith("_") and key not in identity
+            if not key.startswith("_") and key not in identity and key not in limits
         }
 
     @final

@@ -68,7 +68,10 @@ def recorder(monkeypatch, tmp_path):
     out = tmp_path / "judge.jsonl"
 
     def run(*args: str) -> int:
-        return module.main(["--out", str(out), "--inputs", str(tmp_path / "inputs"), *args])
+        # No rate limit: the fake judge costs nothing, and DeepEval's 120 a minute would make
+        # each test take seconds.
+        inputs = str(tmp_path / "inputs")
+        return module.main(["--out", str(out), "--inputs", inputs, "--rate-limit", "0", *args])
 
     return run, out, calls
 
@@ -160,3 +163,16 @@ def _score():
     from mtlj.engine.cache import CachedScore
 
     return CachedScore(score=0.5, raw_score=0.5, latency_ms=1.0)
+
+
+@pytest.mark.parametrize("value", ["-1", "inf", "nan", "fast"])
+def test_a_bad_rate_limit_is_a_usage_error_before_anything_is_spent(recorder, capsys, value):
+    run, out, calls = recorder
+
+    with pytest.raises(SystemExit) as exc:
+        run("--yes", "--rate-limit", value)
+
+    assert exc.value.code == 2
+    assert "--rate-limit" in capsys.readouterr().err
+    assert calls == []
+    assert not out.exists()

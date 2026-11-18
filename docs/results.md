@@ -52,6 +52,7 @@ breaks.
 | `status` | `complete`, `aborted` or `insufficient_data` |
 | `reason` | Why the status isn't `complete`, otherwise null |
 | `scorings` | `total`, `ok`, `errors` and `errors_by_type` |
+| `limits` | `max_concurrency`, the judge calls in flight at once, and `rate_limit`, the most started a minute (null for none): what the run used, the judge's defaults filled in. Null in files written before runs recorded it. How long calls waited for the rate limit is timing, so it isn't kept here; `mtlj audit run` prints it |
 
 `noise`, `correction`, `variance` and `operators` are only filled in when `status` is
 `complete`. Otherwise the first three are null and `operators` is empty:

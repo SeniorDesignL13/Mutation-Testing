@@ -14,7 +14,14 @@ from mtlj.engine.audit_config import (
 )
 from mtlj.engine.battery_config import BatteryConfigError, load_battery
 from mtlj.engine.generator import default_battery
-from mtlj.engine.runner import DEFAULT_MAX_CONCURRENCY, DEFAULT_SAMPLES
+from mtlj.engine.runner import (
+    DEFAULT_MAX_CONCURRENCY,
+    DEFAULT_SAMPLES,
+    NO_RATE_LIMIT,
+    RunLimits,
+    resolve_limits,
+)
+from mtlj.judges.callable import CallableJudge
 
 CONFIGS = Path(__file__).parents[2] / "configs"
 EXAMPLE = CONFIGS / "audit.example.toml"
@@ -58,7 +65,9 @@ def test_only_dataset_is_required_and_the_rest_default_to_the_cli_defaults(
         samples=DEFAULT_SAMPLES,
         seed=0,
         limit=None,
-        concurrency=DEFAULT_MAX_CONCURRENCY,
+        # None leaves both to the judge (see resolve_limits).
+        concurrency=None,
+        rate_limit=None,
         output=None,
     )
     assert DEFAULT_SAMPLES == 5
@@ -98,17 +107,25 @@ def test_a_filter_of_default_operators_is_not_a_path(tmp_path: Path) -> None:
     assert names == ["entity_swap", "verbosity_padding"]
 
 
-def save(config: AuditConfig, directory: Path, model: str = "judge-default") -> Path:
+def save(
+    config: AuditConfig,
+    directory: Path,
+    model: str = "judge-default",
+    limits: RunLimits | None = None,
+) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     battery = select_battery(config.battery)
-    for name, text in config.saved_files(battery, config.model or model).items():
+    if limits is None:
+        # What a judge with no defaults of its own resolves the config's limits to.
+        limits = RunLimits(config.concurrency or DEFAULT_MAX_CONCURRENCY, config.rate_limit or None)
+    for name, text in config.saved_files(battery, config.model or model, limits).items():
         (directory / name).write_text(text, encoding="utf-8")
     return directory / "config.toml"
 
 
 def test_saved_settings_load_back_the_same_from_anywhere(tmp_path: Path) -> None:
     config = load_audit_config(EXAMPLE).model_copy(
-        update={"model": 'odd "name" é', "limit": 3, "output": "runs/x"}
+        update={"model": 'odd "name" é', "limit": 3, "output": "runs/x", "rate_limit": 30.5}
     )
 
     again = load_audit_config(save(config, tmp_path / "run"))
@@ -303,7 +320,7 @@ def test_the_saved_battery_is_what_was_loaded_not_the_file_as_it_is_later(
 
     # The file changes after the run loaded it, but before it saved its settings.
     battery.write_text('[[operators]]\nname = "entity_swap"\nintensities = [0.2]\n', "utf-8")
-    saved = config.saved_files(loaded, "m")["battery.toml"]
+    saved = config.saved_files(loaded, "m", RunLimits(4, None))["battery.toml"]
 
     assert tomllib.loads(saved) == {"operators": [{"name": "entity_swap", "intensities": [1.0]}]}
 
@@ -323,3 +340,76 @@ def test_a_file_that_isnt_utf8_is_invalid_toml(tmp_path: Path) -> None:
 
     with pytest.raises(AuditConfigError, match=r"audit\.toml: invalid TOML: the file isn't UTF-8"):
         load_audit_config(path)
+
+
+# --------------------------------------------------
+# Limits: concurrency and rate limit (MTLJ-96)
+# --------------------------------------------------
+
+
+class _LimitedJudge(CallableJudge):
+    default_max_concurrency = 2
+    default_rate_limit = 90.0
+
+
+def _limited_judge() -> CallableJudge:
+    return _LimitedJudge(lambda i, o, c: 0.5, name="limited", model="m", version="1")
+
+
+@pytest.mark.parametrize("rate_limit", [0, 0.5, 120, 1e6])
+def test_a_rate_limit_of_zero_or_more_is_accepted(rate_limit) -> None:
+    config = build_audit_config({"dataset": "gold", "rate_limit": rate_limit})
+
+    assert config.rate_limit == rate_limit
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("rate_limit = -1", r"rate_limit: .*greater than or equal to 0"),
+        ("rate_limit = inf", r"rate_limit: .*finite number"),
+        ("rate_limit = nan", r"rate_limit: .*finite number"),
+        ("rate_limit = true", r"rate_limit: .*valid number"),
+        ('rate_limit = "120"', r"rate_limit: .*valid number"),
+    ],
+)
+def test_a_bad_rate_limit_in_a_file_is_reported(tmp_path: Path, text: str, message: str) -> None:
+    with pytest.raises(AuditConfigError, match=message):
+        load_audit_config(write(tmp_path, f'dataset = "gold"\n{text}\n'))
+
+
+def test_a_bad_rate_limit_option_is_named_as_the_option_people_type() -> None:
+    with pytest.raises(AuditConfigError, match=r"^--rate-limit: input should be greater"):
+        build_audit_config({"dataset": "gold"}, {"rate_limit": -1})
+
+
+def test_a_missing_key_with_an_underscore_names_its_option(tmp_path: Path) -> None:
+    # Only dataset is required, so check the helper the messages use.
+    from mtlj.engine.audit_config import option_name
+
+    assert option_name("rate_limit") == "--rate-limit"
+    assert option_name("dataset") == "--dataset"
+
+
+def test_the_saved_config_names_the_judges_default_limits(tmp_path: Path) -> None:
+    config = build_audit_config({"dataset": "gold"})
+    judge = _limited_judge()
+    limits = resolve_limits(judge, config.concurrency, config.rate_limit)
+
+    saved = tomllib.loads(save(config, tmp_path / "run", limits=limits).read_text("utf-8"))
+
+    # Named, so a rerun isn't changed by the judge's defaults changing.
+    assert (saved["concurrency"], saved["rate_limit"]) == (2, 90.0)
+
+
+def test_no_rate_limit_is_saved_as_zero_so_a_rerun_has_none_too(tmp_path: Path) -> None:
+    config = build_audit_config({"dataset": "gold", "rate_limit": NO_RATE_LIMIT})
+    judge = _limited_judge()
+    limits = resolve_limits(judge, config.concurrency, config.rate_limit)
+
+    again = load_audit_config(save(config, tmp_path / "run", limits=limits))
+
+    assert limits.rate_limit is None
+    assert again.rate_limit == 0
+    # The judge's default of 90 a minute doesn't come back on the rerun.
+    assert resolve_limits(judge, again.concurrency, again.rate_limit) == limits

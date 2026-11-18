@@ -35,7 +35,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, REPEATED_DOSE, GenerationResult
-from mtlj.engine.runner import OK, ORIGINAL, Evaluation
+from mtlj.engine.runner import OK, ORIGINAL, Evaluation, RunLimits, describe_limits
 from mtlj.judges.base import Judge
 from mtlj.operators.base import OperatorFamily
 from mtlj.stats.bootstrap import BootstrapInterval
@@ -100,6 +100,14 @@ class Scorings(_Model):
     errors_by_type: dict[str, int]
 
 
+class Limits(_Model):
+    """How hard the run drove its judge. How long calls waited isn't kept: it's timing, and
+    the same run must give the same file."""
+
+    max_concurrency: int
+    rate_limit: float | None  # judge calls a minute; None for no limit
+
+
 class RunInfo(_Model):
     """How a run was made and how it ended. ``reason`` says why when it isn't complete."""
 
@@ -115,6 +123,8 @@ class RunInfo(_Model):
     status: Status
     reason: str | None
     scorings: Scorings
+    # None in results written before runs recorded their limits.
+    limits: Limits | None = None
 
 
 class Noise(_Model):
@@ -502,6 +512,7 @@ def build_results(
     samples: int,
     alpha: float = DEFAULT_ALPHA,
     aborted: str | None = None,
+    limits: Limits | None = None,
 ) -> AuditResults:
     """The results of one judge's run.
 
@@ -513,6 +524,7 @@ def build_results(
         samples: how many times each text was meant to be scored.
         alpha: the false-detection rate. docs/metrics.md fixes it at 0.05.
         aborted: why the run stopped early, if it did.
+        limits: the concurrency and rate limit the run used.
 
     Raises:
         ValueError: if an evaluation came from a different judge. Each judge config's run has
@@ -564,6 +576,7 @@ def build_results(
             errors=errors.total(),
             errors_by_type={str(kind): count for kind, count in sorted(errors.items())},
         ),
+        limits=limits,
     )
     if status != COMPLETE:
         return AuditResults(run=run, noise=None, operators=[], correction=None, variance=None)
@@ -672,6 +685,9 @@ def format_summary(results: AuditResults) -> str:
         f"Samples: {run.samples}, alpha: {run.alpha}",
         f"Scorings: {scorings.ok} ok, {scorings.errors} failed",
     ]
+    if run.limits is not None:
+        limits = RunLimits(run.limits.max_concurrency, run.limits.rate_limit)
+        lines.append(f"Limits: {describe_limits(limits)}")
     if results.noise is not None:
         lines.append(f"Noise floor: {results.noise.sigma:.3f}")
     if results.correction is not None:

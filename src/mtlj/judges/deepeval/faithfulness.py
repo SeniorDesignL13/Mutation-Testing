@@ -96,6 +96,9 @@ class DeepEvalFaithfulnessJudge(Judge):
 
     score_range = (0.0, 1.0)
     higher_is_better = True
+    # Each call makes about 3 OpenAI requests (claims, truths, verdicts), so this is about 360
+    # requests a minute: under the 500 a minute of OpenAI's first usage tier for gpt-4o-mini.
+    default_rate_limit = 120.0
 
     def __init__(
         self,

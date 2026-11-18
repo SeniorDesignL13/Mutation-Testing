@@ -1,3 +1,4 @@
+import re
 import subprocess
 import sys
 import threading
@@ -140,6 +141,8 @@ def test_audit_run_warns_but_succeeds_when_only_some_scorings_fail(
         (["--dataset", "no-such-file.jsonl"], "--dataset"),
         (["--limit", "0"], "--limit"),
         (["--concurrency", "0"], "--concurrency"),
+        (["--rate-limit", "-1"], "--rate-limit"),
+        (["--rate-limit", "nan"], "--rate-limit"),
     ],
 )
 def test_bad_arguments_exit_2_before_anything_runs(
@@ -509,3 +512,59 @@ def test_a_config_file_that_isnt_utf8_exits_2(wide, tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "the file isn't UTF-8" in click.unstyle(result.output)
+
+
+# --------------------------------------------------
+# Limits (MTLJ-96)
+# --------------------------------------------------
+
+
+class LimitedJudge(CallableJudge):
+    default_max_concurrency = 2
+    default_rate_limit = 60_000.0  # 1 ms apart: limited, but the test stays fast
+
+
+@pytest.fixture
+def limited_judge(monkeypatch: pytest.MonkeyPatch) -> None:
+    def make(model):
+        return LimitedJudge(make_judge().score_fn, name="limited", model="m", version="1")
+
+    monkeypatch.setitem(JUDGES, "limited", make)
+
+
+def test_the_judges_limits_are_shown_used_and_saved(limited_judge, tmp_path: Path) -> None:
+    result = runner.invoke(app, audit_args(tmp_path, "--judge", "limited", "--samples", "2"))
+
+    assert result.exit_code == 0, result.output
+    assert "2 at a time, at most 60000 calls a minute." in result.stdout
+    # The summary: the limits, from results.json, and how long calls waited for the limit.
+    assert "Limits: 2 at a time, at most 60000 calls a minute" in result.stdout
+    assert re.search(r"Rate limit: \d+ calls waited [\d.]+ s for their turn in all", result.stdout)
+    settings = tomllib.loads((tmp_path / "run" / "config.toml").read_text("utf-8"))
+    # Named, so a rerun isn't changed by the judge's defaults changing.
+    assert (settings["concurrency"], settings["rate_limit"]) == (2, 60_000.0)
+
+
+def test_options_override_the_judges_limits_and_zero_means_none(
+    limited_judge, tmp_path: Path
+) -> None:
+    result = runner.invoke(
+        app,
+        audit_args(tmp_path, "--judge", "limited", "--concurrency", "3", "--rate-limit", "0"),
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "3 at a time, no rate limit." in result.stdout
+    assert "Rate limit:" not in result.stdout  # nothing waited, so nothing to report
+    settings = tomllib.loads((tmp_path / "run" / "config.toml").read_text("utf-8"))
+    assert (settings["concurrency"], settings["rate_limit"]) == (3, 0.0)
+
+
+def test_a_bad_rate_limit_in_the_audit_file_names_the_file(stub_judge, tmp_path: Path) -> None:
+    config = tmp_path / "audit.toml"
+    config.write_text(f'dataset = "{RAGTRUTH_SAMPLE.as_posix()}"\nrate_limit = -5\n', "utf-8")
+
+    result = runner.invoke(app, ["audit", "run", "--config", str(config), "--judge", "stub"])
+
+    assert result.exit_code == 2
+    assert "audit.toml: rate_limit" in click.unstyle(result.output)
