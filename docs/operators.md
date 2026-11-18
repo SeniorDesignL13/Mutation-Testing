@@ -87,10 +87,11 @@ are changed, compared by value, so `1,200` in the answer matches `1200` in the c
 - **Format kept.** Same number of decimal places, thousands separators only if the original
   had them, and `%`, `percent`, currency symbols and units untouched. A change that rounds
   away (10% of `3`) moves one unit of the last digit instead.
-- **Never correct.** The new value matches no number anywhere in the context. It stays above
+- **Never correct.** The new value matches no number anywhere in the context, including
+  numbers joined to other text there (a `6km` warm-up rules out 6). It stays above
   zero, a percentage of at most 100 stays at most 100, and a day stays between 1 and 28.
-- **Left alone:** numbers joined to other text (`COVID-19`, `3rd`, `10:30`, `2019-03-04`,
-  `3/4`, `5km`) and numbers written as words. A four-digit number from 1000 to 2099 is read
+- **Left alone in the answer:** numbers joined to other text (`COVID-19`, `3rd`, `10:30`,
+  `2019-03-04`, `3/4`, `5km`) and numbers written as words. A four-digit number from 1000 to 2099 is read
   as a year.
 
 Each change is recorded in `details["substitutions"]`. It isn't in `default_battery()` yet:

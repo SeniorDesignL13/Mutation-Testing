@@ -10,6 +10,7 @@ from mtlj.data.records import DatasetRecord
 from mtlj.operators.base import ExpectedDirection, OperatorFamily
 from mtlj.operators.degrading.numeric_perturbation import (
     NumericPerturbationOperator,
+    context_values,
     find_numbers,
 )
 from mtlj.operators.registry import get_operator
@@ -224,6 +225,34 @@ def test_a_value_written_differently_in_the_context_is_avoided() -> None:
     for seed in SEEDS:
         replacement = _sub(_apply(answer, context, seed=seed))["replacement"]
         assert replacement not in {"1500", "500"}
+
+
+@pytest.mark.parametrize(
+    ("answer", "context", "ruled_out"),
+    [
+        # The reviewer's case: 4 * 1.5 = 6, which the warm-up states.
+        ("The race was 4 km long.", "The race was 4 km long, after a 6km warm-up.", {"6"}),
+        ("It was founded in 2017.", "It was founded in 2017. It opened 2019-03-04.", {"2019"}),
+        ("Doors open at 20 past.", "Doors open at 20 past; the show starts at 10:30.", {"30"}),
+    ],
+)
+def test_numbers_joined_to_text_in_the_context_are_avoided(answer, context, ruled_out) -> None:
+    """The answer leaves joined numbers alone, but in the context they still state values."""
+    for intensity in (0.2, 0.6, 1.0):
+        for seed in SEEDS:
+            replacement = _sub(_apply(answer, [context], intensity, seed))["replacement"]
+            assert replacement not in ruled_out
+
+
+def test_context_values_include_numbers_joined_to_text() -> None:
+    values = context_values(["A 6km run on 2019-03-04 at 10:30, COVID-19, 1,200 people."])
+    assert values == {Decimal(v) for v in (6, 2019, 3, 4, 10, 30, 19, 1200)}
+
+
+def test_a_number_the_context_states_joined_to_text_can_be_changed() -> None:
+    """6 km in the answer is supported by "6km" in the context."""
+    result = _apply("The run was 6 km.", ["The run was 6km."])
+    assert _sub(result)["original"] == "6"
 
 
 def test_value_stays_above_zero() -> None:

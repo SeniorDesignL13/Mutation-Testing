@@ -8,13 +8,15 @@ The answer is mutated so that one number in it disagrees with its context. The r
   repeated value is never changed everywhere.
 * Formatting is kept: the same number of decimal places, thousands separators if the original
   had them, and everything around the digits (``%``, ``$``, units) untouched.
-* The new value never matches any number in the context, so no passage can support it.
+* The new value never matches any number in the context, so no passage can support it. That
+  includes the context's numbers joined to other text: a ``6km`` warm-up rules out 6.
 * The new value is above zero, and a percentage of at most 100 stays at most 100.
 * A four-digit whole number from 1000 to 2099 without a thousands separator is read as a year.
 
 Numbers are found with a regular expression, and only those standing on their own: digits
 joined to letters or to other numbers (``COVID-19``, ``3rd``, ``10:30``, ``3/4``, ``v2.0.1``,
-``2019-03-04``) are left alone. Numbers written as words ("three") aren't changed.
+``2019-03-04``) are left alone in the answer, though their values still count as stated by
+the context (see ``context_values``). Numbers written as words ("three") aren't changed.
 
 Intensity sets how big the change is. Years and days of the month (``March 5``, ``5 March``)
 move by ``ceil(intensity * 10)``, other numbers by ``intensity * 50%`` of their value, rounded
@@ -84,6 +86,20 @@ def _kind(text: str, start: int, end: int, raw: str, value: Decimal) -> str:
     ):
         return "day"
     return "integer"
+
+
+def context_values(context: list[str]) -> set[Decimal]:
+    """The value of every number the context states, joined to other text or not.
+
+    The answer only has standalone numbers changed, but the context's joined ones still state
+    values: a ``6km`` warm-up rules out 6, ``2019-03-04`` rules out 2019, 3 and 4, and ``10:30``
+    rules out 10 and 30. Leaving them out could turn a number into one the context supports.
+    """
+    return {
+        Decimal(match.group().replace(",", ""))
+        for passage in context
+        for match in NUMBER_RE.finditer(passage)
+    }
 
 
 def find_numbers(text: str) -> list[_Number]:
@@ -157,8 +173,8 @@ class NumericPerturbationOperator(MutationOperator):
         return [target + sign * extra * unit for extra in range(MAX_EXTRA_STEPS)]
 
     @staticmethod
-    def _allowed(number: _Number, value: Decimal, context_values: set[Decimal]) -> bool:
-        if value == number.value or value in context_values:
+    def _allowed(number: _Number, value: Decimal, stated: set[Decimal]) -> bool:
+        if value == number.value or value in stated:
             return False
         if value <= 0:  # the digits never carry a sign, so a count stays a count
             return False
@@ -169,13 +185,13 @@ class NumericPerturbationOperator(MutationOperator):
         return not (number.kind == "percent" and number.value <= 100 < value)
 
     def _replacement(
-        self, number: _Number, intensity: float, context_values: set[Decimal], rng: random.Random
+        self, number: _Number, intensity: float, stated: set[Decimal], rng: random.Random
     ) -> Decimal | None:
         signs = [1, -1]
         rng.shuffle(signs)
         for sign in signs:
             for value in self._candidates(number, intensity, sign):
-                if self._allowed(number, value, context_values):
+                if self._allowed(number, value, stated):
                     return value
         return None
 
@@ -189,13 +205,13 @@ class NumericPerturbationOperator(MutationOperator):
         """Change one context-supported number in ``text`` by an amount set by ``intensity``."""
         rng = random.Random(seed)
         intensity = min(max(intensity, 0.0), 1.0)
-        context_values = {n.value for passage in context for n in find_numbers(passage)}
+        stated = context_values(context)
         skipped = {"no_context_support": 0, "no_valid_replacement": 0}
 
         numbers = find_numbers(text)
         candidates = []
         for number in numbers:
-            if number.value in context_values:
+            if number.value in stated:
                 candidates.append(number)
             else:
                 skipped["no_context_support"] += 1
@@ -206,7 +222,7 @@ class NumericPerturbationOperator(MutationOperator):
         chosen = None
         if intensity > 0:
             for number in candidates:
-                new_value = self._replacement(number, intensity, context_values, rng)
+                new_value = self._replacement(number, intensity, stated, rng)
                 if new_value is None:
                     skipped["no_valid_replacement"] += 1
                     continue
