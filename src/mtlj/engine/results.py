@@ -3,7 +3,9 @@
 ``build_results`` turns a run's mutants and evaluations into ``AuditResults``, and
 ``write_results`` stores them as ``results.json`` in the run's directory, next to the raw
 ``evaluations.jsonl``. docs/results.md documents the format. It holds no timestamps, so the
-same run always gives a byte-identical file.
+same run always gives a byte-identical file. Evaluations are put in one order before anything is
+added up, so neither the order calls finished in nor a run being stopped and resumed (see
+``mtlj.engine.audit.resume_audit``) can change a figure.
 
 Each operator gets the headline metric of its family (docs/metrics.md): detection rate for
 degrading operators, spurious sensitivity for preserving ones. Each is reported pooled across
@@ -35,7 +37,14 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from mtlj.engine.generator import NO_CHANGE, OPERATOR_ERROR, REPEATED_DOSE, GenerationResult
-from mtlj.engine.runner import OK, ORIGINAL, Evaluation, RunLimits, describe_limits
+from mtlj.engine.runner import (
+    OK,
+    ORIGINAL,
+    Evaluation,
+    RunLimits,
+    describe_limits,
+    scoring_key,
+)
 from mtlj.judges.base import Judge
 from mtlj.operators.base import OperatorFamily
 from mtlj.stats.bootstrap import BootstrapInterval
@@ -530,7 +539,10 @@ def build_results(
         ValueError: if an evaluation came from a different judge. Each judge config's run has
             its own results, since a rate belongs to a judge and its config.
     """
-    evaluations = list(evaluations)
+    # Concurrent calls finish in any order, and a resumed run stores its rows after the first
+    # run's. The stats don't depend on the order today; one order here keeps any later
+    # floating-point sum from making a resumed run's file differ from an uninterrupted one's.
+    evaluations = sorted(evaluations, key=scoring_key)
     info = JudgeInfo(name=judge.name, model=judge.model, version=judge.version)
     for evaluation in evaluations:
         found = (evaluation.judge_name, evaluation.model, evaluation.version)

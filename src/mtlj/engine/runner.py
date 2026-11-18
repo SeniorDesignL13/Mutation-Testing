@@ -20,6 +20,9 @@ mutant with its own original and measure the judge's noise (see docs/metrics.md)
   without those to 4 at a time with no rate limit. ``resolve_limits`` works out what a run uses.
 * Each result goes to a ``ResultSink`` as soon as its call finishes, not at the end, so a run
   that dies part way keeps everything scored so far. ``JsonlSink`` writes one line per scoring.
+* A run can be resumed: given the ``ScoringKey`` of every scoring already stored (``done``), it
+  scores only the rest, in the order a whole run would have. ``JsonlSink.append`` adds them to
+  the results file the run left. ``mtlj.engine.audit.resume_audit`` works out what's stored.
 * A judge call that fails for a reason that passes (a timeout, a dropped connection, a rate
   limit, a server error; see ``mtlj.engine.retry``) is tried again after an exponential
   backoff, up to ``retry.max_attempts`` calls in all. The wait is an asyncio sleep, so the other
@@ -57,7 +60,7 @@ mutant with its own original and measure the judge's noise (see docs/metrics.md)
   record's passages, in order. This is the shape the adapter contract tests
   (tests/judges/test_contract.py, ``PASSAGES``).
 
-Not here yet: resuming a run (MTLJ-91) and a Postgres sink (MTLJ-26/28).
+Not here yet: a Postgres sink (MTLJ-26/28).
 """
 
 from __future__ import annotations
@@ -66,12 +69,12 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal, Protocol, Self
+from typing import Any, Literal, Protocol, Self, TextIO
 
 from pydantic import BaseModel
 
@@ -140,6 +143,10 @@ class RunAbortedError(RuntimeError):
         return (type(self), (self.args[0], self.summary))
 
 
+# Identifies one scoring in a run: (kind, target_id, sample_index). A run has one row for each.
+ScoringKey = tuple[str, str, int]
+
+
 @dataclass(frozen=True, slots=True)
 class EvalTask:
     """One scoring to do: one text, one sample."""
@@ -198,6 +205,11 @@ class Evaluation(BaseModel):
     retry_errors: tuple[str, ...] = ()
 
 
+def scoring_key(item: EvalTask | Evaluation) -> ScoringKey:
+    """Which scoring a task or its evaluation is: what a resumed run matches them on."""
+    return (item.kind, item.target_id, item.sample_index)
+
+
 @dataclass
 class RunSummary:
     """Counts for a quick look at a run."""
@@ -225,6 +237,8 @@ class RunSummary:
     rate_limited: int = 0  # calls that had to wait for their turn
     rate_limit_wait_s: float = 0.0  # their waits added up (several can wait at once)
     elapsed_s: float = 0.0
+    # Scorings a resumed run found stored already, and so didn't do (not in total).
+    already_stored: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,14 +365,41 @@ class JsonlSink:
     sink is, and must not exist yet, so a new run can't overwrite an old one's results and two
     runs can't share a file. Closing a sink nothing was written to removes the file, so a run
     rejected before any call doesn't block its retry.
+
+    ``JsonlSink.append`` opens a file a stopped run left, to resume it. That file is never
+    removed.
     """
 
     def __init__(self, path: Path) -> None:
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
         # "x" fails if the file exists. newline="\n" keeps files identical on Windows and Linux.
-        self._file = path.open("x", encoding="utf-8", newline="\n")
+        self._file: TextIO = path.open("x", encoding="utf-8", newline="\n")
         self._written = False
+        self._created = True
+
+    @classmethod
+    def append(cls, path: Path) -> Self:
+        """A sink adding to the results file at ``path``, which must exist.
+
+        Raises:
+            FileNotFoundError: if there's no file at ``path``.
+            ValueError: if its last line has no newline: a write the process died during.
+                Appending to it would join the next row onto it, so the caller must cut it off
+                first (see ``mtlj.engine.audit.resume_audit``).
+        """
+        with path.open("rb") as existing:
+            existing.seek(0, 2)
+            if existing.tell():
+                existing.seek(-1, 2)
+                if existing.read(1) != b"\n":
+                    raise ValueError(f"{path} ends part way through a line; can't append to it")
+        sink = cls.__new__(cls)
+        sink.path = path
+        sink._file = path.open("a", encoding="utf-8", newline="\n")
+        sink._written = False
+        sink._created = False
+        return sink
 
     async def write(self, evaluation: Evaluation) -> None:
         line = evaluation.model_dump_json() + "\n"
@@ -373,7 +414,7 @@ class JsonlSink:
         if self._file.closed:
             return
         self._file.close()
-        if not self._written:
+        if self._created and not self._written:
             self.path.unlink(missing_ok=True)
 
     def __enter__(self) -> Self:
@@ -410,20 +451,60 @@ class TaskPlan:
     """Every scoring a run will do, made one at a time as it's needed.
 
     Its length is the number of scorings. Iterating it more than once gives the same tasks.
+    A plan made ``without`` some scorings leaves them out, and keeps the others in order.
     """
 
     def __init__(
-        self, records: dict[str, DatasetRecord], mutants: list[Mutant], samples: int
+        self,
+        records: dict[str, DatasetRecord],
+        mutants: list[Mutant],
+        samples: int,
+        done: frozenset[ScoringKey] = frozenset(),
     ) -> None:
         self._records = records
         self._mutants = mutants
         self._samples = samples
         self._passages = {rid: tuple(r.context) for rid, r in records.items()}
+        self._done = done
 
-    def __len__(self) -> int:
+    @property
+    def total(self) -> int:
+        """Every scoring of the run, including any this plan leaves out."""
         return self._samples * (len(self._records) + len(self._mutants))
 
+    def __len__(self) -> int:
+        return self.total - len(self._done)
+
+    def without(self, done: Collection[ScoringKey]) -> TaskPlan:
+        """This plan less the scorings in ``done``, such as those a stopped run stored.
+
+        Raises:
+            ValueError: if a scoring in ``done`` isn't one of this plan's: what was stored
+                doesn't belong to this run.
+        """
+        done = frozenset(done) | self._done
+        if not done:
+            return self
+        planned = {scoring_key(task) for task in self._all()}
+        unknown = sorted(done - planned)
+        if unknown:
+            named = "; ".join(f"{k} {t} sample {i}" for k, t, i in unknown[:MAX_MISSING_NAMED])
+            extra = len(unknown) - MAX_MISSING_NAMED
+            more = f" and {extra} more" if extra > 0 else ""
+            raise ValueError(
+                f"{len(unknown)} stored scorings aren't part of this run ({named}{more})"
+            )
+        return TaskPlan(self._records, self._mutants, self._samples, done)
+
     def __iter__(self) -> Iterator[EvalTask]:
+        if not self._done:
+            yield from self._all()
+            return
+        for task in self._all():
+            if scoring_key(task) not in self._done:
+                yield task
+
+    def _all(self) -> Iterator[EvalTask]:
         # Sample by sample, so a run cut short still has some scores for every text.
         for sample_index in range(self._samples):
             for record in self._records.values():
@@ -676,6 +757,7 @@ async def run_judge(
     rate_limit: float | None = None,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
     retry: RetryPolicy = DEFAULT_RETRY,
+    done: Collection[ScoringKey] = (),
 ) -> RunSummary:
     """Score every original and mutant ``samples`` times with ``judge``, concurrently.
 
@@ -702,9 +784,12 @@ async def run_judge(
             after their retries. ``None`` never stops.
         retry: how transient failures are retried (see ``mtlj.engine.retry``). By default up
             to 6 calls per scoring; ``NO_RETRY`` records every failure at once.
+        done: the scorings already stored, to resume a stopped run: they're left out, and the
+            rest are done in the order the whole run would have done them.
 
     Raises:
-        ValueError: for bad arguments (see ``build_tasks`` and ``resolve_limits``), a judge
+        ValueError: for bad arguments (see ``build_tasks`` and ``resolve_limits``), a scoring in
+            ``done`` that isn't one of the run's, a judge
             whose name, model or version isn't a non-empty string, or, with a cache, a judge whose
             ``cache_settings()`` can't be written as JSON, before any call is made.
         FixtureMissingError: replaying from a ``FixtureStore`` that lacks any of the scorings,
@@ -719,7 +804,7 @@ async def run_judge(
     if max_consecutive_errors is not None and max_consecutive_errors < 1:
         raise ValueError(f"max_consecutive_errors must be at least 1, got {max_consecutive_errors}")
     check_identity(judge)
-    tasks = build_tasks(records, mutants, samples)
+    tasks = build_tasks(records, mutants, samples).without(done)
     summary = RunSummary(
         judge.name,
         judge.model,
@@ -727,6 +812,7 @@ async def run_judge(
         samples,
         max_concurrency=max_concurrency,
         rate_limit=limits.rate_limit,
+        already_stored=tasks.total - len(tasks),
     )
     # Works out the judge's part of every key now, so a judge that can't be cached costs nothing.
     keys = CacheKeys(judge) if cache is not None else None
@@ -737,9 +823,16 @@ async def run_judge(
     if cache is not None:
         logger.info("response cache: %s%s", cache.path, " (refreshing)" if cache.refresh else "")
 
+    if summary.already_stored:
+        logger.info(
+            "resuming: %d of %d scorings already stored, %d to go",
+            summary.already_stored,
+            tasks.total,
+            len(tasks),
+        )
     logger.info(
         "scoring %d texts x %d samples with %s (%s), %s",
-        len(tasks) // samples,
+        tasks.total // samples,
         samples,
         judge.name,
         judge.model,
@@ -872,6 +965,7 @@ def run_judge_sync(
     rate_limit: float | None = None,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
     retry: RetryPolicy = DEFAULT_RETRY,
+    done: Collection[ScoringKey] = (),
 ) -> RunSummary:
     """``run_judge`` for code that isn't async, such as the CLI."""
     return asyncio.run(
@@ -886,5 +980,6 @@ def run_judge_sync(
             rate_limit=rate_limit,
             max_consecutive_errors=max_consecutive_errors,
             retry=retry,
+            done=done,
         )
     )

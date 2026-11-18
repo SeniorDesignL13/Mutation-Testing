@@ -1146,6 +1146,13 @@ async def test_tasks_are_only_made_as_workers_free_up(monkeypatch) -> None:
         def __len__(self) -> int:
             return len(self.plan)
 
+        @property
+        def total(self) -> int:
+            return self.plan.total
+
+        def without(self, done):
+            return Counted(self.plan.without(done))
+
         def __iter__(self):
             nonlocal made
             for task in self.plan:
@@ -1167,3 +1174,151 @@ async def test_tasks_are_only_made_as_workers_free_up(monkeypatch) -> None:
 
     assert summary.ok == 200
     assert worst <= 4
+
+
+# --------------------------------------------------
+# resuming: done, TaskPlan.without and JsonlSink.append
+# --------------------------------------------------
+
+
+def _keys(evaluations) -> list[runner.ScoringKey]:
+    return [runner.scoring_key(e) for e in evaluations]
+
+
+def test_a_plan_without_some_scorings_keeps_the_rest_in_order() -> None:
+    plan = build_tasks(RECORDS, MUTANTS, samples=3)
+    every = [runner.scoring_key(t) for t in plan]
+    done = set(every[::3])
+
+    rest = plan.without(done)
+
+    assert [runner.scoring_key(t) for t in rest] == [k for k in every if k not in done]
+    assert len(rest) == len(every) - len(done)
+    assert rest.total == plan.total == len(every)
+    # The plan it came from is unchanged, and leaving out more adds to what's left out.
+    assert len(plan) == len(every)
+    assert len(rest.without({every[1]})) == len(rest) - 1
+    assert plan.without(()) is plan
+
+
+def test_a_plan_refuses_to_leave_out_a_scoring_it_does_not_have() -> None:
+    plan = build_tasks(RECORDS, MUTANTS, samples=2)
+
+    with pytest.raises(ValueError, match=r"1 stored scorings aren't part of this run"):
+        plan.without({(ORIGINAL, RECORDS[0].record_id, 2)})  # sample 2 of a 2-sample run
+    with pytest.raises(ValueError, match="aren't part of this run"):
+        plan.without({(MUTANT, RECORDS[0].record_id, 0)})  # a record's id as a mutant's
+
+
+async def test_a_resumed_run_scores_only_what_is_not_done() -> None:
+    whole = MemorySink()
+    await run_judge(judge(), RECORDS, MUTANTS, whole, samples=3, retry=NO_RETRY, max_concurrency=1)
+    done = set(_keys(whole.evaluations[:7]))
+
+    rest = MemorySink()
+    summary = await run_judge(
+        judge(), RECORDS, MUTANTS, rest, samples=3, retry=NO_RETRY, max_concurrency=1, done=done
+    )
+
+    assert _keys(rest.evaluations) == _keys(whole.evaluations)[7:]
+    assert summary.total == summary.ok == len(whole.evaluations) - 7
+    assert summary.already_stored == 7
+
+
+async def test_a_run_with_everything_done_calls_nothing() -> None:
+    calls = []
+    every = set(_keys(build_tasks(RECORDS, MUTANTS, samples=2)))
+
+    summary = await run_judge(
+        judge(lambda *a: calls.append(a) or 0.5),
+        RECORDS,
+        MUTANTS,
+        MemorySink(),
+        samples=2,
+        done=every,
+    )
+
+    assert calls == []
+    assert (summary.total, summary.already_stored) == (0, len(every))
+
+
+async def test_a_resumed_run_that_fails_again_is_aborted_on_what_was_left() -> None:
+    every = _keys(build_tasks(RECORDS, MUTANTS, samples=2))
+
+    def down(*args):
+        raise PermissionError("invalid API key")
+
+    with pytest.raises(RunAbortedError) as raised:
+        await run(down, samples=2, done=set(every[:4]), max_consecutive_errors=2, max_concurrency=1)
+
+    assert raised.value.summary.already_stored == 4
+    assert raised.value.summary.errors == 2
+
+
+async def test_done_from_another_run_is_refused_before_any_call() -> None:
+    calls = []
+    with pytest.raises(ValueError, match="aren't part of this run"):
+        await run(lambda *a: calls.append(a) or 0.5, done={(ORIGINAL, "elsewhere", 0)})
+    assert calls == []
+
+
+async def test_an_appending_sink_adds_to_the_file_and_never_removes_it(tmp_path: Path) -> None:
+    path = tmp_path / "evaluations.jsonl"
+    with JsonlSink(path) as sink:
+        await run(sink=sink, samples=1)
+    first = read_evaluations(path)
+
+    with JsonlSink.append(path):
+        pass  # nothing written: the file a run left must survive
+    assert read_evaluations(path) == first
+
+    with JsonlSink.append(path) as sink:
+        await run(sink=sink, samples=1)
+    both = read_evaluations(path)
+    assert both[: len(first)] == first
+    assert _keys(both[len(first) :]) == _keys(first)
+
+
+def test_an_appending_sink_needs_the_file(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        JsonlSink.append(tmp_path / "missing.jsonl")
+
+
+def test_an_appending_sink_refuses_a_file_ending_part_way_through_a_line(tmp_path: Path) -> None:
+    path = tmp_path / "evaluations.jsonl"
+    path.write_text('{"kind": "original"}\n{"kind": "ori', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="part way through a line"):
+        JsonlSink.append(path)
+
+
+def test_an_appending_sink_takes_an_empty_file(tmp_path: Path) -> None:
+    path = tmp_path / "evaluations.jsonl"
+    path.touch()
+    JsonlSink.append(path).close()
+    assert path.exists()
+
+
+def test_scoring_key_is_the_same_for_a_task_and_its_evaluation() -> None:
+    task = next(iter(build_tasks(RECORDS, MUTANTS, samples=1)))
+    evaluation = Evaluation(
+        kind=task.kind,
+        target_id=task.target_id,
+        record_id=task.record_id,
+        sample_index=task.sample_index,
+        judge_name="j",
+        model="m",
+        version="1",
+        status=OK,
+        latency_ms=1.0,
+        score=0.5,
+    )
+    assert (
+        runner.scoring_key(task)
+        == runner.scoring_key(evaluation)
+        == (
+            ORIGINAL,
+            RECORDS[0].record_id,
+            0,
+        )
+    )
