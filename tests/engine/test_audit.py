@@ -107,6 +107,8 @@ def test_run_leaves_every_file_and_real_results(generation, tmp_path: Path):
         "mutants.jsonl",
         "skipped.jsonl",
         "run.json",
+        "audit.json",
+        ".lock",
         EVALUATIONS_FILE,
         RESULTS_FILE,
     }

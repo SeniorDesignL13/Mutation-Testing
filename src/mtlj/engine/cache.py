@@ -62,6 +62,19 @@ def _canonical(value: Any) -> str:
     )
 
 
+def judge_core_identity(judge: Judge) -> dict[str, Any]:
+    """What identifies ``judge`` apart from its ``cache_settings()``: the part every judge has."""
+    cls = type(judge)
+    return {
+        "class": f"{cls.__module__}.{cls.__qualname__}",
+        "name": judge.name,
+        "model": judge.model,
+        "version": judge.version,
+        "score_range": list(judge.score_range),
+        "higher_is_better": bool(judge.higher_is_better),
+    }
+
+
 def judge_identity(judge: Judge) -> dict[str, Any]:
     """Everything about ``judge`` that goes into a cache key.
 
@@ -69,22 +82,13 @@ def judge_identity(judge: Judge) -> dict[str, Any]:
         ValueError: if its ``cache_settings()`` can't be written as JSON. Caching such a judge
             could give one config's scores to another.
     """
-    cls = type(judge)
     settings = judge.cache_settings()
     if not isinstance(settings, Mapping):
         raise ValueError(
             f"judge {judge.name!r} can't be cached: cache_settings() returned "
             f"{type(settings).__name__}, not a mapping"
         )
-    identity = {
-        "class": f"{cls.__module__}.{cls.__qualname__}",
-        "name": judge.name,
-        "model": judge.model,
-        "version": judge.version,
-        "score_range": list(judge.score_range),
-        "higher_is_better": bool(judge.higher_is_better),
-        "settings": dict(settings),
-    }
+    identity = {**judge_core_identity(judge), "settings": dict(settings)}
     for key, value in identity["settings"].items():
         try:
             _canonical(value)
@@ -101,6 +105,16 @@ def judge_identity(judge: Judge) -> dict[str, Any]:
             f"judge {judge.name!r} can't be cached: its cache settings can't be written as JSON"
         ) from None
     return identity
+
+
+def settings_sha256(judge: Judge) -> str:
+    """A SHA-256 of ``judge``'s ``cache_settings()``, to compare them without storing them.
+
+    Raises:
+        ValueError: if they can't be written as JSON (see ``judge_identity``).
+    """
+    settings = _canonical(judge_identity(judge)["settings"])
+    return hashlib.sha256(settings.encode("utf-8")).hexdigest()
 
 
 class CacheKeys:
