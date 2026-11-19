@@ -18,6 +18,7 @@ runs.
 | `reformat_to_markdown` | preserving | all or nothing | 1.0 |
 | `reformat_to_prose` | preserving | all or nothing | 1.0 |
 | `entity_swap` | degrading | up to `ceil(intensity × 5)` claims changed | 0.2, 0.6, 1.0 |
+| `numeric_perturbation` | degrading | one number moved by `intensity × 50%` (years and days: `ceil(intensity × 10)`) | not in the default battery yet |
 
 ## Preserving
 
@@ -69,6 +70,32 @@ different one of the same type, so the answer contradicts its source.
 These are maximums: an answer with fewer swappable entities gets fewer changes. When two
 intensities end up changing the same number of claims, only the lower one is kept (see
 `generate_mutants`). Intensity 0 changes nothing.
+
+### `numeric_perturbation`
+
+Changes one number that the context states (an integer, decimal, percentage, year or day of the
+month) so the answer disagrees with its source. Only numbers that also appear in the context
+are changed, compared by value, so `1,200` in the answer matches `1200` in the context.
+
+| Kind | Example | At intensity 0.2 | At intensity 1.0 |
+|---|---|---|---|
+| Integer, decimal, percentage | `324 metres`, `$3.40`, `12.5%` | ±10% | ±50% |
+| Year, day of the month | `1932`, `March 5` | ±2 | ±10 |
+
+- **One number per mutant.** Numbers that appear once in the answer are preferred, and only
+  one occurrence of a repeated value is changed.
+- **Format kept.** Same number of decimal places, thousands separators only if the original
+  had them, and `%`, `percent`, currency symbols and units untouched. A change that rounds
+  away (10% of `3`) moves one unit of the last digit instead.
+- **Never correct.** The new value matches no number anywhere in the context, including
+  numbers joined to other text there (a `6km` warm-up rules out 6). It stays above
+  zero, a percentage of at most 100 stays at most 100, and a day stays between 1 and 28.
+- **Left alone in the answer:** numbers joined to other text (`COVID-19`, `3rd`, `10:30`,
+  `2019-03-04`, `3/4`, `5km`) and numbers written as words. A four-digit number from 1000 to 2099 is read
+  as a year.
+
+Each change is recorded in `details["substitutions"]`. It isn't in `default_battery()` yet:
+adding it changes what an audit runs and costs, so that's a separate decision.
 
 ## Versions
 
