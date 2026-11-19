@@ -29,6 +29,7 @@ class Shout(MutationOperator):
         family=OperatorFamily.DEGRADING,
         expected_direction=ExpectedDirection.DECREASE,
         description="test operator",
+        version=1,
     )
 
     def apply(self, text, context, intensity=1.0, seed=None) -> MutationResult:

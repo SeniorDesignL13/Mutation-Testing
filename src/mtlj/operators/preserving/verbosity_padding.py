@@ -104,6 +104,7 @@ class VerbosityPaddingOperator(MutationOperator):
             "context or inserting meaning-free connective phrases. "
             "intensity * 400 filler words are added (50/100/200/400)."
         ),
+        version=1,
         parameters=[
             ParameterSpec(
                 name="words_added",
