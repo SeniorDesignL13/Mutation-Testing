@@ -25,8 +25,13 @@ samples = 5
 # Seed for generating mutants. The same seed and records give the same mutants.
 seed = 0
 
-# Judge calls in flight at once.
+# Judge calls in flight at once. Without it, the judge's own default, or 4.
 concurrency = 4
+
+# The most judge calls started a minute, retries included, spaced evenly; 0 for no limit.
+# Without it, the judge's own default: 120 for DeepEval, whose calls make about 3 OpenAI
+# requests each. Raise it if your OpenAI usage tier allows more requests a minute.
+# rate_limit = 120
 
 # Use only the first N records.
 # limit = 3

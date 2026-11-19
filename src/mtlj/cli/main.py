@@ -23,11 +23,19 @@ from mtlj.engine.audit_config import (
     AuditConfig,
     AuditConfigError,
     build_audit_config,
+    option_name,
     read_audit_file,
     select_battery,
 )
 from mtlj.engine.generator import BatteryItem, generate_mutants
-from mtlj.engine.runner import DEFAULT_MAX_CONCURRENCY, DEFAULT_SAMPLES
+from mtlj.engine.runner import (
+    DEFAULT_MAX_CONCURRENCY,
+    DEFAULT_SAMPLES,
+    NO_RATE_LIMIT,
+    RunSummary,
+    describe_limits,
+    resolve_limits,
+)
 from mtlj.judges.base import Judge
 
 app = typer.Typer(
@@ -119,7 +127,7 @@ def _settings(
     def where(key: str) -> str:
         if key in file_values and key not in given:
             return f"'{key}' in {config}"
-        return f"--{key}"
+        return option_name(key)
 
     return settings, where
 
@@ -174,7 +182,17 @@ def audit_run(
     concurrency: Annotated[
         int | None,
         typer.Option(
-            min=1, help=f"Judge calls in flight at once. Default: {DEFAULT_MAX_CONCURRENCY}."
+            min=1,
+            help="Judge calls in flight at once. Default: the judge's own, "
+            f"or {DEFAULT_MAX_CONCURRENCY}.",
+        ),
+    ] = None,
+    rate_limit: Annotated[
+        float | None,
+        typer.Option(
+            min=0,
+            help="Most judge calls started a minute, retries included; 0 for no limit. "
+            "Default: the judge's own (120 for DeepEval), or none.",
         ),
     ] = None,
     output: Annotated[
@@ -206,6 +224,7 @@ def audit_run(
             "seed": seed,
             "limit": limit,
             "concurrency": concurrency,
+            "rate_limit": rate_limit,
             "output": None if output is None else str(output),
         },
     )
@@ -221,14 +240,27 @@ def audit_run(
         raise typer.BadParameter(str(exc), param_hint=hint("output")) from exc
     records = _load_dataset(settings.dataset, settings.limit, hint("dataset"))
     items = _select_battery(settings.battery, hint("battery"))
-    # The battery as loaded and the judge's actual model, so a rerun matches this run.
-    saved = settings.saved_files(items, chosen.model)
-    samples, concurrency = settings.samples, settings.concurrency
+    try:
+        limits = resolve_limits(chosen, settings.concurrency, settings.rate_limit)
+    except (TypeError, ValueError) as exc:
+        # The options were checked already, so this is a judge with a bad default.
+        typer.echo(f"Error: the run can't start: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    # The battery as loaded, the judge's actual model and limits, so a rerun matches this run.
+    saved = settings.saved_files(items, chosen.model, limits)
+    samples = settings.samples
+    # As resolved, so the judge's defaults aren't looked up again (0 keeps "no limit").
+    concurrency, rate = limits.max_concurrency, limits.rate_limit or NO_RATE_LIMIT
 
     generation = generate_mutants(records, items, base_seed=settings.seed)
     try:
         plan = check_can_start(
-            generation, chosen, run_dir, samples=samples, max_concurrency=concurrency
+            generation,
+            chosen,
+            run_dir,
+            samples=samples,
+            max_concurrency=concurrency,
+            rate_limit=rate,
         )
     except FileExistsError as exc:
         raise typer.BadParameter(str(exc), param_hint=hint("output")) from exc
@@ -239,11 +271,13 @@ def audit_run(
     scorings = len(plan)
     typer.echo(
         f"Planned: {len(generation.originals)} originals and {len(generation.mutants)} mutants, "
-        f"{samples} scorings each: {scorings} scorings with {chosen.name} ({chosen.model})."
+        f"{samples} scorings each: {scorings} scorings with {chosen.name} ({chosen.model}), "
+        f"{describe_limits(limits)}."
     )
     if scorings > CONFIRM_ABOVE_SCORINGS and not yes:
         typer.confirm("Judges bill per call. Continue?", abort=True)
 
+    summaries: list[RunSummary] = []
     results = run_audit(
         generation,
         chosen,
@@ -251,10 +285,19 @@ def audit_run(
         dataset=settings.dataset,
         samples=samples,
         max_concurrency=concurrency,
+        rate_limit=rate,
         saved_files=saved,
+        on_summary=summaries.append,
     )
 
-    typer.echo(f"\n{format_summary(results)}\n\nSaved to {run_dir}")
+    typer.echo(f"\n{format_summary(results)}")
+    for summary in summaries:
+        if summary.rate_limit is not None:
+            typer.echo(
+                f"Rate limit: {summary.rate_limited} calls waited "
+                f"{summary.rate_limit_wait_s:.1f} s for their turn in all"
+            )
+    typer.echo(f"\nSaved to {run_dir}")
     # Before the exit: when a run doesn't complete, failed scorings are usually why.
     if results.run.scorings.errors:
         typer.echo(f"Warning: {results.run.scorings.errors} scorings failed.", err=True)

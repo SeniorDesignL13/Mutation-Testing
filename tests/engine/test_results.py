@@ -21,6 +21,7 @@ from mtlj.engine.results import (
     RESULTS_FILE,
     SCHEMA_VERSION,
     DetectionResult,
+    Limits,
     SpuriousResult,
     build_results,
     format_summary,
@@ -379,6 +380,33 @@ def test_results_survive_a_round_trip(tmp_path: Path):
     assert path == tmp_path / RESULTS_FILE
     assert read_results(path) == results
     assert read_results(tmp_path) == results
+
+
+LIMITS = Limits(max_concurrency=4, rate_limit=120.0)
+
+
+def test_limits_survive_a_round_trip_and_are_shown(tmp_path: Path):
+    results = build(*make_run(), limits=LIMITS)
+
+    write_results(results, tmp_path)
+
+    assert read_results(tmp_path).run.limits == LIMITS
+    assert "Limits: 4 at a time, at most 120 calls a minute\n" in format_summary(results)
+    unlimited = LIMITS.model_copy(update={"rate_limit": None})
+    summary = format_summary(build(*make_run(), limits=unlimited))
+    assert "Limits: 4 at a time, no rate limit\n" in summary
+
+
+def test_results_from_before_limits_were_recorded_still_read(tmp_path: Path):
+    path = write_results(build(*make_run(), limits=LIMITS), tmp_path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["run"]["limits"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    results = read_results(path)
+
+    assert results.run.limits is None
+    assert "Limits:" not in format_summary(results)
 
 
 def test_no_partial_file_is_left_behind(tmp_path: Path):

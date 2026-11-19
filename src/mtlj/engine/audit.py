@@ -24,17 +24,24 @@ from types import FrameType
 from typing import Any
 
 from mtlj.engine.generator import GenerationResult, write_generation
-from mtlj.engine.results import AuditResults, build_results, operator_families, write_results
+from mtlj.engine.results import (
+    AuditResults,
+    Limits,
+    build_results,
+    operator_families,
+    write_results,
+)
 from mtlj.engine.runner import (
-    DEFAULT_MAX_CONCURRENCY,
     DEFAULT_SAMPLES,
     Evaluation,
     JsonlSink,
     RunAbortedError,
+    RunSummary,
     TaskPlan,
     build_tasks,
     check_identity,
     read_evaluations,
+    resolve_limits,
     run_judge_sync,
 )
 from mtlj.judges.base import Judge
@@ -68,7 +75,8 @@ def check_can_start(
     run_dir: Path,
     *,
     samples: int = DEFAULT_SAMPLES,
-    max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+    max_concurrency: int | None = None,
+    rate_limit: float | None = None,
 ) -> TaskPlan:
     """Everything run_audit checks before it writes anything or calls the judge.
 
@@ -77,12 +85,12 @@ def check_can_start(
     Raises:
         FileExistsError: if ``run_dir`` isn't empty (see ``check_run_dir``).
         ValueError: if the run can't start, such as a judge with no version, mutants that
-            can't be scored or an operator with no family.
+            can't be scored, an operator with no family, or a bad limit (see
+            ``mtlj.engine.runner.resolve_limits``).
     """
     check_run_dir(run_dir)
     check_identity(judge)
-    if max_concurrency < 1:
-        raise ValueError(f"max_concurrency must be at least 1, got {max_concurrency}")
+    resolve_limits(judge, max_concurrency, rate_limit)
     plan = build_tasks(generation.originals, generation.mutants, samples)
     operator_families(generation)
     return plan
@@ -152,15 +160,20 @@ def run_audit(
     *,
     dataset: str,
     samples: int = DEFAULT_SAMPLES,
-    max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+    max_concurrency: int | None = None,
+    rate_limit: float | None = None,
     saved_files: Mapping[str, str] | None = None,
+    on_summary: Callable[[RunSummary], None] | None = None,
 ) -> AuditResults:
     """Score a generated run with ``judge`` and store everything in ``run_dir``.
 
     A run that stops early, because the judge is down or it was stopped, still gets a
     ``results.json``, with its status set to ``aborted``. ``saved_files`` (name -> text) are
     written to ``run_dir`` before scoring: the run's settings, from
-    ``mtlj.engine.audit_config.AuditConfig.saved_files``.
+    ``mtlj.engine.audit_config.AuditConfig.saved_files``. ``max_concurrency`` and
+    ``rate_limit`` default to the judge's (see ``mtlj.engine.runner.resolve_limits``).
+    ``on_summary`` is given the runner's counts, such as how long calls waited for the rate
+    limit, which ``results.json`` doesn't keep; not for a run stopped with Ctrl+C or a signal.
 
     Raises:
         FileExistsError: if ``run_dir`` isn't empty (see ``check_run_dir``).
@@ -168,33 +181,44 @@ def run_audit(
             can't be scored. Nothing is written, so the same directory can be used again.
     """
     plan = check_can_start(
-        generation, judge, run_dir, samples=samples, max_concurrency=max_concurrency
+        generation,
+        judge,
+        run_dir,
+        samples=samples,
+        max_concurrency=max_concurrency,
+        rate_limit=rate_limit,
     )
     write_generation(generation, run_dir)
     for name, text in (saved_files or {}).items():
         (run_dir / name).write_text(text, encoding="utf-8", newline="\n")
     path = run_dir / EVALUATIONS_FILE
+    # Already checked by check_can_start; resolved again for the results.
+    limits = resolve_limits(judge, max_concurrency, rate_limit)
 
     aborted = None
+    # The runner's counts, which a run that was stopped (Ctrl+C) doesn't get back.
+    summary: RunSummary | None = None
     stopper = _Stopper()
     with _handling(("SIGINT", *STOP_SIGNALS), stopper):
         try:
             with JsonlSink(path) as sink:
                 stopper.scoring = True
                 try:
-                    run_judge_sync(
+                    summary = run_judge_sync(
                         judge,
                         generation.originals,
                         generation.mutants,
                         sink,
                         samples=samples,
                         max_concurrency=max_concurrency,
+                        rate_limit=rate_limit,
                     )
                 finally:
                     stopper.scoring = False
         except RunAbortedError as exc:
             logger.error("run stopped early: %s", exc)
             aborted = str(exc)
+            summary = exc.summary
         except KeyboardInterrupt:
             aborted = INTERRUPTED
 
@@ -211,6 +235,9 @@ def run_audit(
             dataset=dataset,
             samples=samples,
             aborted=aborted,
+            limits=Limits(max_concurrency=limits.max_concurrency, rate_limit=limits.rate_limit),
         )
         write_results(results, run_dir)
+    if summary is not None and on_summary is not None:
+        on_summary(summary)
     return results

@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from mtlj.engine.battery_config import load_battery
 from mtlj.engine.generator import BatteryItem, default_battery
-from mtlj.engine.runner import DEFAULT_MAX_CONCURRENCY, DEFAULT_SAMPLES
+from mtlj.engine.runner import DEFAULT_SAMPLES, NO_RATE_LIMIT, RunLimits
 
 CORPUS_V1 = "corpus-v1"
 GOLD_SET = "gold"
@@ -58,17 +58,24 @@ class AuditConfig(BaseModel):
     samples: int = Field(DEFAULT_SAMPLES, ge=2)
     seed: int = 0
     limit: int | None = Field(None, ge=1)
-    concurrency: int = Field(DEFAULT_MAX_CONCURRENCY, ge=1)
+    # None for the judge's own default (see mtlj.engine.runner.resolve_limits).
+    concurrency: int | None = Field(None, ge=1)
+    # Judge calls a minute; 0 for no limit, even if the judge has one.
+    rate_limit: float | None = Field(None, ge=0, allow_inf_nan=False)
     output: str | None = Field(None, min_length=1)
 
-    def saved_files(self, battery: Sequence[BatteryItem], model: str) -> dict[str, str]:
+    def saved_files(
+        self, battery: Sequence[BatteryItem], model: str, limits: RunLimits
+    ) -> dict[str, str]:
         """What a run saves of these settings, as file name -> text, for its own directory.
 
-        ``battery`` is the battery the run loaded from these settings, and ``model`` the model
-        its judge uses, which is the judge's default when ``self.model`` is None.
+        ``battery`` is the battery the run loaded from these settings, ``model`` the model its
+        judge uses, which is the judge's default when ``self.model`` is None, and ``limits``
+        the concurrency and rate limit it runs with, the judge's defaults filled in the same way.
 
         ``config.toml`` is an audit file that reruns these settings with ``--config``. It names
-        the model, so a rerun isn't changed by a judge's default changing. ``battery.toml`` holds
+        the model and the limits (a rate limit of 0 for none), so a rerun isn't changed by a
+        judge's defaults changing. ``battery.toml`` holds
         the operators and intensities the run used, written from ``battery`` rather than copied
         from a file, so it's what the run used even if the file changed after it was loaded, or
         the battery came from ``default``. A dataset file is referenced by its absolute path,
@@ -76,7 +83,13 @@ class AuditConfig(BaseModel):
         ``output`` is left out: it names this run, and a rerun needs a directory of its own.
         """
         settings = self.model_copy(
-            update={"output": None, "model": model, "battery": SAVED_BATTERY_FILE}
+            update={
+                "output": None,
+                "model": model,
+                "battery": SAVED_BATTERY_FILE,
+                "concurrency": limits.max_concurrency,
+                "rate_limit": limits.rate_limit or float(NO_RATE_LIMIT),
+            }
         )
         if is_dataset_file(self.dataset):
             settings = settings.model_copy(update={"dataset": str(Path(self.dataset).resolve())})
@@ -102,6 +115,11 @@ def battery_toml(battery: Sequence[BatteryItem]) -> str:
         for item in battery
     ]
     return "\n".join(tables)
+
+
+def option_name(key: str) -> str:
+    """The ``mtlj audit run`` option for the audit file's ``key``: rate_limit is --rate-limit."""
+    return "--" + key.replace("_", "-")
 
 
 def is_dataset_file(dataset: str) -> bool:
@@ -218,12 +236,12 @@ def _describe(error: Any, overrides: Mapping[str, Any], source: str | Path | Non
     """One Pydantic error as ``where: what's wrong``, where being the option or the file's key."""
     key = ".".join(str(part) for part in error["loc"]) or "(top level)"
     from_option = key in overrides or source is None
-    where = f"--{key}" if from_option else f"{source}: {key}"
+    where = option_name(key) if from_option else f"{source}: {key}"
     kind = error["type"]
     if kind == "extra_forbidden":
         return f"{where}: unknown key; expected one of {sorted(AuditConfig.model_fields)}"
     if kind == "missing":
         if source is None:
             return f"{where}: missing; it's required unless --config gives it"
-        return f"{where}: missing; set it in the file or with --{key}"
+        return f"{where}: missing; set it in the file or with {option_name(key)}"
     return f"{where}: {error['msg'].lower()}, got {error['input']!r}"

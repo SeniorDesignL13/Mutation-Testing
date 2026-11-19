@@ -23,7 +23,7 @@ from mtlj.engine.audit import (
     run_audit,
 )
 from mtlj.engine.generator import GenerationResult, default_battery, generate_mutants
-from mtlj.engine.results import RESULTS_FILE, read_results
+from mtlj.engine.results import RESULTS_FILE, Limits, read_results
 from mtlj.engine.runner import read_evaluations
 from mtlj.judges.callable import CallableJudge
 
@@ -116,12 +116,41 @@ def test_run_leaves_every_file_and_real_results(generation, tmp_path: Path):
     assert results.run.scorings.ok == count_scorings(generation, 5)
     swap = next(o for o in results.operators if o.operator == "entity_swap")
     assert swap.overall.rate == 1.0
+    # A CallableJudge has no limits of its own, so the runner's.
+    assert results.run.limits == Limits(max_concurrency=4, rate_limit=None)
+
+
+def test_results_record_the_limits_and_the_caller_gets_the_waits(generation, tmp_path: Path):
+    judge = stub_judge([r.answer for r in generation.originals])
+    summaries = []
+
+    # 6000 a minute, one call every 10 ms: quick, but every call after the first waits.
+    results = run_audit(
+        generation,
+        judge,
+        tmp_path / "run",
+        dataset="test",
+        samples=2,
+        max_concurrency=2,
+        rate_limit=6000,
+        on_summary=summaries.append,
+    )
+
+    assert results.run.limits == Limits(max_concurrency=2, rate_limit=6000.0)
+    assert read_results(tmp_path / "run") == results
+    [summary] = summaries
+    assert summary.rate_limited >= results.run.scorings.total - 2
+    assert summary.rate_limit_wait_s > 0
 
 
 def test_judge_going_down_leaves_an_aborted_results_file(generation, tmp_path: Path):
     run_dir = tmp_path / "run"
 
-    results = run_audit(generation, down_judge(), run_dir, dataset="test", samples=5)
+    summaries = []
+
+    results = run_audit(
+        generation, down_judge(), run_dir, dataset="test", samples=5, on_summary=summaries.append
+    )
 
     assert results.run.status == "aborted"
     assert "in a row failed" in results.run.reason
@@ -129,6 +158,9 @@ def test_judge_going_down_leaves_an_aborted_results_file(generation, tmp_path: P
     rows = read_evaluations(run_dir / EVALUATIONS_FILE)
     assert len(rows) == results.run.scorings.total > 0
     assert results.run.scorings.errors_by_type == {"PermissionError": len(rows)}
+    # The runner's counts come back with the abort.
+    [summary] = summaries
+    assert summary.errors == len(rows)
 
 
 def test_ctrl_c_leaves_an_aborted_results_file(generation, tmp_path: Path, monkeypatch):
@@ -139,12 +171,19 @@ def test_ctrl_c_leaves_an_aborted_results_file(generation, tmp_path: Path, monke
     run_dir = tmp_path / "run"
     judge = stub_judge([r.answer for r in generation.originals])
 
-    results = run_audit(generation, judge, run_dir, dataset="test", samples=5)
+    summaries = []
+
+    results = run_audit(
+        generation, judge, run_dir, dataset="test", samples=5, on_summary=summaries.append
+    )
 
     assert results.run.status == "aborted"
     assert results.run.reason == INTERRUPTED
+    assert summaries == []
     assert results.run.scorings.total == 0
     assert read_results(run_dir) == results
+    # The limits are known, but a stopped run never got the runner's counts back.
+    assert results.run.limits == Limits(max_concurrency=4, rate_limit=None)
 
 
 @posix_signals

@@ -8,6 +8,16 @@ mutant with its own original and measure the judge's noise (see docs/metrics.md)
   (tests/judges/test_contract.py, ``check_concurrent_calls``) guarantees adapters are safe to
   call from several threads at once. A thread can't be interrupted, so adapters must put a
   timeout on their backend calls: the runner can't stop a call that hangs.
+* Backpressure: a fixed set of ``max_concurrency`` workers take tasks one at a time from a lazy
+  ``TaskPlan``, so a task only exists once a worker is free to score it. However big the run,
+  at most ``max_concurrency`` tasks are made and not yet finished; nothing queues up.
+* With a rate limit (``mtlj.engine.ratelimit``), calls start at most ``rate_limit`` a minute,
+  evenly spaced. Every call waits its turn, retries included, since each is a request the API
+  counts; a scoring the cache answers makes no call and doesn't wait. A run that's stopping
+  makes no call that's still waiting for its turn, and a scoring that never got to its first
+  call isn't written. The summary reports how long calls waited.
+* ``max_concurrency`` and ``rate_limit`` default to the judge's own (``Judge.default_*``), and
+  without those to 4 at a time with no rate limit. ``resolve_limits`` works out what a run uses.
 * Each result goes to a ``ResultSink`` as soon as its call finishes, not at the end, so a run
   that dies part way keeps everything scored so far. ``JsonlSink`` writes one line per scoring.
 * A judge call that fails for a reason that passes (a timeout, a dropped connection, a rate
@@ -47,8 +57,7 @@ mutant with its own original and measure the judge's noise (see docs/metrics.md)
   record's passages, in order. This is the shape the adapter contract tests
   (tests/judges/test_contract.py, ``PASSAGES``).
 
-Not here yet: rate limiting (MTLJ-96), resuming a run (MTLJ-91) and a Postgres sink
-(MTLJ-26/28).
+Not here yet: resuming a run (MTLJ-91) and a Postgres sink (MTLJ-26/28).
 """
 
 from __future__ import annotations
@@ -70,6 +79,7 @@ from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord, Passage
 from mtlj.engine.cache import CachedScore, CacheKeys
 from mtlj.engine.fixtures import FixtureMissingError
+from mtlj.engine.ratelimit import RateLimiter, check_rate_limit
 from mtlj.engine.retry import (
     DEFAULT_RETRY,
     NO_RETRY,
@@ -92,8 +102,12 @@ ERROR = "error"
 
 # Every text is scored 5 times by default (docs/metrics.md, "Decisions", 2026-10-20).
 DEFAULT_SAMPLES = 5
-# The spike ran 4 calls at a time on gpt-4o-mini without hitting rate limits.
+# The spike ran 4 calls at a time on gpt-4o-mini without hitting rate limits. Used when neither
+# the run nor the judge says (see resolve_limits).
 DEFAULT_MAX_CONCURRENCY = 4
+# A rate limit of 0 means none, even for a judge that has a default one. 0 rather than None,
+# because None means "the judge's default", and an audit file (TOML) has no None to write.
+NO_RATE_LIMIT = 0
 # This many failed calls in a row means the judge is down, not that some calls were unlucky.
 DEFAULT_MAX_CONSECUTIVE_ERRORS = 20
 # Longest error message stored; backend errors can carry a whole response body.
@@ -205,7 +219,64 @@ class RunSummary:
     retried: int = 0  # scorings that needed a retry, whether or not it worked
     retries_by_type: dict[str, int] = field(default_factory=dict)  # each retry's error
     gave_up: int = 0  # failed scorings whose last error was transient (in errors too)
+    # The limits the run used (see resolve_limits), and the rate limit's effect.
+    max_concurrency: int = DEFAULT_MAX_CONCURRENCY
+    rate_limit: float | None = None  # calls a minute; None for none
+    rate_limited: int = 0  # calls that had to wait for their turn
+    rate_limit_wait_s: float = 0.0  # their waits added up (several can wait at once)
     elapsed_s: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class RunLimits:
+    """How hard a run drives its judge: calls at once, and calls a minute (None for no limit)."""
+
+    max_concurrency: int
+    rate_limit: float | None
+
+
+def resolve_limits(
+    judge: Judge, max_concurrency: int | None = None, rate_limit: float | None = None
+) -> RunLimits:
+    """The limits a run uses: those given, else the judge's defaults, else the runner's.
+
+    ``rate_limit`` is calls a minute; ``NO_RATE_LIMIT`` (0) means none, whatever the judge's
+    default. Giving back what this returned (with ``rate_limit or NO_RATE_LIMIT``) gives the
+    same limits, so a run's saved settings rerun with the limits it had.
+
+    Raises:
+        ValueError: a limit, given or the judge's default, isn't valid; a ``TypeError`` for
+            one that isn't a number. Checked before any call.
+    """
+    if max_concurrency is None:
+        max_concurrency = judge.default_max_concurrency
+        source = f"{type(judge).__name__}.default_max_concurrency"
+        if max_concurrency is None:
+            max_concurrency = DEFAULT_MAX_CONCURRENCY
+    else:
+        source = "max_concurrency"
+    if isinstance(max_concurrency, bool) or not isinstance(max_concurrency, int):
+        raise TypeError(f"{source} must be an int, got {max_concurrency!r}")
+    if max_concurrency < 1:
+        raise ValueError(f"{source} must be at least 1, got {max_concurrency}")
+
+    if rate_limit is None:
+        limit = judge.default_rate_limit
+        if limit is not None:
+            limit = check_rate_limit(limit, f"{type(judge).__name__}.default_rate_limit")
+    elif not isinstance(rate_limit, bool) and rate_limit == NO_RATE_LIMIT:
+        limit = None
+    else:
+        limit = check_rate_limit(rate_limit)
+    return RunLimits(max_concurrency, limit)
+
+
+def describe_limits(limits: RunLimits) -> str:
+    """``limits`` for people: "4 at a time, at most 120 calls a minute"."""
+    at_a_time = f"{limits.max_concurrency} at a time"
+    if limits.rate_limit is None:
+        return f"{at_a_time}, no rate limit"
+    return f"{at_a_time}, at most {limits.rate_limit:g} calls a minute"
 
 
 class ScoreStore(Protocol):
@@ -476,11 +547,14 @@ async def _evaluate(
     executor: ThreadPoolExecutor,
     retry: RetryPolicy = NO_RETRY,
     stop: asyncio.Event | None = None,
-) -> Evaluation:
+    limiter: RateLimiter | None = None,
+) -> Evaluation | None:
     """Score one task on a worker thread, retrying transient failures as ``retry`` says.
 
-    A scoring that fails for good becomes an ERROR evaluation. Once ``stop`` is set (the run is
-    stopping), a failed call isn't retried, and a wait to retry ends early.
+    A scoring that fails for good becomes an ERROR evaluation. With a ``limiter``, every call,
+    retries included, waits for its turn first. Once ``stop`` is set (the run is stopping), a
+    failed call isn't retried, and a wait to retry or for a turn ends early. None when the run
+    stopped before the first call was made: there's nothing to record.
     """
     loop = asyncio.get_running_loop()
     provenance = {
@@ -498,7 +572,40 @@ async def _evaluate(
     }
     # The error each retry followed, in order.
     retry_errors: list[str] = []
+
+    def give_up(exc: Exception, latency_ms: float) -> Evaluation:
+        """The ERROR evaluation for a scoring whose last call failed, raising ``exc``."""
+        attempt = len(retry_errors) + 1
+        message = _error_message(exc)
+        logger.warning(
+            "judge %s failed on %s %s (sample %d) after %d attempt(s): %s: %s",
+            judge.name,
+            task.kind,
+            task.target_id,
+            task.sample_index,
+            attempt,
+            type(exc).__name__,
+            message,
+        )
+        return Evaluation(
+            **provenance,
+            status=ERROR,
+            latency_ms=latency_ms,
+            error_type=type(exc).__name__,
+            error=message,
+            error_kind=TRANSIENT if is_transient(exc) else PERMANENT,
+            attempts=attempt,
+            retry_errors=tuple(retry_errors),
+        )
+
+    # The failed call a retry is due for, and its latency; None before the first call.
+    failed: tuple[Exception, float] | None = None
     while True:
+        if limiter is not None and not await limiter.acquire(stop):
+            # Stopping before this call got its turn: record the last failure, if there was one.
+            return None if failed is None else give_up(*failed)
+        if failed is not None:
+            retry_errors.append(type(failed[0]).__name__)
         # A fresh context per call, so a judge that edits it can't affect other calls.
         context = judge_context(task.passages)
         start = time.perf_counter()
@@ -507,11 +614,9 @@ async def _evaluate(
             break
         except Exception as exc:  # one failed call must not stop the whole run
             latency_ms = (time.perf_counter() - start) * 1000
-            message = _error_message(exc)
             attempt = len(retry_errors) + 1
-            transient = is_transient(exc)
             stopping = stop is not None and stop.is_set()
-            if transient and attempt < retry.max_attempts and not stopping:
+            if is_transient(exc) and attempt < retry.max_attempts and not stopping:
                 delay = retry.delay(attempt, exc)
                 logger.info(
                     "judge %s failed on %s %s (sample %d, attempt %d of %d): %s: %s; "
@@ -523,33 +628,14 @@ async def _evaluate(
                     attempt,
                     retry.max_attempts,
                     type(exc).__name__,
-                    message,
+                    _error_message(exc),
                     delay,
                 )
                 await _wait(delay, stop)
                 if stop is None or not stop.is_set():
-                    retry_errors.append(type(exc).__name__)
+                    failed = (exc, latency_ms)
                     continue
-            logger.warning(
-                "judge %s failed on %s %s (sample %d) after %d attempt(s): %s: %s",
-                judge.name,
-                task.kind,
-                task.target_id,
-                task.sample_index,
-                attempt,
-                type(exc).__name__,
-                message,
-            )
-            return Evaluation(
-                **provenance,
-                status=ERROR,
-                latency_ms=latency_ms,
-                error_type=type(exc).__name__,
-                error=message,
-                error_kind=TRANSIENT if transient else PERMANENT,
-                attempts=attempt,
-                retry_errors=tuple(retry_errors),
-            )
+            return give_up(exc, latency_ms)
 
     counts = result.verdict_counts
     return Evaluation(
@@ -586,7 +672,8 @@ async def run_judge(
     *,
     cache: ScoreStore | None = None,
     samples: int = DEFAULT_SAMPLES,
-    max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+    max_concurrency: int | None = None,
+    rate_limit: float | None = None,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
     retry: RetryPolicy = DEFAULT_RETRY,
 ) -> RunSummary:
@@ -606,15 +693,19 @@ async def run_judge(
             (see ``mtlj.engine.cache``). ``None``, the default, calls the judge every time. A
             ``FixtureStore`` goes here too; in replay mode the judge is never called.
         samples: how many times each text is scored.
-        max_concurrency: the most judge calls in flight at once.
+        max_concurrency: the most judge calls in flight at once. ``None``, the default, uses
+            the judge's ``default_max_concurrency``, or ``DEFAULT_MAX_CONCURRENCY``.
+        rate_limit: the most judge calls started a minute, retries included, evenly spaced
+            (see ``mtlj.engine.ratelimit``). ``None``, the default, uses the judge's
+            ``default_rate_limit``; ``NO_RATE_LIMIT`` (0) means none.
         max_consecutive_errors: stop the run once this many scorings in a row have failed,
             after their retries. ``None`` never stops.
         retry: how transient failures are retried (see ``mtlj.engine.retry``). By default up
             to 6 calls per scoring; ``NO_RETRY`` records every failure at once.
 
     Raises:
-        ValueError: for bad arguments (see ``build_tasks``), a judge whose name, model or
-            version isn't a non-empty string, or, with a cache, a judge whose
+        ValueError: for bad arguments (see ``build_tasks`` and ``resolve_limits``), a judge
+            whose name, model or version isn't a non-empty string, or, with a cache, a judge whose
             ``cache_settings()`` can't be written as JSON, before any call is made.
         FixtureMissingError: replaying from a ``FixtureStore`` that lacks any of the scorings,
             before any call is made.
@@ -623,13 +714,20 @@ async def run_judge(
         Exception: whatever ``sink.write`` raised first (or anything else that went wrong
             outside the judge call), with the run's summary as a note. Nothing is written after.
     """
-    if max_concurrency < 1:
-        raise ValueError(f"max_concurrency must be at least 1, got {max_concurrency}")
+    limits = resolve_limits(judge, max_concurrency, rate_limit)
+    max_concurrency = limits.max_concurrency
     if max_consecutive_errors is not None and max_consecutive_errors < 1:
         raise ValueError(f"max_consecutive_errors must be at least 1, got {max_consecutive_errors}")
     check_identity(judge)
     tasks = build_tasks(records, mutants, samples)
-    summary = RunSummary(judge.name, judge.model, judge.version, samples)
+    summary = RunSummary(
+        judge.name,
+        judge.model,
+        judge.version,
+        samples,
+        max_concurrency=max_concurrency,
+        rate_limit=limits.rate_limit,
+    )
     # Works out the judge's part of every key now, so a judge that can't be cached costs nothing.
     keys = CacheKeys(judge) if cache is not None else None
     if not tasks:
@@ -640,13 +738,15 @@ async def run_judge(
         logger.info("response cache: %s%s", cache.path, " (refreshing)" if cache.refresh else "")
 
     logger.info(
-        "scoring %d texts x %d samples with %s (%s), %d at a time",
+        "scoring %d texts x %d samples with %s (%s), %s",
         len(tasks) // samples,
         samples,
         judge.name,
         judge.model,
-        max_concurrency,
+        describe_limits(limits),
     )
+    # Made here, inside the run's event loop, which it belongs to.
+    limiter = RateLimiter(limits.rate_limit) if limits.rate_limit is not None else None
     started = time.perf_counter()
     consecutive_errors = 0
     # Why the run is stopping early, if it is. Workers take no new task once either is set.
@@ -687,7 +787,10 @@ async def run_judge(
                         missing=1,
                     )
                 else:
-                    evaluation = await _evaluate(judge, task, executor, retry, stop)
+                    scored = await _evaluate(judge, task, executor, retry, stop, limiter)
+                    if scored is None:
+                        return  # the run stopped before this scoring's first call
+                    evaluation = scored
                     if key is not None and cache is not None and evaluation.status == OK:
                         # Before the write, so a score that was paid for is kept if the sink fails.
                         cache.put(key, judge, _cache_entry(evaluation))
@@ -740,6 +843,9 @@ async def run_judge(
         executor.shutdown(wait=False, cancel_futures=True)
 
     summary.elapsed_s = time.perf_counter() - started
+    if limiter is not None:
+        summary.rate_limited = limiter.throttled
+        summary.rate_limit_wait_s = limiter.waited_s
     lookups = summary.cache_hits + summary.cache_misses
     summary.cache_hit_rate = summary.cache_hits / lookups if lookups else None
     if failure is not None:
@@ -762,7 +868,8 @@ def run_judge_sync(
     *,
     cache: ScoreStore | None = None,
     samples: int = DEFAULT_SAMPLES,
-    max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+    max_concurrency: int | None = None,
+    rate_limit: float | None = None,
     max_consecutive_errors: int | None = DEFAULT_MAX_CONSECUTIVE_ERRORS,
     retry: RetryPolicy = DEFAULT_RETRY,
 ) -> RunSummary:
@@ -776,6 +883,7 @@ def run_judge_sync(
             cache=cache,
             samples=samples,
             max_concurrency=max_concurrency,
+            rate_limit=rate_limit,
             max_consecutive_errors=max_consecutive_errors,
             retry=retry,
         )

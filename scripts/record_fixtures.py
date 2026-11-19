@@ -30,8 +30,10 @@ from mtlj.data.ragtruth import load_corpus_v1
 from mtlj.engine.cache import CacheKeys
 from mtlj.engine.fixtures import FixtureStore, load_inputs, save_inputs
 from mtlj.engine.generator import default_battery, generate_mutants
+from mtlj.engine.ratelimit import check_rate_limit
 from mtlj.engine.runner import (
     DEFAULT_SAMPLES,
+    NO_RATE_LIMIT,
     MemorySink,
     RunAbortedError,
     build_tasks,
@@ -105,6 +107,20 @@ def gold_set_plan(inputs: Path, regenerate: bool):
     return records, mutants
 
 
+def rate_limit_arg(text: str) -> float:
+    """``--rate-limit``'s value: 0 for none, else a finite number of calls a minute > 0."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if value == NO_RATE_LIMIT:
+        return value
+    try:
+        return check_rate_limit(value, "--rate-limit")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def plan_keys(keys: CacheKeys, tasks) -> set[str]:
     return {task_key(keys, task) for task in tasks}
 
@@ -121,6 +137,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
     parser.add_argument("--max-cost", type=float, default=DEFAULT_MAX_COST, help="US dollars")
     parser.add_argument("--max-concurrency", type=int, default=4)
+    parser.add_argument(
+        "--rate-limit",
+        type=rate_limit_arg,
+        help="judge calls a minute; 0 for none (default: the judge's, 120)",
+    )
     parser.add_argument("--limit", type=int, help="only the first N gold-set records (a trial)")
     parser.add_argument("--refresh", action="store_true", help="re-record every score")
     parser.add_argument("--yes", action="store_true", help="don't ask before spending")
@@ -183,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
                     cache=store,
                     samples=args.samples,
                     max_concurrency=args.max_concurrency,
+                    rate_limit=args.rate_limit,
                     # Once the cap is hit every call fails at once; stop soon after.
                     max_consecutive_errors=2 * args.max_concurrency,
                 )
