@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import ClassVar
 
@@ -18,6 +19,7 @@ from mtlj.engine.generator import (
     default_battery,
     derive_seed,
     generate_mutants,
+    read_generation,
     run_manifest,
     write_generation,
 )
@@ -325,3 +327,93 @@ def test_same_seed_writes_byte_identical_files(tmp_path: Path) -> None:
     assert (tmp_path / "a" / "mutants.jsonl").read_bytes() != (
         tmp_path / "c" / "mutants.jsonl"
     ).read_bytes()
+
+
+# --------------------------------------------------
+# read_generation: a run's files read back, for resuming it
+# --------------------------------------------------
+
+# Every kind of outcome: mutants, a no-change skip, an operator crash, a repeated dose, and an
+# operator listed after one whose name sorts later, so the battery's order is tested too.
+MIXED_BATTERY = [
+    BatteryItem(NeverApplies(), (1.0,)),
+    BatteryItem(FixedDose(), (0.2, 0.6, 1.0)),
+    BatteryItem(FailsOnRecordOne(), (1.0,)),
+    BatteryItem(AppendSeed(), (0.5,)),
+]
+
+
+def test_a_generation_reads_back_exactly_as_it_was_written(tmp_path: Path) -> None:
+    result = generate_mutants(RECORDS, MIXED_BATTERY, base_seed=4)
+    assert {s.reason for s in result.skipped} == {NO_CHANGE, OPERATOR_ERROR, REPEATED_DOSE}
+    write_generation(result, tmp_path)
+
+    back = read_generation(tmp_path)
+
+    assert back == result
+    # In the battery's order, not run.json's sorted one, so the run reads back exactly.
+    assert list(back.battery) == ["never_applies", "fixed_dose", "fails_on_one", "append_seed"]
+    # never_applies made no mutants, so its family can only come from run.json.
+    assert back.families["never_applies"] is OperatorFamily.DEGRADING
+
+
+def test_an_older_run_json_gets_its_order_and_families_from_elsewhere(tmp_path: Path) -> None:
+    from mtlj.engine.results import operator_families
+    from mtlj.operators.degrading.entity_swap import EntitySwapOperator
+
+    swap = EntitySwapOperator.metadata.name
+    result = generate_mutants(RECORDS, [BatteryItem(AppendSeed(), (1.0,))])
+    result.battery = {"append_seed": [1.0], swap: [0.5]}
+    result.families = {"append_seed": OperatorFamily.DEGRADING}  # swap made no mutants
+    write_generation(result, tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    del manifest["operators"], manifest["families"]  # as run.json was before MTLJ-91
+    (tmp_path / "run.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    back = read_generation(tmp_path, battery_order=["append_seed", swap])
+
+    assert list(back.battery) == ["append_seed", swap]
+    # swap made no mutants, so its family comes from the operator registry. append_seed isn't
+    # a registered operator; its family is on its mutants, where the results take it from.
+    assert back.families == {swap: EntitySwapOperator.metadata.family}
+    assert operator_families(back)["append_seed"] is OperatorFamily.DEGRADING
+    # Without an order to go by, the file's (sorted) one.
+    assert list(read_generation(tmp_path).battery) == sorted(["append_seed", swap])
+
+
+def test_a_mutant_edited_since_it_was_made_is_refused(tmp_path: Path) -> None:
+    write_generation(generate_mutants(RECORDS, [BatteryItem(AppendSeed(), (1.0,))]), tmp_path)
+    path = tmp_path / "mutants.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    first = json.loads(lines[0])
+    first["mutated_text"] += " (edited)"
+    path.write_text("\n".join([json.dumps(first), *lines[1:]]) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"mutants\.jsonl can't be read back"):
+        read_generation(tmp_path)
+
+
+@pytest.mark.parametrize("name", ["originals.jsonl", "mutants.jsonl", "skipped.jsonl", "run.json"])
+def test_a_generation_with_a_file_missing_is_refused(tmp_path: Path, name: str) -> None:
+    write_generation(generate_mutants(RECORDS, [BatteryItem(AppendSeed(), (1.0,))]), tmp_path)
+    (tmp_path / name).unlink()
+
+    with pytest.raises(ValueError, match=f"{re.escape(name)} is missing"):
+        read_generation(tmp_path)
+
+
+def test_a_manifest_whose_order_does_not_match_its_battery_is_refused(tmp_path: Path) -> None:
+    write_generation(generate_mutants(RECORDS, [BatteryItem(AppendSeed(), (1.0,))]), tmp_path)
+    manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    manifest["operators"] = ["something_else"]
+    (tmp_path / "run.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="isn't a valid run manifest"):
+        read_generation(tmp_path)
+
+
+def test_run_json_keeps_the_battery_order_and_every_family(tmp_path: Path) -> None:
+    result = generate_mutants(RECORDS, MIXED_BATTERY)
+    manifest = run_manifest(result)
+    assert manifest["operators"] == ["never_applies", "fixed_dose", "fails_on_one", "append_seed"]
+    assert manifest["families"] == dict.fromkeys(manifest["operators"], "degrading")

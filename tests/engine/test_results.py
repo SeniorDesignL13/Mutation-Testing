@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import pytest
@@ -739,3 +740,28 @@ def test_repeated_doses_are_counted_at_their_intensity_and_shown():
     assert "1 repeated doses left out" in next(
         line for line in summary.splitlines() if line.startswith("    intensity 1:")
     )
+
+
+def test_results_do_not_depend_on_the_order_rows_were_stored_in(tmp_path: Path):
+    # Concurrent calls finish in any order, and a resumed run stores its rows after the first
+    # run's. A plain float sum of these scores depends on order ((0.1 + 0.2) + 0.3 is not
+    # 0.1 + (0.2 + 0.3)), so the file must come out byte for byte the same whatever the order.
+    generation, rows = make_run()
+    noisy = [0.1, 0.2, 0.3, 0.7, 0.6]
+    rows = [
+        e.model_copy(update={"score": noisy[e.sample_index], "raw_score": noisy[e.sample_index]})
+        if e.kind == "original"
+        else e
+        for e in rows
+    ]
+    files = []
+    for name, ordered in (
+        ("forward", rows),
+        ("reversed", rows[::-1]),
+        ("shuffled", random.Random(3).sample(rows, len(rows))),
+    ):
+        (tmp_path / name).mkdir()
+        write_results(build(generation, ordered), tmp_path / name)
+        files.append((tmp_path / name / RESULTS_FILE).read_bytes())
+
+    assert files[0] == files[1] == files[2]

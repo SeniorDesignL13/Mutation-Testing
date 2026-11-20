@@ -10,11 +10,47 @@ Every `mtlj audit run` leaves one directory:
 | `run.json` | The seed, battery and library versions behind the mutants |
 | `config.toml` | The settings the run used, as an audit file `mtlj audit run --config` can rerun. It names the judge's model even when the run used the default. `output` is left out so a rerun gets its own directory. A dataset file is referenced by its absolute path, not copied |
 | `battery.toml` | The operators and intensities the run used, written from the battery it loaded, so a rerun isn't changed by later edits to a battery file or to the default battery |
+| `audit.json` | What resuming the run needs: the dataset label and samples its results are built with, the judge that scored it (class, name, model, version, and a SHA-256 of its settings, never the settings themselves, which can hold API keys) and its limits. Written before the first judge call |
+| `evaluations.superseded.jsonl` | Only after a resume that scored failed scorings again: their old rows, so every paid call stays on record |
+| `.lock` | Empty. Held while a process scores into the directory, so two can't at once |
 
 `mtlj audit show <run directory>` prints `results.json`. `mtlj.engine.results.read_results` loads
 it in Python. [metrics.md](metrics.md) defines every metric below.
 
-The file holds no timestamps, so the same run always gives identical bytes.
+The file holds no timestamps, so the same run always gives identical bytes. A run that was
+stopped and resumed gives the same bytes as one that never stopped.
+
+## Resuming a run
+
+A run that stopped part way, for whatever reason (the judge went down, Ctrl+C, `docker stop`,
+SIGKILL, a power cut), carries on from where it stopped:
+
+```bash
+uv run mtlj audit resume runs/example
+```
+
+It scores only the scorings `evaluations.jsonl` has no row for, with the run's own mutants,
+judge, model and samples, read from its directory. Nothing is regenerated, and the original
+dataset or settings files aren't needed. Everything is checked before any call is made: a
+different judge (another version, model or settings), a row that isn't one of the run's
+scorings, or a scoring stored twice stops it with exit code 2 and leaves the directory as it
+was. It asks before scoring more than 1,000, like `audit run`.
+
+- **A row cut short** by the process dying mid-write is dropped and scored again.
+- **Failed scorings:** `--retry-errors transient` (the default) scores again those that failed
+  for a reason that passes (a timeout, a rate limit, the judge being down). `all` also
+  scores again those that failed for good, such as after fixing a revoked API key, and `none`
+  keeps every failure. The old rows move to `evaluations.superseded.jsonl`, so
+  `evaluations.jsonl` keeps one row per scoring.
+- **Limits:** `--concurrency` and `--rate-limit` default to the run's own; the new ones are
+  recorded in `results.json`.
+- A resume can be stopped and resumed again. While a run or a resume is scoring, another one on
+  the same directory is refused.
+- A run made before `audit.json` existed is resumed from its `config.toml`, with a warning: only
+  the judge's name, model and version can be checked against it, not its settings.
+
+In Python, `mtlj.engine.audit.prepare_resume` shows what a resume would do without changing
+anything, and `resume_audit` does it.
 
 ## Versioning
 

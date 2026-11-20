@@ -570,3 +570,201 @@ def test_a_bad_rate_limit_in_the_audit_file_names_the_file(
 
     assert result.exit_code == 2
     assert "audit.toml: rate_limit" in click.unstyle(result.output)
+
+
+# --------------------------------------------------
+# audit resume
+# --------------------------------------------------
+
+
+def text_score(input, output, context) -> float:
+    """A score from the text alone, so a resumed run scores like an uninterrupted one."""
+    return 0.3 + (sum(output.encode("utf-8")) % 97) / 160
+
+
+def text_judge(version: str = "1", fail_after: int | None = None) -> CallableJudge:
+    lock = threading.Lock()
+    calls = [0]
+
+    def scoring(input, output, context):
+        with lock:
+            calls[0] += 1
+            n = calls[0]
+        if fail_after is not None and n > fail_after:
+            raise PermissionError("invalid API key")  # permanent: no retry waits
+        return text_score(input, output, context)
+
+    judge = CallableJudge(scoring, name="stub", model="m", version=version)
+    judge.calls = calls  # type: ignore[attr-defined]
+    return judge
+
+
+def use_judge(monkeypatch: pytest.MonkeyPatch, judge: CallableJudge) -> None:
+    monkeypatch.setitem(JUDGES, "stub", lambda model: judge)
+
+
+def resume_args(tmp_path: Path, *extra: str) -> list[str]:
+    return ["audit", "resume", str(tmp_path / "run"), *extra]
+
+
+@pytest.fixture
+def stopped_run(monkeypatch, tmp_path: Path) -> Path:
+    """A run whose judge went down part way: aborted, with failed rows at the end."""
+    use_judge(monkeypatch, text_judge(fail_after=15))
+    result = runner.invoke(app, audit_args(tmp_path))
+    assert result.exit_code == 1
+    return tmp_path / "run"
+
+
+def test_audit_run_prints_how_to_resume_a_run_that_stopped(monkeypatch, tmp_path: Path) -> None:
+    use_judge(monkeypatch, text_judge(fail_after=15))
+
+    result = runner.invoke(app, audit_args(tmp_path))
+
+    assert result.exit_code == 1
+    assert f"mtlj audit resume {tmp_path / 'run'}" in result.stderr
+
+
+def test_a_resumed_run_ends_with_the_results_of_one_never_stopped(
+    stopped_run: Path, monkeypatch, tmp_path: Path
+) -> None:
+    use_judge(monkeypatch, text_judge())
+    whole = tmp_path / "whole"
+    assert runner.invoke(app, audit_args(whole)).exit_code == 0
+
+    judge = text_judge()
+    use_judge(monkeypatch, judge)
+    result = runner.invoke(app, resume_args(stopped_run.parent, "--retry-errors", "all"))
+
+    assert result.exit_code == 0, result.output
+    assert f"Resuming {stopped_run}: 15 of " in result.stdout
+    assert "failed ones scored again" in result.stdout
+    assert "Status: complete" in result.stdout
+    assert (stopped_run / "results.json").read_bytes() == (
+        whole / "run" / "results.json"
+    ).read_bytes()
+    assert judge.calls[0] == read_results(whole / "run").run.scorings.total - 15
+
+
+def test_permanent_failures_stay_failed_by_default(stopped_run: Path, monkeypatch) -> None:
+    use_judge(monkeypatch, text_judge())
+
+    result = runner.invoke(app, resume_args(stopped_run.parent))
+
+    # The revoked-key rows are kept as they were; everything never reached is scored.
+    assert result.exit_code == 0, result.output
+    assert "failed ones scored again" not in result.stdout
+    assert "scorings failed" in result.stderr
+    assert read_results(stopped_run).run.status == "complete"
+
+
+def test_a_complete_run_resumes_to_nothing_left(stub_judge, tmp_path: Path) -> None:
+    assert runner.invoke(app, audit_args(tmp_path)).exit_code == 0
+    before = (tmp_path / "run" / "results.json").read_bytes()
+
+    result = runner.invoke(app, resume_args(tmp_path))
+
+    assert result.exit_code == 0, result.output
+    assert " 0 to score" in result.stdout
+    assert (tmp_path / "run" / "results.json").read_bytes() == before
+
+
+def test_resume_takes_new_limits(stopped_run: Path, monkeypatch) -> None:
+    use_judge(monkeypatch, text_judge())
+
+    result = runner.invoke(
+        app, resume_args(stopped_run.parent, "--concurrency", "2", "--rate-limit", "6000")
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "2 at a time, at most 6000 calls a minute" in result.stdout
+    limits = read_results(stopped_run).run.limits
+    assert (limits.max_concurrency, limits.rate_limit) == (2, 6000)
+
+
+def test_a_big_resume_asks_first(stopped_run: Path, monkeypatch) -> None:
+    use_judge(monkeypatch, text_judge())
+    monkeypatch.setattr(cli, "CONFIRM_ABOVE_SCORINGS", 1)
+    before = (stopped_run / "evaluations.jsonl").read_bytes()
+
+    result = runner.invoke(app, resume_args(stopped_run.parent), input="n\n")
+
+    assert result.exit_code == 1
+    assert "Continue?" in result.output
+    assert (stopped_run / "evaluations.jsonl").read_bytes() == before
+
+    assert runner.invoke(app, resume_args(stopped_run.parent, "--yes")).exit_code == 0
+
+
+def test_a_different_judge_exits_2_and_changes_nothing(stopped_run: Path, monkeypatch) -> None:
+    judge = text_judge(version="2")
+    use_judge(monkeypatch, judge)
+    before = (stopped_run / "evaluations.jsonl").read_bytes()
+
+    result = runner.invoke(app, resume_args(stopped_run.parent))
+
+    assert result.exit_code == 2
+    assert "can't be resumed" in result.stderr
+    assert "different judge" in result.stderr
+    assert judge.calls[0] == 0
+    assert (stopped_run / "evaluations.jsonl").read_bytes() == before
+
+
+def test_resume_exits_2_for_a_directory_that_is_not_a_run(tmp_path: Path) -> None:
+    missing = runner.invoke(app, resume_args(tmp_path))
+    (tmp_path / "run").mkdir()
+    empty = runner.invoke(app, resume_args(tmp_path))
+
+    assert missing.exit_code == empty.exit_code == 2
+    assert "isn't a run directory" in missing.stderr
+    assert "has no config.toml" in empty.stderr
+
+
+def test_resume_exits_2_for_a_bad_retry_mode(stopped_run: Path, wide) -> None:
+    result = runner.invoke(app, resume_args(stopped_run.parent, "--retry-errors", "some"))
+
+    assert result.exit_code == 2
+    assert "--retry-errors" in click.unstyle(result.output)
+
+
+def test_a_run_from_before_audit_json_resumes_from_its_config(
+    stopped_run: Path, monkeypatch
+) -> None:
+    (stopped_run / "audit.json").unlink()
+    use_judge(monkeypatch, text_judge())
+
+    result = runner.invoke(app, resume_args(stopped_run.parent))
+
+    assert result.exit_code == 0, result.output
+    assert "made before runs kept an audit.json" in result.stderr
+    # The dataset label is the one its results were built with, not config.toml's.
+    assert read_results(stopped_run).run.dataset == str(RAGTRUTH_SAMPLE)
+
+
+def test_resuming_a_run_still_scoring_is_refused_before_anything_is_shown(
+    stopped_run: Path, monkeypatch
+) -> None:
+    from mtlj.engine.run_state import lock_run
+
+    use_judge(monkeypatch, text_judge())
+    monkeypatch.setattr(cli, "CONFIRM_ABOVE_SCORINGS", 0)
+
+    with lock_run(stopped_run):  # as the run that's still scoring holds it
+        result = runner.invoke(app, resume_args(stopped_run.parent))
+
+    assert result.exit_code == 2
+    assert "in use by another mtlj process" in result.stderr
+    assert "Resuming" not in result.stdout
+    assert "Continue?" not in result.output
+
+
+def test_a_run_whose_directory_is_taken_mid_start_exits_2(stub_judge, tmp_path: Path) -> None:
+    from mtlj.engine.run_state import lock_run
+
+    # Another run holds the directory: it passed the emptiness check, then lost the race.
+    with lock_run(tmp_path / "run"):
+        result = runner.invoke(app, audit_args(tmp_path))
+
+    assert result.exit_code == 2
+    assert "in use by another mtlj process" in result.stderr
+    assert "Traceback" not in result.output
