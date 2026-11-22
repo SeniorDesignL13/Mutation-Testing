@@ -1,0 +1,61 @@
+@startuml
+!include _style.iuml
+!pragma layout smetana
+hide empty members
+abstract class Judge {
+  name: str
+  model: str
+  version: str
+  score_range: ScoreRange
+  higher_is_better: bool
+  {abstract} score_raw(input, output, context)
+  cache_settings()
+  score(input, output, context): JudgeResult
+}
+class JudgeResult {
+  score: float
+  raw_score: float
+  judge_name, model, version: str
+  verdict_counts: VerdictCounts?
+  n_claims: int?
+}
+class DeepEvalFaithfulness
+class CallableJudge
+abstract class MutationOperator {
+  metadata: OperatorMetadata
+  {abstract} apply(text, context, intensity, seed): MutationResult
+  describe(): dict
+}
+class OperatorMetadata {
+  name: str
+  family: OperatorFamily
+  expected_direction: ExpectedDirection
+  version: int
+  parameters: list[ParameterSpec]
+}
+class MutationResult {
+  original_text: str
+  mutated_text: str
+  changed: bool
+  details: dict
+}
+class OperatorRegistry {
+  register(cls)
+  get(name): MutationOperator
+  names(): list[str]
+}
+class EntitySwap
+class NumericPerturbation
+class VerbosityPadding
+class Reformat
+Judge <|-- DeepEvalFaithfulness
+Judge <|-- CallableJudge
+Judge ..> JudgeResult : returns
+MutationOperator <|-- EntitySwap
+MutationOperator <|-- NumericPerturbation
+MutationOperator <|-- VerbosityPadding
+MutationOperator <|-- Reformat
+MutationOperator *-- OperatorMetadata
+MutationOperator ..> MutationResult : returns
+OperatorRegistry o-- MutationOperator
+@enduml

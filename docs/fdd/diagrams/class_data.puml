@@ -1,0 +1,61 @@
+@startuml
+!include _style.iuml
+!pragma layout smetana
+hide empty members
+class DatasetRecord {
+  record_id: str
+  source_dataset: str
+  question: str
+  context: list[Passage]
+  answer: str
+  metadata: dict
+}
+class Passage {
+  passage_id: str
+  text: str
+  title: str?
+}
+class Mutant {
+  mutant_id: str
+  record_id: str
+  operator_name: str
+  operator_version: int
+  operator_family
+  intensity: float
+  seed: int
+  expected_direction
+  original_text / mutated_text
+  changed: bool
+  details: dict
+  regenerate(record): Mutant
+}
+class GenerationResult {
+  originals: list[DatasetRecord]
+  mutants: list[Mutant]
+  skipped: list[SkippedMutant]
+  base_seed: int
+  battery: dict
+}
+class Evaluation {
+  kind: original | mutant
+  target_id, record_id: str
+  sample_index: int
+  status: ok | error
+  score, raw_score: float?
+  verdict_yes / borderline / no
+  n_claims: int?
+  latency_ms, cached, attempts
+}
+class RunSummary {
+  total, ok, errors: int
+  cache_hits, retries: int
+  elapsed_s: float
+}
+DatasetRecord "1" *-- "1..*" Passage
+DatasetRecord "1" <-- "0..*" Mutant : record_id
+GenerationResult o-- DatasetRecord
+GenerationResult o-- Mutant
+Evaluation "0..*" --> "1" Mutant : target_id
+Evaluation "0..*" --> "1" DatasetRecord : record_id
+RunSummary ..> Evaluation : counts
+@enduml

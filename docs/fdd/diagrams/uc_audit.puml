@@ -1,0 +1,35 @@
+@startuml
+!include _style.iuml
+!pragma layout smetana
+left to right direction
+skinparam nodesep 18
+skinparam ranksep 60
+actor "ML / LLM\nengineer" as Eng
+actor "Judge backend" as JB
+rectangle "Run an audit (detail)" {
+  usecase "Choose dataset\n(gold, corpus-v1, file)" as A1
+  usecase "Choose operator battery\nand intensities" as A2
+  usecase "Set samples, seed,\nconcurrency" as A3
+  usecase "Validate settings\nbefore any call" as A4
+  usecase "Generate mutants\nwith provenance" as A5
+  usecase "Score originals and\nmutants N times" as A6
+  usecase "Confirm a large run\n(over 1,000 scorings)" as A7
+  usecase "Retry transient\nfailures" as A8
+  usecase "Answer from response\ncache or fixtures" as A9
+  usecase "Write run directory\nand results.json" as A10
+  usecase "Print summary\n(audit show)" as A11
+}
+Eng --> A1
+Eng --> A2
+Eng --> A3
+Eng --> A7
+Eng --> A11
+A1 ..> A4 : <<include>>
+A2 ..> A4 : <<include>>
+A3 ..> A4 : <<include>>
+A6 ..> A5 : <<include>>
+A6 ..> A10 : <<include>>
+A8 ..> A6 : <<extend>>
+A9 ..> A6 : <<extend>>
+A6 --> JB
+@enduml

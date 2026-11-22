@@ -1,0 +1,27 @@
+@startuml
+!include _style.iuml
+skinparam defaultFontSize 13
+start
+:Run spaCy on answer and context;
+:Collect person, organization, place
+and date entities in the answer;
+:Keep entities the context supports;
+if (Any supported entity?) then (no)
+  :Return unchanged (logged as skip);
+  stop
+endif
+:Prefer entities that appear once in the answer;
+:Pick up to ceil(5 x intensity) claims, one per sentence;
+repeat :Next chosen entity;
+  :Find a replacement of the same type and format
+  (first from the context, then a short fixed list);
+  if (Replacement appears in the supporting sentence?) then (yes)
+    :Try the next candidate;
+  else (no)
+    :Substitute and record original, new text,
+    position, sentence and source;
+  endif
+repeat while (More chosen entities?) is (yes)
+:Return MutationResult with details["substitutions"];
+stop
+@enduml

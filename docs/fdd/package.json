@@ -1,0 +1,11 @@
+{
+  "name": "mtlj-fdd",
+  "private": true,
+  "description": "Builds the MTLJ Final Design Document (.docx) from content/*.md",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "docx": "9.5.1"
+  }
+}

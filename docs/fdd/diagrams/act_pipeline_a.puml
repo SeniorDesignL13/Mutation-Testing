@@ -1,0 +1,31 @@
+@startuml
+!include _style.iuml
+skinparam defaultFontSize 14
+start
+partition "1. Data preparation (once per corpus version)" {
+  :Load RAGTruth question-answering records;
+  :Keep GPT-4 answers with no human
+  hallucination label;
+  :Convert to the standard record format;
+  :Freeze as corpus v1 with a checksum;
+}
+partition "2. Mutation" {
+  :Read battery, intensities and base seed;
+  repeat :Next record and operator intensity;
+    :Derive a seed from (base seed,
+    record, operator, intensity);
+    :Apply the operator;
+    if (Text changed?) then (yes)
+      if (Same dose as a lower intensity?) then (yes)
+        :Drop as a repeated dose;
+      else (no)
+        :Save mutant with full provenance;
+      endif
+    else (no)
+      :Log the skip and its reason;
+    endif
+  repeat while (More work?) is (yes)
+}
+:Hand originals and mutants to execution;
+stop
+@enduml

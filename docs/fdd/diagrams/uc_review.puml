@@ -1,0 +1,35 @@
+@startuml
+!include _style.iuml
+!pragma layout smetana
+left to right direction
+skinparam nodesep 18
+skinparam ranksep 60
+actor "ML / LLM\nengineer" as Eng
+actor "Team\nannotator" as Ann
+actor "Product Owner" as PO
+rectangle "Dashboard (SD2)" {
+  usecase "Open a run's\njudge profile" as D1
+  usecase "Compare two runs" as D2
+  usecase "View dose-response\ncurves" as D3
+  usecase "Open the mutant\nexplorer" as D4
+  usecase "Download results.json" as D5
+}
+rectangle "Validation study (SD2)" {
+  usecase "Draw a stratified\nsample (100+ edits)" as V1
+  usecase "Label whether the\nexpected direction holds" as V2
+  usecase "Compute agreement\n(kappa / alpha)" as V3
+  usecase "Fix or drop weak\noperators" as V4
+}
+Eng --> D1
+Eng --> D2
+Eng --> D3
+Eng --> D4
+Eng --> D5
+D4 ..> D1 : <<extend>>
+PO --> V1
+Ann --> V2
+PO --> V3
+PO --> V4
+V2 ..> V1 : <<include>>
+V3 ..> V2 : <<include>>
+@enduml

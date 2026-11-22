@@ -1,0 +1,90 @@
+@startuml
+!include _style.iuml
+!pragma layout smetana
+hide circle
+hide empty members
+entity corpus_version {
+  * corpus_id : uuid <<PK>>
+  name : text
+  checksum : text
+  record_count : int
+  frozen_at : timestamptz
+}
+entity dataset_record {
+  * record_id : text <<PK>>
+  corpus_id : uuid <<FK>>
+  question : text
+  context : jsonb
+  answer : text
+  metadata : jsonb
+}
+entity operator {
+  * operator_id : uuid <<PK>>
+  name : text
+  version : int
+  family : enum
+  expected_direction : enum
+}
+entity mutant {
+  * mutant_id : text <<PK>>
+  record_id : text <<FK>>
+  operator_id : uuid <<FK>>
+  intensity : real
+  parameters : jsonb
+  seed : bigint
+  mutated_answer : text
+  details : jsonb
+}
+entity judge {
+  * judge_id : uuid <<PK>>
+  name : text
+  framework : text
+  framework_version : text
+}
+entity judge_config {
+  * config_id : uuid <<PK>>
+  judge_id : uuid <<FK>>
+  model : text
+  quantization : text
+  settings : jsonb
+}
+entity audit_run {
+  * run_id : uuid <<PK>>
+  corpus_id : uuid <<FK>>
+  config_id : uuid <<FK>>
+  battery : jsonb
+  samples : int
+  seed : bigint
+  status : enum
+  results : jsonb
+  started_at : timestamptz
+  finished_at : timestamptz
+}
+entity evaluation {
+  * evaluation_id : uuid <<PK>>
+  run_id : uuid <<FK>>
+  target_id : text
+  is_original : bool
+  sample_index : int
+  status : enum
+  score : real
+  n_claims : int
+  verdict_counts : jsonb
+  created_at : timestamptz
+}
+entity annotation {
+  * annotation_id : uuid <<PK>>
+  mutant_id : text <<FK>>
+  annotator : text
+  direction_holds : bool
+  notes : text
+}
+corpus_version ||--o{ dataset_record
+dataset_record ||--o{ mutant
+operator ||--o{ mutant
+mutant ||--o{ annotation
+judge ||--o{ judge_config
+judge_config ||--o{ audit_run
+corpus_version ||--o{ audit_run
+audit_run ||--o{ evaluation
+@enduml

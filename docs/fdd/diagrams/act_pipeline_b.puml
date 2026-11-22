@@ -1,0 +1,31 @@
+@startuml
+!include _style.iuml
+skinparam defaultFontSize 14
+start
+partition "3. Execution" {
+  :Check judge identity and plan
+  (originals + mutants) x N scorings;
+  if (Over 1,000 scorings and no --yes?) then (yes)
+    :Ask the user to confirm;
+  endif
+  fork
+    :Score originals N times;
+  fork again
+    :Score mutants N times;
+  end fork
+  :Stream each score to evaluations.jsonl
+  (cache hit, fixture or live call,
+  retry on a transient error);
+}
+partition "4. Analysis" {
+  :Pool the variance of originals
+  into the noise floor;
+  :Pair each mutant with its original;
+  :Detection rate and spurious sensitivity
+  with Wilson and bootstrap intervals;
+  :Benjamini-Hochberg across the run's tests;
+  :Fit dose-response curves;
+  :Write results.json and print the summary;
+}
+stop
+@enduml

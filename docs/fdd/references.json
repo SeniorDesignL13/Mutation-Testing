@@ -1,0 +1,134 @@
+[
+ {
+  "key": "beller",
+  "text": "Beller, M., Wong, C.-P., Bader, J., Scott, A., Machalica, M., Chandra, S., and Meijer, E. \"What It Would Take to Use Mutation Testing in Industry: A Study at Facebook.\" Proceedings of ICSE-SEIP 2021. https://doi.org/10.1109/ICSE-SEIP52600.2021.00036"
+ },
+ {
+  "key": "bh",
+  "text": "Benjamini, Y., and Hochberg, Y. \"Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing.\" Journal of the Royal Statistical Society, Series B, 57(1), 1995, pp. 289-300."
+ },
+ {
+  "key": "nltk",
+  "text": "Bird, S., Klein, E., and Loper, E. Natural Language Processing with Python. O'Reilly Media, 2009. NLTK available at https://www.nltk.org"
+ },
+ {
+  "key": "cohen",
+  "text": "Cohen, J. \"A Coefficient of Agreement for Nominal Scales.\" Educational and Psychological Measurement, 20(1), 1960, pp. 37-46."
+ },
+ {
+  "key": "deepeval",
+  "text": "Confident AI. DeepEval: The LLM Evaluation Framework. Open-source software, Apache License 2.0. https://github.com/confident-ai/deepeval"
+ },
+ {
+  "key": "efron",
+  "text": "Efron, B., and Tibshirani, R. J. An Introduction to the Bootstrap. Chapman and Hall/CRC, 1993."
+ },
+ {
+  "key": "ragas",
+  "text": "Es, S., James, J., Espinosa-Anke, L., and Schockaert, S. \"RAGAS: Automated Evaluation of Retrieval Augmented Generation.\" Proceedings of EACL 2024 (System Demonstrations). https://arxiv.org/abs/2309.15217"
+ },
+ {
+  "key": "spacy",
+  "text": "Explosion AI. spaCy: Industrial-Strength Natural Language Processing in Python, and the en_core_web_sm 3.8 model card. Open-source software, MIT License. https://spacy.io/models/en"
+ },
+ {
+  "key": "fastapi",
+  "text": "FastAPI contributors. FastAPI framework documentation. https://fastapi.tiangolo.com"
+ },
+ {
+  "key": "jia",
+  "text": "Jia, Y., and Harman, M. \"An Analysis and Survey of the Development of Mutation Testing.\" IEEE Transactions on Software Engineering, 37(5), 2011, pp. 649-678."
+ },
+ {
+  "key": "krippendorff",
+  "text": "Krippendorff, K. Content Analysis: An Introduction to Its Methodology, 4th ed. SAGE Publications, 2018."
+ },
+ {
+  "key": "vllm",
+  "text": "Kwon, W., et al. \"Efficient Memory Management for Large Language Model Serving with PagedAttention.\" Proceedings of SOSP 2023. vLLM available at https://github.com/vllm-project/vllm"
+ },
+ {
+  "key": "halueval",
+  "text": "Li, J., Cheng, X., Zhao, W. X., Nie, J.-Y., and Wen, J.-R. \"HaluEval: A Large-Scale Hallucination Evaluation Benchmark for Large Language Models.\" Proceedings of EMNLP 2023. https://arxiv.org/abs/2305.11747"
+ },
+ {
+  "key": "geval",
+  "text": "Liu, Y., Iter, D., Xu, Y., Wang, S., Xu, R., and Zhu, C. \"G-Eval: NLG Evaluation Using GPT-4 with Better Human Alignment.\" Proceedings of EMNLP 2023. https://arxiv.org/abs/2303.16634"
+ },
+ {
+  "key": "llama",
+  "text": "Meta. Llama 3.1 model card and Llama 3.1 Community License Agreement, 2024. https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct"
+ },
+ {
+  "key": "muteval",
+  "text": "muteval contributors. muteval: Mutation Testing for LLM Evaluation Pipelines. Python package. https://pypi.org/project/muteval/"
+ },
+ {
+  "key": "msmarco",
+  "text": "Nguyen, T., Rosenberg, M., Song, X., Gao, J., Tiwary, S., Majumder, R., and Deng, L. \"MS MARCO: A Human Generated Machine Reading Comprehension Dataset.\" 2016. https://arxiv.org/abs/1611.09268"
+ },
+ {
+  "key": "ragtruth",
+  "text": "Niu, C., Wu, Y., Zhu, J., Xu, S., Shum, K., Zhong, R., Song, J., and Zhang, T. \"RAGTruth: A Hallucination Corpus for Developing Trustworthy Retrieval-Augmented Language Models.\" Proceedings of ACL 2024. https://arxiv.org/abs/2401.00396"
+ },
+ {
+  "key": "nuxt",
+  "text": "Nuxt contributors. Nuxt 4 documentation. https://nuxt.com/docs"
+ },
+ {
+  "key": "ollama",
+  "text": "Ollama. Ollama: Run Large Language Models Locally, and the llama3.1 model library page. Open-source software. https://ollama.com/library/llama3.1"
+ },
+ {
+  "key": "openai",
+  "text": "OpenAI. GPT-4o mini model documentation, API pricing, and API data usage policies. https://platform.openai.com/docs/models"
+ },
+ {
+  "key": "panickssery",
+  "text": "Panickssery, A., Bowman, S. R., and Feng, S. \"LLM Evaluators Recognize and Favor Their Own Generations.\" Advances in Neural Information Processing Systems 37 (NeurIPS 2024). https://arxiv.org/abs/2404.13076"
+ },
+ {
+  "key": "petrovic",
+  "text": "Petrović, G., and Ivanković, M. \"State of Mutation Testing at Google.\" Proceedings of ICSE-SEIP 2018. https://doi.org/10.1145/3183519.3183521"
+ },
+ {
+  "key": "plantuml",
+  "text": "PlantUML contributors. PlantUML language reference guide. https://plantuml.com"
+ },
+ {
+  "key": "primevue",
+  "text": "PrimeTek. PrimeVue 4 documentation, including the accessibility guide and the Aura theme. https://primevue.org"
+ },
+ {
+  "key": "promptfoo",
+  "text": "Promptfoo contributors. Promptfoo: Test Your LLM App. Open-source software. https://github.com/promptfoo/promptfoo"
+ },
+ {
+  "key": "scrum",
+  "text": "Schwaber, K., and Sutherland, J. The Scrum Guide. 2020. https://scrumguides.org"
+ },
+ {
+  "key": "fever",
+  "text": "Thorne, J., Vlachos, A., Christodoulopoulos, C., and Mittal, A. \"FEVER: A Large-Scale Dataset for Fact Extraction and VERification.\" Proceedings of NAACL-HLT 2018. https://arxiv.org/abs/1803.05355"
+ },
+ {
+  "key": "wcag",
+  "text": "W3C. Web Content Accessibility Guidelines (WCAG) 2.2. W3C Recommendation, 2023. https://www.w3.org/TR/WCAG22/"
+ },
+ {
+  "key": "wang",
+  "text": "Wang, P., Li, L., Chen, L., et al. \"Large Language Models Are Not Fair Evaluators.\" Proceedings of ACL 2024. https://arxiv.org/abs/2305.17926"
+ },
+ {
+  "key": "wilson",
+  "text": "Wilson, E. B. \"Probable Inference, the Law of Succession, and Statistical Inference.\" Journal of the American Statistical Association, 22(158), 1927, pp. 209-212."
+ },
+ {
+  "key": "hotpotqa",
+  "text": "Yang, Z., Qi, P., Zhang, S., Bengio, Y., Cohen, W. W., Salakhutdinov, R., and Manning, C. D. \"HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering.\" Proceedings of EMNLP 2018. https://arxiv.org/abs/1809.09600"
+ },
+ {
+  "key": "zheng",
+  "text": "Zheng, L., Chiang, W.-L., Sheng, Y., et al. \"Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena.\" Advances in Neural Information Processing Systems 36 (NeurIPS 2023), Datasets and Benchmarks Track. https://arxiv.org/abs/2306.05685"
+ }
+]

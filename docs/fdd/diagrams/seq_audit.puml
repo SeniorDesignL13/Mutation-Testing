@@ -1,0 +1,39 @@
+@startuml
+!include _style.iuml
+skinparam defaultFontSize 16
+autonumber
+actor Engineer
+participant "CLI" as CLI
+participant "AuditConfig" as Cfg
+participant "Generator" as Gen
+participant "Runner" as Run
+participant "Cache /\nFixtures" as Cache
+participant "Judge\nadapter" as Judge
+participant "Judge\nbackend" as Back
+participant "JsonlSink" as Sink
+participant "Results" as Res
+Engineer -> CLI : mtlj audit run --config audit.toml
+CLI -> Cfg : load and validate every key
+Cfg --> CLI : settings (or exit 2)
+CLI -> Gen : generate_mutants(records, battery, seed)
+Gen --> CLI : GenerationResult
+CLI -> CLI : count scorings; confirm if over 1,000
+CLI -> Run : run_judge(judge, records, mutants, N)
+loop each task (original or mutant, sample i), up to 4 in flight
+  Run -> Cache : get(task key)
+  alt cached
+    Cache --> Run : score
+  else not cached
+    Run -> Judge : score(input, output, context)
+    Judge -> Back : model call
+    Back --> Judge : claims and verdicts
+    Judge --> Run : JudgeResult (score, verdict counts)
+    Run -> Cache : put(task key, score)
+  end
+  Run -> Sink : write(Evaluation)
+end
+Run --> CLI : RunSummary
+CLI -> Res : compute rates, intervals, correction, curves
+Res --> CLI : results.json
+CLI --> Engineer : printed summary + run directory
+@enduml

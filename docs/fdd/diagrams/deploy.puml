@@ -1,0 +1,33 @@
+@startuml
+!include _style.iuml
+!pragma layout smetana
+node "Developer laptop (now)" as Laptop {
+  node "Docker Compose" as DC {
+    component "frontend\nNuxt :3000" as FE
+    component "api\nFastAPI :8000" as API
+    database "db\nPostgres 16 :5432" as DB
+    component "ollama :11434\n(profile: models)" as OL
+  }
+  component "uv venv\nmtlj CLI" as CLI
+  folder "runs/ and\nresponse cache" as RUNS
+}
+cloud "GitHub" as GH {
+  component "Repository\n+ branch protection" as Repo
+  component "Actions CI\n(lint, tests, build)" as Actions
+  component "Dependabot" as Dep
+}
+cloud "OpenAI API" as OAI
+node "Target host (SD2, to decide)" as Target {
+  component "Static dashboard\n+ read-only API" as Prod
+  database "Managed Postgres" as PDB
+}
+FE --> API
+API --> DB
+CLI --> OAI
+CLI --> OL
+CLI --> RUNS
+Repo --> Actions
+Dep --> Repo
+Repo ..> Target : deploy on tag
+Prod --> PDB
+@enduml
