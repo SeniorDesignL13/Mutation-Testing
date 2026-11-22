@@ -83,7 +83,10 @@ so the noise floor is 0. Use `--dataset gold` or `--dataset corpus-v1` for real 
 nobody can answer, such as under `nohup` or in CI, add `--yes`: without it the question gets no
 answer, and the command prints "Aborted." and exits 1 before any scoring.
 
-`--dataset` also takes a RAGTruth `.jsonl` file. See `uv run mtlj audit run --help` for the rest.
+`--dataset` also takes a RAGTruth `.jsonl` file. `--judge` picks the judge: `deepeval-faithfulness`
+(default), `deepeval-faithfulness-penalized` or `ragas-faithfulness`, and `--model` its OpenAI model.
+[Judges](docs/judges.md) explains how the DeepEval and Ragas metrics differ. See
+`uv run mtlj audit run --help` for the rest.
 The command exits 1 if the run stops early.
 
 ### From a config file
@@ -137,6 +140,7 @@ generated, `.github/` runs the automatic checks, and the dotfiles configure tool
 ## Next
 
 - **[How to develop](docs/DEVELOPER.md)**: running Python on your machine, how-tos, fixing problems
+- **[Judges](docs/judges.md)**: the judges you can audit, and how Ragas faithfulness differs from DeepEval's
 - **[Audit results](docs/results.md)**: what a run leaves behind and the `results.json` format
 - **[Rules for contributing](docs/CONTRIBUTING.md)**: how Jira and GitHub work together, Git step by step, pull requests, code style
 
