@@ -147,4 +147,4 @@ Table: Traceability from epics to requirements and tests {#trace}
 | MTLJ-12 Command Line Interface | FR-15, FR-25 | tests/cli/test_cli.py, tests/engine/test_audit_config.py |
 | MTLJ-13 Mutation Engine | FR-03, FR-07, FR-08 | tests/operators/test_registry.py, tests/engine/test_generator.py, tests/engine/test_battery_config.py |
 | MTLJ-14 Execution Engine | FR-12 to FR-19 | tests/engine/test_runner.py, test_retry.py, test_cache.py, test_fixtures.py |
-| MTLJ-5 Empirical Audit and Findings | Objective 5 | Pilot and full audit run directories; findings report (Section 11.4) |
+| MTLJ-5 Empirical Audit and Findings | Objective 5 | Pilot and full audit run directories; findings report (Sections 11.4 and 11.5) |

@@ -38,7 +38,8 @@ write. Search the .docx for "Team check" to find them all. In short:
 - [ ] Each member checks their row of the team roles table (Section 21.1)
 - [ ] Replace the three Jira placeholders with screenshots: backlog, epics, Sprint 4 board
 - [ ] Confirm the Sprint 2 totals against Jira's sprint report
-- [ ] Fill in the first full audit's judges and results (Section 11.4, both tables) from the run directories
+- [ ] Add the live pilot numbers (Section 11.4) and fill in the first full audit's judges and results (Section 11.5, both tables)
+- [ ] Create Jira tickets for the two pilot fixes with no ticket: wire the response cache into `audit run`, and the numeric perturbation repeated-dose fix (Sections 8.4 and 9.3)
 - [ ] Check the negation insertion, sentence reordering, validity filter, resume and rate-limit descriptions against the code (Sections 8.7 to 8.9 and 9.5)
 - [ ] Replace the test results table with the last CI run on main before submission (Section 18.3)
 - [ ] Add the measured local-model speed and memory, and the full audit's run time and cost (Section 16.3)

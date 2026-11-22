@@ -136,7 +136,7 @@ Table: Major milestones {#milestones}
 | Corpus v1 frozen | Oct 23, 2026 (met) | 919 records with a committed checksum |
 | First end-to-end CLI audit | Nov 9, 2026 (met) | `mtlj audit run` on the gold set with intervals |
 | Final design document | End of SD1 | This document |
-| Pilot audits and first full audit | Nov 24, 2026 (met) | Run directories and first findings (Section 11.4) |
+| Pilot audits and first full audit | Nov 24, 2026 (met) | Run directories and first findings (Sections 11.4 and 11.5) |
 | Dashboard MVP | Late Feb 2027 | Profile and comparison views on real results |
 | Ground truth validated | Mar 9, 2027 | Validation score and agreement for every operator |
 | Final audit with validated operators | Apr 13, 2027 | At least two published judges audited with validated operators |
@@ -164,13 +164,15 @@ Table: Risk register {#risks}
 | Risk | Impact | Likelihood | Mitigation | Status |
 |---|---|---|---|---|
 | Edits that do not really change meaning (equivalent mutants) | High | Medium | Strict operator rules, validity filter, two-person human review | Filter done; review in SD2 |
-| An entity swap breaks grammar instead of meaning, or swaps a mislabeled entity | High | Medium | Same-type swaps only; filter rejects garbled output; rejection rates logged | Seen in the gold set (Section 8.9); filter done |
+| An entity swap breaks grammar instead of meaning, or swaps a mislabeled entity | High | High | Same-type swaps only; validity filter; skip verbs and non-names; hand-check 50 mutants before the full run | Confirmed by the pilots: 7 of 13 gold-set swaps invalid (Section 8.9) |
 | A "harmless" edit actually hurts quality | Medium | Medium | Filler from the record's own context; report as curves; extra review of preserving edits | Mitigated by design |
 | Judge randomness hides real effects | High | High | Repeated sampling, paired comparison, noise-based threshold, intervals | Mitigated; validated on the feasibility data |
 | Scores stuck at 1.0 (saturation) | Medium | Medium | Report it honestly; run the `penalize_ambiguous_claims` setting; note it as a limitation | See Section 11.4 |
 | Labels give only direction | Medium | Certain | Report detection and sensitivity, not accuracy or calibration | Accepted limitation |
-| Long audits crash or take hours | Medium | Medium | Stream results, retries, cache, local models, pilots first, resume | Mitigated |
+| Long audits crash or take hours | Medium | Medium | Stream results, retries, resume, rate limiting, local models, pilots first; wire the cache into the CLI | Mitigated once the cache is wired in (Section 9.3) |
 | Framework updates break adapters | Medium | Medium | Pinned versions, adapters, contract tests, replayed fixtures in CI | Mitigated |
+| Numeric perturbation loses its higher intensities to the repeated-dose rule | Medium | Certain | Skip the repeated-dose check for operators whose intensity is not a count | Found by the pilots (Section 8.4); fix needs a ticket |
+| Run time is longer than planned (one recording session, untested at 8 concurrent calls) | Medium | Medium | Live pilot before booking the full run; 4 concurrent calls until no rate-limit errors are seen at 8 | Open |
 | API costs exceed the budget | Medium | Low | Cache, fixtures, local models, spending limits, pilot runs before full runs | Mitigated |
 | Team capacity | High | Medium | Smaller MVP, agreed cut order, backup roles, raise problems early | Ahead of plan |
 | Dashboard slips | Medium | Medium | Dashboard is off the critical path; the CLI and results file deliver every result | Mitigated by design |

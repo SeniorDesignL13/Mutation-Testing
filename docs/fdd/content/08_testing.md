@@ -91,7 +91,7 @@ Table: Acceptance tests by user story {#acceptance}
 | US-10, US-11 | The profile and comparison views render a seeded run correctly, pass axe-core checks, and work by keyboard | Planned (SD2) |
 | US-12 | The validation study meets the bars in {tab:validation} | Planned (SD2) |
 | US-13 | The test suite passes with the network blocked | Pass |
-| US-14 | A second identical run is answered entirely from the cache, with a 100% hit rate in the run summary | Pass |
+| US-14 | Running the runner twice on the same tasks with the same cache answers the second run entirely from the cache, with a 100% hit rate in the run summary | Pass (runner tests); CLI wiring pending (Section 9.3) |
 
 ## 18.5 Senior Design II Test Plan
 

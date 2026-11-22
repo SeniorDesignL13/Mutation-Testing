@@ -46,7 +46,7 @@ Every rate gets two 95% intervals. The **Wilson score interval** {ref:wilson} tr
 
 Two different sample sizes matter, and the preliminary design document blurred them. This section separates them.
 
-**Samples per text (N)** is how many times each original and each mutant is scored. It controls how precisely each paired delta is measured, and so how small τ is relative to σ ({tab:tau}). N multiplies every judge call, so it drives cost more than anything else. The feasibility study showed entity swaps moving scores by about three times the noise floor, which five samples resolve comfortably (τ ≈ 1.04 σ). The team adopted N = 5 as the default on October 20, 2026, and checked it against the pilot audits in Sprint 4.
+**Samples per text (N)** is how many times each original and each mutant is scored. It controls how precisely each paired delta is measured, and so how small τ is relative to σ ({tab:tau}). N multiplies every judge call, so it drives cost more than anything else. The feasibility study showed entity swaps moving scores by about three times the noise floor, which five samples resolve comfortably (τ ≈ 1.04 σ). The team adopted N = 5 as the default on October 20, 2026, and checked it against the pilot audits in Sprint 4. Re-cutting the pilot's five recorded samples into every subset of two, three, and four showed that smaller N finds slightly fewer of everything and changes about one per-mutant verdict in ten at N = 3, while no headline rate moves by more than its interval. N = 5 stays the default, and N = 3, which would cut a full run by 40%, is the fallback if the budget requires it.
 
 **Number of pairs (testable mutants per operator and intensity)** controls how precisely each rate and each mean effect is estimated. As a guide for the mean paired effect, a paired test at 80% power and α = 0.05 needs about 34 pairs to detect a medium standardized effect (0.5), about 90 for 0.3, and about 200 for a small effect (0.2). For the rates themselves, the interval width matters more. A full corpus audit has several hundred testable mutants per operator and intensity, which gives Wilson intervals roughly ±3 to ±5 percentage points wide. The 20-record gold set gives intervals of about ±20 points and is meant only for development.
 
@@ -108,11 +108,49 @@ The study also found three things about the judge itself, a preview of what the 
 
 The study supports five samples per text as the default. It confirmed that entity swaps must contradict the source rather than merely add something new, and it led to two data model changes: saving verdict and claim counts with every score, and switching to the pooled noise estimate. It also flagged score saturation as a risk. If clean answers almost always score 1.0, harmless edits can only push scores down, so the system can catch a judge that punishes padding but not one that rewards it. That is documented as a limitation. The study used only 20 records, one judge, one model, and edits written by one person. That is adequate for a yes-or-no feasibility check, and it is exactly what the full system is designed to go beyond.
 
-## 11.4 Pilot Audits and First Full Audit
+## 11.4 Pilot Audits
 
-In Sprint 4 the team moved from the hand-built feasibility study to the real system. It first ran pilot audits (MTLJ-89) on 20 records per judge, to check the whole pipeline, the cost, and the run time on a small scale before committing to a long run. It then selected the judge population for the study (MTLJ-88), ran the full audit battery on corpus records (MTLJ-86), and analyzed the results (MTLJ-87). {tab:judges_selected} lists the judges audited, and {tab:audit_results} summarizes the headline rates.
+In Sprint 4 the team moved from the hand-built feasibility study to the real system. The pilot audits (MTLJ-89) sized the full study and looked for problems before a long run. They had two parts. The first replayed the recorded gold-set run (20 records, 133 default-battery mutants, five samples each, 765 DeepEval scorings on gpt-4o-mini) through the real engine with no network, and generated every corpus v1 mutant locally to count the planned work exactly. The second was a live run on 20 corpus records per judge configuration. The write-up, data, and analysis script are in `docs/pilot-audits.md`, `docs/pilot/`, and `scripts/pilot_analysis.py`.
 
-> NOTE: Fill in the two tables below from the run directories (results.json) of the Sprint 4 audits, and add one paragraph per judge describing its main weak spots. Do not leave any "fill in" cell in the submitted document.
+> NOTE: The live pilots (the second part) and the Ragas pilot need an OpenAI key and had not run when this section was written. Add their measured latency, errors, rate-limit responses, and tokens per scoring here, and compare them with the replay figures below.
+
+{tab:pilot_size} shows the size of a full audit. {tab:pilot_time} extrapolates its run time and cost. Latency comes from the 765 recorded calls: a mean of 8.46 seconds per scoring (median 8.30, 90th percentile 10.89, maximum 16.86), nearly the same for originals and every operator. It grows with the number of claims the judge has to check (correlation 0.64). Cost is a ceiling from the README's three-record run (at most $0.0013 per scoring), since token counts are not recorded in the fixtures.
+
+Table: Planned work for one full audit of one judge configuration (corpus v1, N = 5) {#pilot_size}
+| Part | Texts | Scorings |
+|---|---|---|
+| Originals | 919 | 4,595 |
+| Verbosity padding (four lengths) | 3,676 | 18,380 |
+| Reformatting (bullets, markdown, prose) | 1,844 | 9,220 |
+| Entity substitution (364 / 151 / 23 at the three intensities) | 538 | 2,690 |
+| **Default battery total** | **6,977** | **34,885** |
+| With numeric perturbation added (one intensity, see Section 8.4) | 7,376 | 36,880 |
+
+Table: Extrapolated run time and cost of the full audit {#pilot_time}
+| Setup | Scorings | Hours at 4 concurrent | Hours at 8 concurrent | Cost (ceiling) |
+|---|---|---|---|---|
+| One configuration, default battery | 34,885 | 20.5 | 10.2 | $45.50 |
+| Both DeepEval configurations, default battery | 69,770 | 41.0 | 20.5 | $91 |
+| Both DeepEval configurations, with numeric perturbation | 73,760 | 43.4 | 21.7 | $96 |
+
+The resources are modest: about 1 MB of run directory per 1,000 scorings (about 35 MB for a full run) and a peak of 283 MB of memory for the replay process. The extrapolation assumes calls overlap perfectly and that the provider does not throttle at eight concurrent calls, which only a live run can confirm. The feasibility study ran about twice as fast per scoring, so the times may halve.
+
+The replay also gave the first engine-produced rates. The noise floor was 0.030, about half the feasibility study's 0.054 on the same records, because the judge was nearly deterministic this time: 15 of 20 originals and 100 of 133 mutants scored identically on all five samples, 13 originals at exactly 1.0. The noise floor is re-estimated in every run, and with 919 originals it rests on far more records. Spurious sensitivity was above chance for every preserving operator: 25% for bullets, 35% for markdown, and 19% for padding, against the 5% that noise alone produces. The rate rises rather than falls with N, so these are consistent reactions to formatting rather than noise, and they are likely to be a headline finding of the full study.
+
+The pilots found four problems, ordered by how much they would waste:
+
+1. **Entity swap makes invalid mutants** (Section 8.9). The gold set's 46% detection rate comes entirely from invalid or doubtful swaps, so it does not yet measure how well the judge catches wrong facts.
+2. **Numeric perturbation loses two thirds of its intensities** to the repeated-dose rule (Section 8.4).
+3. **The CLI did not use the response cache**, and a run that stopped partway had to start again (Section 9.3). Resume (MTLJ-91) and rate limiting (MTLJ-96) were not yet built when the pilot ran.
+4. **Verdict counts sometimes fall short of the claim count.** In 43 of 765 scorings (5.6%) the counts sum to fewer than `n_claims`, concentrated in long, padded answers. No score is wrong, because DeepEval divides by the verdicts it returned, but analyses must not use `n_claims` as the denominator.
+
+The pilots' recommendation was not to start the full run until entity swap is fixed or filtered and checked by hand, the response cache is wired into the CLI, and a live pilot has confirmed latency, errors, and rate-limit behavior.
+
+## 11.5 First Full Audit
+
+After the pilots, the team selected the judge population for the study (MTLJ-88), ran the full audit battery on corpus records (MTLJ-86), and analyzed the results (MTLJ-87). {tab:judges_selected} lists the judges audited, and {tab:audit_results} summarizes the headline rates.
+
+> NOTE: Fill in the two tables below from the run directories (results.json) of the Sprint 4 audits, and add one paragraph per judge describing its main weak spots. State which pilot recommendations were in place before the run. Do not leave any "fill in" cell in the submitted document.
 
 Table: Judges audited in the first full audit {#judges_selected}
 | Judge | Framework and version | Model | Settings | Why it was chosen |

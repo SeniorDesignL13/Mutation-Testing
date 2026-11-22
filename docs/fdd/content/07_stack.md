@@ -78,7 +78,7 @@ One other language tool takes part, but it is not generative. The operators use 
 
 ## 16.2 Judge Models
 
-Judges are chosen because teams actually use them, not because they are the best. The main target is DeepEval's faithfulness metric: it is widely used, and its claim-by-claim design lines up well with the operators. Ragas faithfulness is the second target, because it computes nominally the same metric a different way. The team selected the judges for the study in Sprint 4 (MTLJ-88); {tab:judges_selected} in Section 11.4 lists them with the reason for each. The model behind a judge is treated as part of its identity. {tab:models} lists the models in use or planned.
+Judges are chosen because teams actually use them, not because they are the best. The main target is DeepEval's faithfulness metric: it is widely used, and its claim-by-claim design lines up well with the operators. Ragas faithfulness is the second target, because it computes nominally the same metric a different way. The team selected the judges for the study in Sprint 4 (MTLJ-88); {tab:judges_selected} in Section 11.5 lists them with the reason for each. The model behind a judge is treated as part of its identity. {tab:models} lists the models in use or planned.
 
 Table: Judge models {#models}
 | Model | Source | Role | How it runs | Approximate resources and cost |
@@ -87,13 +87,13 @@ Table: Judge models {#models}
 | Llama 3.1 8B Instruct, 4-bit quantized (Q4_K_M) | Meta {ref:llama}, through the Ollama library {ref:ollama} | Local judge model for free overnight audits | Ollama container on a team member's machine | About a 4.9 GB download; roughly 6 to 8 GB of GPU or system memory |
 | Llama 3.2 3B (development) | Meta, through Ollama | Small model for testing the Ollama integration | Ollama container | About a 2 GB download; runs on most laptops |
 
-> NOTE: Confirm the current gpt-4o-mini prices and the Ollama download sizes before submitting, and make this table match the judges in Section 11.4.
+> NOTE: Confirm the current gpt-4o-mini prices and the Ollama download sizes before submitting, and make this table match the judges in Section 11.5.
 
 ## 16.3 Speed, Cost, and Memory in Practice
 
 The measured numbers so far come from gpt-4o-mini. The README's three-record pilot (3 originals and 20 mutants, 5 scorings each, 115 scorings in total) takes about four minutes and costs under fifteen cents at the default concurrency of four. That is about 0.13 cents per scoring, and about two seconds of wall-clock time per scoring with four calls in flight. Each DeepEval faithfulness scoring makes several model calls (claim extraction, then a verdict for each claim), which is why a single scoring takes several seconds.
 
-Extrapolating from the gold set, which yields about 6.65 default-battery mutants per record, a full corpus audit is about 919 × 7.65 × 5 ≈ 35,000 scorings. That is roughly $45 to $50 with gpt-4o-mini, and about 20 hours at a concurrency of four. Raising the concurrency within the API's rate limits shortens the run proportionally. The response cache makes any rerun of the same scorings free. A local quantized 8B model costs nothing per call but is slower per call on consumer hardware, so overnight runs are the expected pattern. The Ollama integration (MTLJ-92) is complete, and the pilot audits measured local throughput and memory on the team's machines.
+The pilot audits (Section 11.4) measured more precisely. Across 765 recorded DeepEval scorings, a scoring took 8.46 seconds on average (median 8.30, 90th percentile 10.89), driven mostly by how many claims the answer has. A full corpus audit is 34,885 scorings per judge configuration: at most about $46 with gpt-4o-mini, and about 20.5 hours at four concurrent calls or 10.2 at eight, if the provider does not throttle. The replay process peaked at 283 MB of memory. Once the response cache is wired into the CLI (Section 9.3), a rerun of unchanged scorings costs nothing. A local quantized 8B model costs nothing per call but is slower per call on consumer hardware, so overnight runs are the expected pattern. The Ollama integration (MTLJ-92) is complete, and the pilot audits measured local throughput and memory on the team's machines.
 
 > NOTE: Add the measured local numbers (seconds per scoring and memory used for the local model, and the hardware) and the actual run time and cost of the first full audit.
 
