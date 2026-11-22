@@ -12,6 +12,7 @@ Scoring --> Analyzing : all tasks done
 Analyzing --> Complete : 2+ scores on originals
 Analyzing --> InsufficientData : no original with 2+ scores
 Aborted --> [*] : status aborted (exit 1)
+Aborted --> Scoring : mtlj audit resume
 Complete --> [*] : status complete
 InsufficientData --> [*] : status insufficient_data
 @enduml

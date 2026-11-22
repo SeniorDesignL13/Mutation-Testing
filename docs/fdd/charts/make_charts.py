@@ -33,19 +33,19 @@ def save(fig, name):
 # --- Epic status (tasks per epic: done, active, to do) as of 2026-11-22 ---------------------
 EPICS = [
     ("Infrastructure and Tooling", 8, 0, 0),
-    ("Dataset Acquisition", 4, 0, 1),
+    ("Dataset Acquisition", 5, 0, 0),
     ("Core Data Model", 5, 0, 4),
-    ("Adapter Layer", 4, 0, 1),
-    ("Degrading Operators", 3, 0, 3),
-    ("Preserving Operators", 4, 0, 2),
+    ("Adapter Layer", 5, 0, 0),
+    ("Degrading Operators", 6, 0, 0),
+    ("Preserving Operators", 6, 0, 0),
     ("Mutation Engine", 4, 0, 0),
-    ("Execution Engine", 5, 1, 2),
+    ("Execution Engine", 8, 0, 0),
     ("Analysis and Statistics", 9, 0, 0),
-    ("Command Line Interface", 2, 0, 1),
+    ("Command Line Interface", 3, 0, 0),
     ("Dashboard", 1, 0, 5),
     ("Validation Study", 0, 0, 6),
-    ("Empirical Audit", 0, 0, 4),
-    ("Documentation", 1, 2, 3),
+    ("Empirical Audit", 4, 0, 0),
+    ("Documentation", 6, 0, 0),
 ]
 
 
@@ -68,7 +68,7 @@ def epic_status():
 
 
 # --- Sprint velocity -------------------------------------------------------------------
-SPRINTS = [("Sprint 1", 41, 26), ("Sprint 2", 89, 52), ("Sprint 3", 83, 78)]
+SPRINTS = [("Sprint 1", 41, 26), ("Sprint 2", 89, 52), ("Sprint 3", 83, 76), ("Sprint 4", 94, 94)]
 
 
 def velocity():
@@ -94,14 +94,14 @@ TIMELINE = [
     ("S1", date(2026, 9, 29), date(2026, 10, 13), "done", "Setup, corpus survey, interfaces, feasibility study"),
     ("S2", date(2026, 10, 13), date(2026, 10, 27), "done", "Models, loader, corpus freeze, adapters, first operators"),
     ("S3", date(2026, 10, 27), date(2026, 11, 10), "done", "DeepEval adapter, runner, cache, retries, all core statistics, CLI"),
-    ("S4", date(2026, 11, 10), date(2026, 11, 24), "now", "Numeric operator, operator versions, Ollama, FDD"),
-    ("S5", date(2026, 11, 24), date(2026, 12, 8), "sd1", "Pilot audit, resume, rate limits, validity filter"),
-    ("S6", date(2027, 1, 12), date(2027, 1, 26), "sd2", "Database schema, results API, Nuxt scaffold, review protocol"),
-    ("S7", date(2027, 1, 26), date(2027, 2, 9), "sd2", "Profile view, first review round, Ragas adapter"),
+    ("S4", date(2026, 11, 10), date(2026, 11, 24), "done", "Filter, resume, limits, Ollama, Ragas, first full audit, FDD"),
+    ("S5", date(2026, 11, 24), date(2026, 12, 8), "now", "Database schema, validation protocol, findings review"),
+    ("S6", date(2027, 1, 12), date(2027, 1, 26), "sd2", "Repository layer, results API, Nuxt scaffold, sampling tool"),
+    ("S7", date(2027, 1, 26), date(2027, 2, 9), "sd2", "Profile view, first review round"),
     ("S8", date(2027, 2, 9), date(2027, 2, 23), "sd2", "Comparison view, second review round, agreement"),
-    ("S9", date(2027, 2, 23), date(2027, 3, 9), "sd2", "Operator validation scores, judge selection"),
-    ("S10", date(2027, 3, 9), date(2027, 3, 30), "sd2", "Pilot audits, start of the full audit (spring break)"),
-    ("S11", date(2027, 3, 30), date(2027, 4, 13), "sd2", "Finish the full audit and analysis"),
+    ("S9", date(2027, 2, 23), date(2027, 3, 9), "sd2", "Operator validation scores, fix or drop weak operators"),
+    ("S10", date(2027, 3, 9), date(2027, 3, 30), "sd2", "Re-run the full audit with validated operators"),
+    ("S11", date(2027, 3, 30), date(2027, 4, 13), "sd2", "Final analysis, extra dashboard views"),
     ("S12", date(2027, 4, 13), date(2027, 4, 24), "sd2", "Findings write-up, README, final documents"),
 ]
 COLORS = {"done": DONE, "now": "#d08a1e", "sd1": ACTIVE, "sd2": "#7a5ea8"}
@@ -117,13 +117,13 @@ def timeline():
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.xaxis.set_major_locator(mdates.MonthLocator())
     ax.set_xlim(mdates.date2num(date(2026, 9, 20)), mdates.date2num(date(2027, 8, 15)))
-    ax.axvline(mdates.date2num(date(2026, 11, 22)), color="#b3304d", lw=1.2, ls="--")
-    ax.text(mdates.date2num(date(2026, 11, 22)) + 2, len(TIMELINE) - 0.4, "Today", color="#b3304d", fontsize=9.5)
+    ax.axvline(mdates.date2num(date(2026, 11, 24)), color="#b3304d", lw=1.2, ls="--")
+    ax.text(mdates.date2num(date(2026, 11, 24)) + 2, len(TIMELINE) - 0.4, "FDD submitted", color="#b3304d", fontsize=9.5)
     ax.axvspan(mdates.date2num(date(2026, 12, 8)), mdates.date2num(date(2027, 1, 12)), color="#f1f2f5")
     ax.text(mdates.date2num(date(2026, 12, 12)), 1.0, "Winter\nbreak", fontsize=9, color=MUTED)
     ax.spines[["top", "right"]].set_visible(False)
-    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in COLORS.values()]
-    ax.legend(handles, ["Done", "Current sprint", "Planned, SD1", "Planned, SD2"], frameon=False,
+    handles = [plt.Rectangle((0, 0), 1, 1, color=COLORS[k]) for k in ("done", "now", "sd2")]
+    ax.legend(handles, ["Done", "Last SD1 sprint", "Planned, SD2"], frameon=False,
               loc="upper right", fontsize=9.5)
     plt.setp(ax.get_xticklabels(), fontsize=9.5)
     save(fig, "chart_timeline.png")

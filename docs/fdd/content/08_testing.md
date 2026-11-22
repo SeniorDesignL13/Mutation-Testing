@@ -24,7 +24,9 @@ Every pull request runs two CI jobs on GitHub Actions. The Python job checks tha
 
 ## 18.3 Results
 
-{tab:test_results} shows the results of the CI run on `main` at commit `1aaeeea` (November 19, 2026, the merge of the numeric perturbation operator). All 1,127 selected tests passed in 68.9 seconds. One test, the live DeepEval call, was deselected by design because it needs an API key. {fig:tests_chart} summarizes the counts by area.
+{tab:test_results} shows the results of the CI run on `main` at commit `1aaeeea` (November 19, 2026, the merge of the numeric perturbation operator). All 1,127 selected tests passed in 68.9 seconds.
+
+> NOTE: Sprint 4 added tests for the new operators, the validity filter, the Ragas adapter, resume, and rate limiting. Replace this table with the CI run on main just before submission (the per-file counts come from the pytest output in the CI log). One test, the live DeepEval call, was deselected by design because it needs an API key. {fig:tests_chart} summarizes the counts by area.
 
 ![Passing tests by area in the CI run of November 19, 2026.](diagrams/chart_tests.png){width=5.2 #tests_chart}
 
@@ -83,7 +85,7 @@ Table: Acceptance tests by user story {#acceptance}
 | US-03 | A battery file selects operators and intensities; an unknown operator name stops the run with exit code 2 | Pass |
 | US-04 | Regenerating any mutant from its record gives byte-identical text; a changed operator version is refused | Pass |
 | US-05 | A run with `--samples 5` stores five scorings per text, and a later run with more samples calls the judge only for the new ones | Pass |
-| US-06 | A run killed halfway keeps every finished score on disk | Pass (resume test planned with MTLJ-91) |
+| US-06 | A run killed halfway keeps every finished score on disk, and `mtlj audit resume` completes it without rescoring | Pass |
 | US-07, US-08 | On the feasibility data, the statistics reproduce the documented tables (12 of 20 detected; pooled σ 0.054) | Pass |
 | US-09 | `mtlj audit run --dataset gold --limit 3` completes and prints the summary; `audit show` reprints it | Pass |
 | US-10, US-11 | The profile and comparison views render a seeded run correctly, pass axe-core checks, and work by keyboard | Planned (SD2) |
@@ -135,15 +137,15 @@ MTLJ has no external sponsor, so every cost is paid by the team, and the design 
 Table: Project budget {#budget}
 | Item | Purpose | Cost so far | Expected for SD2 | Notes |
 |---|---|---|---|---|
-| OpenAI API (gpt-4o-mini) | Feasibility study, fixture recording, development, pilots | Under $10 (estimate) | About $250 | Two judges, two settings each, about $50 per full audit, plus pilots and reruns of failed calls |
+| OpenAI API (gpt-4o-mini) | Feasibility study, fixture recording, development, pilots, first full audit | About $100 (estimate) | About $150 | One full re-run after validation (about $50 per judge configuration), plus pilots and reruns of failed calls |
 | Local inference (Ollama) | Free overnight audits | $0 | $0 | Team members' existing hardware |
 | GitHub (repository, Actions, Dependabot) | Code hosting and CI | $0 | $0 | Free for public repositories |
 | Jira and Confluence | Backlog, sprints, documentation | $0 | $0 | Free plan, up to 10 users |
 | Figma | Mockups | $0 | $0 | Education plan |
 | Discord | Daily communication | $0 | $0 | Free |
 | Hosting | Public dashboard | $0 | $0 to $120 | $0 for a static site; up to about $20 per month for six months if a server is needed |
-| **Total** | | **Under $10** | **About $250 to $370** | |
+| **Total** | | **About $100** | **About $150 to $270** | |
 
-> NOTE: Replace the "cost so far" estimate with the actual OpenAI spend from the billing page, and record who pays for API usage (split evenly or one member).
+> NOTE: Replace the "cost so far" estimate with the actual OpenAI spend from the billing page (it now includes the pilots and the first full audit), and record who pays for API usage.
 
 The largest uncertainty is how many full audits the study needs. The cost scales linearly with the number of judge configurations, the number of samples per text, and the number of operators in the battery. Running both DeepEval settings on a local model instead of gpt-4o-mini would remove most of the API cost, at the price of longer runs.

@@ -3,7 +3,7 @@
 !pragma layout smetana
 top to bottom direction
 package "Interfaces" {
-  component "Typer CLI\n(mtlj audit run / show)" as CLI
+  component "Typer CLI\n(audit run / show / resume)" as CLI
   component "Nuxt + PrimeVue\ndashboard (SD2)" as UI
   component "FastAPI service" as API
 }
@@ -11,18 +11,18 @@ package "Core engine (Python 3.12, Pydantic models)" {
   component "RAGTruth loader" as Loader
   component "Operator registry\n(spaCy, NLTK)" as Ops
   component "Mutation generator" as Gen
-  component "Async judge runner\n(retry, cache, fixtures)" as Run
+  component "Async judge runner\n(rate limit, retry, cache,\nfixtures, resume)" as Run
   component "Statistics\n(NumPy, SciPy, statsmodels)" as Stats
 }
 package "Adapter layer" {
   component "Judge interface\n+ contract tests" as JI
   component "DeepEval\nfaithfulness" as DE
   component "Plain Python\ncallable" as PY
-  component "Ragas\n(planned)" as RG
+  component "Ragas\nfaithfulness" as RG
 }
 package "Judge backends" {
   component "Hosted API\n(gpt-4o-mini)" as Hosted
-  component "Ollama\n(local, in progress)" as Oll
+  component "Ollama\n(local models)" as Oll
 }
 database "Run directory\n(JSONL + results.json)" as Files
 database "Response cache\n(SQLite)" as Cache
@@ -34,9 +34,9 @@ Gen --> Run
 Run --> JI
 JI <|-- DE
 JI <|-- PY
-JI <|.. RG
+JI <|-- RG
 DE --> Hosted
-DE ..> Oll
+DE --> Oll
 Run --> Cache
 Run --> Files
 Files --> Stats

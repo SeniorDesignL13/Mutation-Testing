@@ -21,6 +21,7 @@ class JudgeResult {
 }
 class DeepEvalFaithfulness
 class CallableJudge
+class RagasFaithfulness
 abstract class MutationOperator {
   metadata: OperatorMetadata
   {abstract} apply(text, context, intensity, seed): MutationResult
@@ -48,13 +49,18 @@ class EntitySwap
 class NumericPerturbation
 class VerbosityPadding
 class Reformat
+class NegationInsertion
+class SentenceReordering
 Judge <|-- DeepEvalFaithfulness
 Judge <|-- CallableJudge
+Judge <|-- RagasFaithfulness
 Judge ..> JudgeResult : returns
 MutationOperator <|-- EntitySwap
 MutationOperator <|-- NumericPerturbation
 MutationOperator <|-- VerbosityPadding
 MutationOperator <|-- Reformat
+MutationOperator <|-- NegationInsertion
+MutationOperator <|-- SentenceReordering
 MutationOperator *-- OperatorMetadata
 MutationOperator ..> MutationResult : returns
 OperatorRegistry o-- MutationOperator

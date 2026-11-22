@@ -2,7 +2,7 @@
 
 ## 15.1 Stack Summary
 
-{tab:stack} lists every layer of the system, what it is used for, and why it was chosen. Versions are the ones pinned in the lockfiles on November 22, 2026.
+{tab:stack} lists every layer of the system, what it is used for, and why it was chosen. Versions are the ones pinned in the lockfiles at the end of Senior Design I.
 
 Table: Technology stack {#stack}
 | Technology | Used for | Why |
@@ -13,7 +13,7 @@ Table: Technology stack {#stack}
 | asyncio, httpx, thread pool | Execution | Many judge calls at once without blocking; synchronous judge libraries run in worker threads |
 | spaCy 3.8 (en_core_web_sm), NLTK | Operators | Named-entity recognition, noun phrases, and sentence splitting with a small, fast, deterministic model |
 | NumPy, SciPy, statsmodels | Statistics | Bootstrap, binomial tests, Wilson intervals, likelihood fitting, and multiple-comparison correction |
-| DeepEval 4.2.8, Ragas | Audit targets | The judges teams actually run; Ragas adapter planned |
+| DeepEval 4.2.8, Ragas | Audit targets | The judges teams actually run; both adapters done |
 | OpenAI API (gpt-4o-mini) | Hosted judge model | Cheap, widely used default for DeepEval |
 | Ollama, vLLM | Local inference | Free local models; vLLM for larger batches if needed |
 | SQLite | Response cache | Single-file key-value store, no service needed |
@@ -72,28 +72,30 @@ Table: Key design decisions {#decisions}
 
 A generative model is used in exactly one place: as the judge under test. No language model writes edits, filler text, or expected labels. This held even for the feasibility study, where all sixty edits were written by hand. MTLJ does not train or fine-tune any model, so there is no training data, training run, or training accuracy in the usual sense. The "accuracy" that matters is the judge's, which is exactly what MTLJ measures.
 
-One other language tool takes part, but it is not generative. The operators use spaCy's small English pipeline, `en_core_web_sm` 3.8 {ref:spacy}, to find entities, sentences, and noun phrases. It is a pretrained statistical model distributed by Explosion AI under the MIT license, about 12 MB on disk, and it runs on a CPU in milliseconds per answer. Its published named-entity accuracy is in the mid-80s (F-score) on the OntoNotes benchmark. The gold-set mislabels described in Section 8.7 show what that error rate looks like in practice, which is why the validity filter and the human review exist.
+One other language tool takes part, but it is not generative. The operators use spaCy's small English pipeline, `en_core_web_sm` 3.8 {ref:spacy}, to find entities, sentences, and noun phrases. It is a pretrained statistical model distributed by Explosion AI under the MIT license, about 12 MB on disk, and it runs on a CPU in milliseconds per answer. Its published named-entity accuracy is in the mid-80s (F-score) on the OntoNotes benchmark. The gold-set mislabels described in Section 8.9 show what that error rate looks like in practice, which is why the validity filter and the human review exist.
 
 > NOTE: Confirm the en_core_web_sm 3.8 entity F-score and model size on the spaCy models page before submitting.
 
 ## 16.2 Judge Models
 
-Judges are chosen because teams actually use them, not because they are the best. The main target is DeepEval's faithfulness metric: it is widely used, and its claim-by-claim design lines up well with the operators. Ragas faithfulness is the second target, because it computes nominally the same metric a different way. The final list of judges for the study, with reasons for each, is its own task (MTLJ-88). The model behind a judge is treated as part of its identity. {tab:models} lists the models in use or planned.
+Judges are chosen because teams actually use them, not because they are the best. The main target is DeepEval's faithfulness metric: it is widely used, and its claim-by-claim design lines up well with the operators. Ragas faithfulness is the second target, because it computes nominally the same metric a different way. The team selected the judges for the study in Sprint 4 (MTLJ-88); {tab:judges_selected} in Section 11.4 lists them with the reason for each. The model behind a judge is treated as part of its identity. {tab:models} lists the models in use or planned.
 
 Table: Judge models {#models}
 | Model | Source | Role | How it runs | Approximate resources and cost |
 |---|---|---|---|---|
 | gpt-4o-mini | OpenAI API {ref:openai} | Default hosted judge model; used in the feasibility study and recorded fixtures | Hosted, called through DeepEval | No local memory; about $0.15 per million input tokens and $0.60 per million output tokens |
-| Llama 3.1 8B Instruct, 4-bit quantized (Q4_K_M) | Meta {ref:llama}, through the Ollama library {ref:ollama} | Planned local judge model for free overnight audits | Ollama container on a team member's machine | About a 4.9 GB download; roughly 6 to 8 GB of GPU or system memory |
+| Llama 3.1 8B Instruct, 4-bit quantized (Q4_K_M) | Meta {ref:llama}, through the Ollama library {ref:ollama} | Local judge model for free overnight audits | Ollama container on a team member's machine | About a 4.9 GB download; roughly 6 to 8 GB of GPU or system memory |
 | Llama 3.2 3B (development) | Meta, through Ollama | Small model for testing the Ollama integration | Ollama container | About a 2 GB download; runs on most laptops |
 
-> NOTE: Confirm the current gpt-4o-mini prices and the Ollama download sizes before submitting. Add the final judge list from MTLJ-88 when it is decided.
+> NOTE: Confirm the current gpt-4o-mini prices and the Ollama download sizes before submitting, and make this table match the judges in Section 11.4.
 
 ## 16.3 Speed, Cost, and Memory in Practice
 
 The measured numbers so far come from gpt-4o-mini. The README's three-record pilot (3 originals and 20 mutants, 5 scorings each, 115 scorings in total) takes about four minutes and costs under fifteen cents at the default concurrency of four. That is about 0.13 cents per scoring, and about two seconds of wall-clock time per scoring with four calls in flight. Each DeepEval faithfulness scoring makes several model calls (claim extraction, then a verdict for each claim), which is why a single scoring takes several seconds.
 
-Extrapolating from the gold set, which yields about 6.65 default-battery mutants per record, a full corpus audit is about 919 × 7.65 × 5 ≈ 35,000 scorings. That is roughly $45 to $50 with gpt-4o-mini, and about 20 hours at a concurrency of four. Raising the concurrency within the API's rate limits shortens the run proportionally. The response cache makes any rerun of the same scorings free. A local quantized 8B model costs nothing per call but is slower per call on consumer hardware, so overnight runs are the expected pattern. Measuring local throughput and memory on the team's machines is part of finishing the Ollama integration (MTLJ-92).
+Extrapolating from the gold set, which yields about 6.65 default-battery mutants per record, a full corpus audit is about 919 × 7.65 × 5 ≈ 35,000 scorings. That is roughly $45 to $50 with gpt-4o-mini, and about 20 hours at a concurrency of four. Raising the concurrency within the API's rate limits shortens the run proportionally. The response cache makes any rerun of the same scorings free. A local quantized 8B model costs nothing per call but is slower per call on consumer hardware, so overnight runs are the expected pattern. The Ollama integration (MTLJ-92) is complete, and the pilot audits measured local throughput and memory on the team's machines.
+
+> NOTE: Add the measured local numbers (seconds per scoring and memory used for the local model, and the hardware) and the actual run time and cost of the first full audit.
 
 ## 16.4 Prompt Shaping
 

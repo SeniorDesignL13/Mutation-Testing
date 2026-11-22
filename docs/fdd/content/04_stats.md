@@ -46,7 +46,7 @@ Every rate gets two 95% intervals. The **Wilson score interval** {ref:wilson} tr
 
 Two different sample sizes matter, and the preliminary design document blurred them. This section separates them.
 
-**Samples per text (N)** is how many times each original and each mutant is scored. It controls how precisely each paired delta is measured, and so how small τ is relative to σ ({tab:tau}). N multiplies every judge call, so it drives cost more than anything else. The feasibility study showed entity swaps moving scores by about three times the noise floor, which five samples resolve comfortably (τ ≈ 1.04 σ). The team adopted N = 5 as the default on October 20, 2026, and will check it against the first pilot audits.
+**Samples per text (N)** is how many times each original and each mutant is scored. It controls how precisely each paired delta is measured, and so how small τ is relative to σ ({tab:tau}). N multiplies every judge call, so it drives cost more than anything else. The feasibility study showed entity swaps moving scores by about three times the noise floor, which five samples resolve comfortably (τ ≈ 1.04 σ). The team adopted N = 5 as the default on October 20, 2026, and checked it against the pilot audits in Sprint 4.
 
 **Number of pairs (testable mutants per operator and intensity)** controls how precisely each rate and each mean effect is estimated. As a guide for the mean paired effect, a paired test at 80% power and α = 0.05 needs about 34 pairs to detect a medium standardized effect (0.5), about 90 for 0.3, and about 200 for a small effect (0.2). For the rates themselves, the interval width matters more. A full corpus audit has several hundred testable mutants per operator and intensity, which gives Wilson intervals roughly ±3 to ±5 percentage points wide. The 20-record gold set gives intervals of about ±20 points and is meant only for development.
 
@@ -108,15 +108,42 @@ The study also found three things about the judge itself, a preview of what the 
 
 The study supports five samples per text as the default. It confirmed that entity swaps must contradict the source rather than merely add something new, and it led to two data model changes: saving verdict and claim counts with every score, and switching to the pooled noise estimate. It also flagged score saturation as a risk. If clean answers almost always score 1.0, harmless edits can only push scores down, so the system can catch a judge that punishes padding but not one that rewards it. That is documented as a limitation. The study used only 20 records, one judge, one model, and edits written by one person. That is adequate for a yes-or-no feasibility check, and it is exactly what the full system is designed to go beyond.
 
+## 11.4 Pilot Audits and First Full Audit
+
+In Sprint 4 the team moved from the hand-built feasibility study to the real system. It first ran pilot audits (MTLJ-89) on 20 records per judge, to check the whole pipeline, the cost, and the run time on a small scale before committing to a long run. It then selected the judge population for the study (MTLJ-88), ran the full audit battery on corpus records (MTLJ-86), and analyzed the results (MTLJ-87). {tab:judges_selected} lists the judges audited, and {tab:audit_results} summarizes the headline rates.
+
+> NOTE: Fill in the two tables below from the run directories (results.json) of the Sprint 4 audits, and add one paragraph per judge describing its main weak spots. Do not leave any "fill in" cell in the submitted document.
+
+Table: Judges audited in the first full audit {#judges_selected}
+| Judge | Framework and version | Model | Settings | Why it was chosen |
+|---|---|---|---|---|
+| DeepEval faithfulness | DeepEval 4.2.8 | gpt-4o-mini | default | Widely used; claim-by-claim design |
+| DeepEval faithfulness | DeepEval 4.2.8 | gpt-4o-mini | penalize_ambiguous_claims | Tests the setting that changes how unclear claims count |
+| Ragas faithfulness | (fill in) | (fill in) | default | Same metric, different implementation |
+| (fill in) | (fill in) | (fill in) | (fill in) | (fill in) |
+
+Table: Headline results of the first full audit (detection rate and spurious sensitivity, with 95% intervals) {#audit_results}
+| Operator | Family | DeepEval (default) | DeepEval (penalize ambiguous) | Ragas |
+|---|---|---|---|---|
+| Entity substitution | Degrading | (fill in) | (fill in) | (fill in) |
+| Numeric perturbation | Degrading | (fill in) | (fill in) | (fill in) |
+| Negation insertion | Degrading | (fill in) | (fill in) | (fill in) |
+| Verbosity padding | Preserving | (fill in) | (fill in) | (fill in) |
+| Reformatting (bullets, markdown) | Preserving | (fill in) | (fill in) | (fill in) |
+| Sentence reordering | Preserving | (fill in) | (fill in) | (fill in) |
+| Noise floor σ | | (fill in) | (fill in) | (fill in) |
+
+These are first results, produced before the human validation study. The validation study in Senior Design II may fix or drop operators. Because every operator carries a version and every mutant ID includes it, any operator change produces new mutants that can never be confused with these. The final audit in Senior Design II re-runs the battery with the validated operators and supersedes this one. The first audit's value is that it exercised the full pipeline at scale and gives the validation study real mutants to sample.
+
 # 12. Validating the Ground Truth
 
 ## 12.1 Why Validation Is Required
 
-The whole system is only as good as its labels, so the labels are checked directly. An edit can look right and still not change the meaning the way the operator assumes: a swap into a sentence the source never supported, a mislabeled entity such as the gold-set examples in Section 8.7, a reformat that splits a claim differently, or filler that slips in a new claim. Any of these gives an edit the wrong expected direction. The team therefore treats human validation as required and has agreed it will not be cut even if other work is.
+The whole system is only as good as its labels, so the labels are checked directly. An edit can look right and still not change the meaning the way the operator assumes: a swap into a sentence the source never supported, a mislabeled entity such as the gold-set examples in Section 8.9, a reformat that splits a claim differently, or filler that slips in a new claim. Any of these gives an edit the wrong expected direction. The team therefore treats human validation as required and has agreed it will not be cut even if other work is.
 
 ## 12.2 Study Design
 
-The study is planned for the first half of Senior Design II and has its own epic (MTLJ-7):
+The study is planned for the first half of Senior Design II and has its own epic (MTLJ-7). It samples mutants from the first full audit, so reviewers see exactly the edits the judges were scored on:
 
 1. **Write the instructions (MTLJ-47).** Define what reviewers check for each operator. For degrading edits: does the answer now actually contradict or misstate the source? For preserving edits: is every claim and its support unchanged?
 2. **Draw the sample (MTLJ-45).** At least 100 edits, stratified across every operator and intensity, chosen with a fixed seed.

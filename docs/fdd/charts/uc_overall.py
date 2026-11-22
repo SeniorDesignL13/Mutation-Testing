@@ -56,7 +56,7 @@ def dep(x1, y1, x2, y2, label, lx, ly):
     ax.text(lx, ly, label, fontsize=9.5, style="italic", color=MUTED, ha="center")
 
 
-left = [(63, "Run an audit", False), (53, "Resume an\ninterrupted audit", True),
+left = [(63, "Run an audit", False), (53, "Resume an\ninterrupted audit", False),
         (43, "Read rates with\nintervals", False), (33, "View a judge profile\n(dashboard)", True),
         (23, "Compare two judges\nor two versions", True), (13, "Inspect a missed\nmutant", True)]
 for y, label, planned in left:

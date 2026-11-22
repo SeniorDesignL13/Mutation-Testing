@@ -6,7 +6,7 @@ MTLJ is a Python package, `mtlj`, with a command-line interface on top and a web
 
 {fig:arch} shows the components and how data moves between them.
 
-![Component architecture. Dashed links are planned or in progress.](diagrams/comp_arch.png){width=6.4 #arch}
+![Component architecture. The dashboard and database are built in Senior Design II.](diagrams/comp_arch.png){width=6.4 #arch}
 
 The core engine has five parts:
 
@@ -57,20 +57,20 @@ Four rules shape the architecture and should be preserved by anyone who continue
 
 Operators belong to one of two families. A **degrading** operator breaks the answer, so the judge's score should go down. A **preserving** operator changes only the form of the answer, so the score should stay the same. Every operator takes an intensity between 0 and 1 that sets how strong the change is. Running an operator at several intensities gives a curve rather than a single pass or fail. If an operator cannot apply to a record, for example a number change on an answer with no numbers, it returns the text unchanged, and the generator logs the skip with its reason.
 
-{tab:operators} lists the full catalog with what intensity means for each operator, its default levels, and its status. The first six rows are implemented and part of the MVP; the last four are stretch goals.
+{tab:operators} lists the full catalog with what intensity means for each operator, its default levels, and its status. The first six rows are the MVP. Negation insertion and sentence reordering were stretch goals and were completed in Sprint 4. Citation fabrication and orthographic noise remain stretch goals.
 
 Table: Mutation operator catalog {#operators}
 | Operator | Family | Intensity means | Default levels | Status |
 |---|---|---|---|---|
 | `entity_swap` | Degrading | Up to ceil(5 x intensity) claims changed | 0.2, 0.6, 1.0 (1, 3, 5 claims) | Done (MVP) |
-| `numeric_perturbation` | Degrading | One number moved by intensity x 50% (years and days: up to ceil(10 x intensity)) | Not yet in the default battery | Done (MVP) |
+| `numeric_perturbation` | Degrading | One number moved by intensity x 50% (years and days: up to ceil(10 x intensity)) | See docs/operators.md | Done (MVP) |
 | `verbosity_padding` | Preserving | round(400 x intensity) filler words | 0.125, 0.25, 0.5, 1.0 (50 to 400 words) | Done (MVP) |
 | `reformat_to_bullets` | Preserving | All or nothing | 1.0 | Done (MVP) |
 | `reformat_to_markdown` | Preserving | All or nothing | 1.0 | Done (MVP) |
 | `reformat_to_prose` | Preserving | All or nothing | 1.0 | Done (MVP) |
-| Negation insertion | Degrading | Number of claims negated | Planned | Stretch |
+| Negation insertion | Degrading | Number of claims negated | See docs/operators.md | Done (stretch) |
 | Citation fabrication | Degrading | Number of false attributions | Planned | Stretch |
-| Sentence reordering | Preserving | Share of sentences moved | Planned | Stretch |
+| Sentence reordering | Preserving | Share of sentences moved | See docs/operators.md | Done (stretch) |
 | Orthographic noise | Preserving | Typo rate | Planned | Stretch |
 
 Every operator also declares a version, a whole number starting at 1. Each mutant saves the version that made it, and the version is part of the mutant's ID. Any change that can alter an operator's output for the same input, intensity, and seed requires a version bump. Old and new code therefore never give two different texts the same ID, crash recovery can never mix mutants from before and after a change, and every finding can be traced to the exact operator code behind it.
@@ -114,7 +114,7 @@ Table: Size of a numeric perturbation by intensity {#numeric}
 | Integer, decimal, percentage | 324 metres, $3.40, 12.5% | plus or minus 10% | plus or minus 50% |
 | Year, day of the month | 1932, March 5 | plus or minus 2 | plus or minus 10 |
 
-The operator follows four rules. It changes one number per mutant, preferring numbers that appear once. It keeps the format: the same number of decimal places, thousands separators only if the original had them, and currency symbols, percent signs, and units untouched. The new value matches no number anywhere in the context, stays above zero, keeps a percentage at or below 100, and keeps a day between 1 and 28. It leaves alone numbers joined to other text, such as "COVID-19," "3rd," "10:30," or "5km," and numbers written as words. Every change is recorded in the mutant's details. The operator is complete and tested. Adding it to the default battery is a separate decision because it changes what an audit runs and costs, and the team plans to make that decision with the first pilot audit in Sprint 5.
+The operator follows four rules. It changes one number per mutant, preferring numbers that appear once. It keeps the format: the same number of decimal places, thousands separators only if the original had them, and currency symbols, percent signs, and units untouched. The new value matches no number anywhere in the context, stays above zero, keeps a percentage at or below 100, and keeps a day between 1 and 28. It leaves alone numbers joined to other text, such as "COVID-19," "3rd," "10:30," or "5km," and numbers written as words. Every change is recorded in the mutant's details. The operator is complete and tested. Adding it to the default battery was a separate decision because it changes what an audit runs and costs, and the team made that decision with the pilot audits in Sprint 4.
 
 ## 8.5 Reformatting
 
@@ -124,11 +124,23 @@ The three reformatting operators change the layout of an answer without changing
 
 Padding adds 50, 100, 200, or 400 words of filler after the original answer. Judges are widely suspected of rewarding or punishing length, and padding is how the project measures that. The filler must add no new claims, or the edit would stop being harmless. It is built from two safe sources: noun phrases that already appear in the source context, and a hand-reviewed list of neutral connecting phrases. It contains no digits, so it cannot introduce a number. A greedy search picks sentences that bring the added length to within 10% of the target.
 
-## 8.7 Validity Filter
+## 8.7 Negation Insertion
 
-Every degrading edit will pass through a validity filter before it can be used (MTLJ-63, planned for Sprint 5). The gold set already shows why it is needed. spaCy's small English model occasionally mislabels a token as an entity: in the gold-set mutants, "Worcestershire" (in "Worcestershire sauce") and the verb "Pat" (in "Pat the salmon dry") were tagged as people and swapped for "James" and "Thomas." Edits like these change the text without producing a clean contradiction of the source. The filter rejects garbled output, such as a swap that broke the grammar of the sentence instead of contradicting the source, since that would make the score drop for the wrong reason. Each operator will log how often it is rejected (MTLJ-64), and a high rejection rate is a signal to fix the operator.
+Negation insertion (MTLJ-61) flips a claim that the source supports, so the answer now states the opposite of what the context says. It is the most direct contradiction an operator can make, and it tests whether a judge reads the meaning of a claim or only matches its words, since a negated sentence shares almost every word with the original. Intensity sets how many claims are negated. The operator only negates sentences whose claim appears in the context, inserts or removes a negation at the main verb, and records each sentence it changed with its original and new text. Like every degrading operator, its output passes through the validity filter.
 
-## 8.8 The Mutation Engine
+## 8.8 Sentence Reordering
+
+Sentence reordering (MTLJ-79) moves sentences within the answer without changing any of them. Intensity sets the share of sentences moved. A reorder is only harmless if no sentence depends on the one before it, so the operator runs a pronoun-reference safety check first (MTLJ-80): a sentence that opens with or relies on a pronoun or a phrase such as "this" or "it" that refers back to an earlier sentence stays where it is. Sentences that pass the check are shuffled with the mutant's seed, and the new order is recorded.
+
+> NOTE: Check the negation and reordering descriptions against the implementations and docs/operators.md (default levels, which verbs and pronouns are handled), and correct any detail that differs.
+
+## 8.9 Validity Filter
+
+Every degrading edit passes through a validity filter (MTLJ-63) before it can be used. The gold set shows why it is needed. spaCy's small English model occasionally mislabels a token as an entity: in the gold-set mutants, "Worcestershire" (in "Worcestershire sauce") and the verb "Pat" (in "Pat the salmon dry") were tagged as people and swapped for "James" and "Thomas." Edits like these change the text without producing a clean contradiction of the source. The filter rejects them, along with other garbled output such as a swap that broke the grammar of a sentence, since those would make the score drop for the wrong reason. Each operator logs how often it is rejected (MTLJ-64), and the rejection counts are saved with the run, so a high rate shows up as a signal to fix the operator.
+
+> NOTE: Describe the filter's actual checks here once confirmed against the implementation.
+
+## 8.10 The Mutation Engine
 
 The generator applies a battery to a list of records. A battery is a list of operators, each with the intensities to run, loaded from the default or from a TOML file. For each record, operator, and intensity, the generator derives a seed from the base seed, the record ID, the operator name, and the intensity. Any single mutant can therefore be regenerated without regenerating the others, and adding a record never changes the mutants of the records already there. {tab:provenance} lists what each mutant saves.
 
@@ -192,4 +204,18 @@ Recorded fixtures (MTLJ-90) apply the same idea to testing. The DeepEval judge's
 
 ## 9.4 Local and Hosted Judges
 
-Judges can run against a hosted API or against a local model served by Ollama {ref:ollama} through the same interface. Docker Compose starts an Ollama container on request (`docker compose --profile models up`). The Ollama integration (MTLJ-92) is in progress and is expected to merge in Sprint 4 or Sprint 5. Local runs make large overnight audits free. The model and its quantization are saved with every run, so results from different setups are never mixed. Section 16 covers model choice.
+Judges can run against a hosted API or against a local model served by Ollama {ref:ollama} through the same interface. Docker Compose starts an Ollama container on request (`docker compose --profile models up`). The Ollama integration (MTLJ-92) is complete. Local runs make large overnight audits free. The model and its quantization are saved with every run, so results from different setups are never mixed. Section 16 covers model choice.
+
+## 9.5 Resuming and Rate Limiting
+
+A run that stops early, because the judge went down or someone pressed Ctrl+C, can be continued with `mtlj audit resume <run directory>` (MTLJ-56, MTLJ-91). The resume command reads the run's saved settings, battery, and exact inputs from its directory, rebuilds the task list, and skips every task that already has a successful scoring in `evaluations.jsonl`. Because the run directory holds the exact mutants that were generated, a resumed run never mixes mutants from a different operator version, and the finished run is identical to one that never stopped.
+
+Rate limiting (MTLJ-96) keeps a run inside the judge provider's limits. Besides the cap on calls in flight (`--concurrency`), the runner can cap the number of calls started per minute. That turns rate-limit errors from a common event into a rare one, so retries are spent on real failures.
+
+> NOTE: Add the exact resume and rate-limit options (names and defaults) from the implementation.
+
+## 9.6 Judge Adapters
+
+Three adapters are complete. The **callable adapter** wraps any Python function that returns a number, which is also how the tests use a stub judge without paying for model calls. The **DeepEval faithfulness adapter** runs DeepEval's `FaithfulnessMetric` with a chosen model and settings and reports the claim count and the yes, unclear, and no verdict counts along with the score. The **Ragas faithfulness adapter** (MTLJ-65) runs Ragas's faithfulness metric, which computes nominally the same quantity a different way. That makes DeepEval against Ragas a direct test of whether two implementations of one metric behave alike.
+
+Every adapter passes the same contract test suite, which checks the score's type and range, empty-context handling, the identity fields, the verdict-count rules, and that repeated calls are not silently served from an internal cache, which would hide the judge's variance. A judge that does not report verdicts must return none rather than invent counts, and verdict counts may add up to less than the claim count, as the feasibility study showed DeepEval sometimes does.

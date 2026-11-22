@@ -10,7 +10,7 @@ Table: CLI commands {#cli}
 | `mtlj version` | Print the package version | Done |
 | `mtlj audit run` | Generate mutants, score them with a judge, and report how the judge did | Done (MTLJ-58) |
 | `mtlj audit show <run>` | Print a finished run's results again from its directory or results.json | Done |
-| `mtlj audit resume <run>` | Continue an interrupted run without rescoring completed work | Planned (MTLJ-56) |
+| `mtlj audit resume <run>` | Continue an interrupted run without rescoring completed work | Done (MTLJ-56, MTLJ-91) |
 | `mtlj db import <run>` | Load a run directory into PostgreSQL for the dashboard | Planned (SD2) |
 
 {tab:cli_opts} lists the options of `mtlj audit run`. Each option can also come from an audit file, and an option given on the command line overrides the file.
