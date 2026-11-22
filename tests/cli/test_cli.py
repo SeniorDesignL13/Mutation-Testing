@@ -218,6 +218,13 @@ def test_judge_names_build_the_deepeval_adapter(name: str, penalized: bool) -> N
     assert judge.penalize_ambiguous_claims is penalized
 
 
+def test_ragas_judge_name_builds_the_ragas_adapter() -> None:
+    judge = JUDGES["ragas-faithfulness"]("some-model")
+
+    assert judge.name == "ragas-faithfulness"
+    assert judge.model == "some-model"
+
+
 def test_audit_show_exits_1_for_a_missing_file(tmp_path: Path) -> None:
     result = runner.invoke(app, ["audit", "show", str(tmp_path / "nothing")])
 
