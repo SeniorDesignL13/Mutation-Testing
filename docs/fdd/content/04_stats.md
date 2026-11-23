@@ -148,11 +148,11 @@ The pilots' recommendation was not to start the full run until entity swap is fi
 
 ## 11.5 First Full Audit
 
-After the pilots, the team selected the judge population for the study (MTLJ-88), ran the full audit battery on corpus records (MTLJ-86), and analyzed the results (MTLJ-87). {tab:judges_selected} lists the judges audited, and {tab:audit_results} summarizes the headline rates.
+The team selected the judge population for the study in Sprint 4 (MTLJ-88). It had planned to run the full audit battery (MTLJ-86) and analyze it (MTLJ-87) in the same sprint, but the pilots changed that plan. About 70,000 scorings with an entity swap operator that mostly makes invalid mutants, a CLI that cannot reuse scores it has already paid for, and a numeric operator that loses two thirds of its intensities would have spent the budget on numbers the team would have to discard. The team therefore moved the full audit to the start of Senior Design II, after three fixes in Sprint 5: filtering entity swaps and checking 50 of them by hand, wiring the response cache into `mtlj audit run`, and the repeated-dose fix for numeric perturbation. {tab:judges_selected} lists the judges selected, and {tab:audit_plan} gives the plan for the run.
 
-> NOTE: Fill in the two tables below from the run directories (results.json) of the Sprint 4 audits, and add one paragraph per judge describing its main weak spots. State which pilot recommendations were in place before the run. Do not leave any "fill in" cell in the submitted document.
+> NOTE: Fill in the remaining cells of the judges table (the Ragas version and model, and any fourth judge) from MTLJ-88. Do not leave any "fill in" cell in the submitted document.
 
-Table: Judges audited in the first full audit {#judges_selected}
+Table: Judges selected for the full audit (MTLJ-88) {#judges_selected}
 | Judge | Framework and version | Model | Settings | Why it was chosen |
 |---|---|---|---|---|
 | DeepEval faithfulness | DeepEval 4.2.8 | gpt-4o-mini | default | Widely used; claim-by-claim design |
@@ -160,18 +160,18 @@ Table: Judges audited in the first full audit {#judges_selected}
 | Ragas faithfulness | (fill in) | (fill in) | default | Same metric, different implementation |
 | (fill in) | (fill in) | (fill in) | (fill in) | (fill in) |
 
-Table: Headline results of the first full audit (detection rate and spurious sensitivity, with 95% intervals) {#audit_results}
-| Operator | Family | DeepEval (default) | DeepEval (penalize ambiguous) | Ragas |
-|---|---|---|---|---|
-| Entity substitution | Degrading | (fill in) | (fill in) | (fill in) |
-| Numeric perturbation | Degrading | (fill in) | (fill in) | (fill in) |
-| Negation insertion | Degrading | (fill in) | (fill in) | (fill in) |
-| Verbosity padding | Preserving | (fill in) | (fill in) | (fill in) |
-| Reformatting (bullets, markdown) | Preserving | (fill in) | (fill in) | (fill in) |
-| Sentence reordering | Preserving | (fill in) | (fill in) | (fill in) |
-| Noise floor σ | | (fill in) | (fill in) | (fill in) |
+Table: Plan for the first full audit {#audit_plan}
+| Item | Plan |
+|---|---|
+| When | Sprint 6 (January 12 to 26, 2027); findings write-up in Sprint 7 |
+| Prerequisites | Entity swap filtered and 50 mutants checked by hand; response cache wired into `mtlj audit run`; numeric perturbation repeated-dose fix; a live pilot with no rate-limit errors |
+| Scope | Corpus v1 (919 records), default battery plus numeric perturbation once fixed, N = 5, seed 0, every judge in the table above |
+| Size | About 35,000 scorings per judge configuration |
+| Time | About 20 hours per configuration at four concurrent calls, or 10 at eight |
+| Cost | At most about $46 per configuration at the pilot's cost ceiling |
+| Output | Run directories and results.json per judge, the findings write-up (MTLJ-87), and the mutants the validation study samples |
 
-These are first results, produced before the human validation study. The validation study in Senior Design II may fix or drop operators. Because every operator carries a version and every mutant ID includes it, any operator change produces new mutants that can never be confused with these. The final audit in Senior Design II re-runs the battery with the validated operators and supersedes this one. The first audit's value is that it exercised the full pipeline at scale and gives the validation study real mutants to sample.
+The first full audit's results will be preliminary, because the human validation study runs after it and may fix or drop operators. Because every operator carries a version and every mutant ID includes it, any operator change produces new mutants that can never be confused with the first audit's. The final audit in March re-runs the battery with the validated operators and supersedes the first one. The first audit's value is that it exercises the full pipeline at scale and gives the validation study real mutants to sample.
 
 # 12. Validating the Ground Truth
 

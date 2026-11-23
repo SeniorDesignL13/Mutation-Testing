@@ -12,7 +12,7 @@ Table: Team roles {#roles}
 | Gia Do | Mutation operators | Experimental design | Record format, operator interface, padding source, entity substitution, verbosity padding, reformatting, numeric perturbation, operator versions, operator registry, seeding, battery configuration, mutant generation, dataset sanity checks, validity filter, rejection logging |
 | Nathaniel Frank | Execution engine and adapters | Full stack (CLI, database, dashboard) | Judge adapter interface, callable adapter, DeepEval faithfulness adapter, repeated sampling, Ollama integration, negation insertion operator, judge selection |
 
-> NOTE: Each member should check their "main contributions" row against Jira and GitHub before submitting. Sentence reordering, the pronoun safety check, the full audit, and the findings write-up were unassigned in Jira on November 22; add them to whoever completed them.
+> NOTE: Each member should check their "main contributions" row against Jira and GitHub before submitting. Sentence reordering and the pronoun safety check were unassigned in Jira on November 22; add them to whoever completed them.
 
 ## 21.2 Agile Process
 
@@ -36,7 +36,7 @@ Jira is linked to GitHub. Moving a task to In Progress creates its branch, named
 
 ## 21.4 Epics
 
-The backlog is split into fourteen epics that match the system's components and research activities. {fig:epics_chart} and {tab:epics} show where each stands at the end of Senior Design I: 70 of the 85 tasks are done, and the 15 still to do all belong to Senior Design II (the database, the dashboard, and the validation study). Eleven of the fourteen epics are complete.
+The backlog is split into fourteen epics that match the system's components and research activities. {fig:epics_chart} and {tab:epics} show where each stands at the end of Senior Design I: 68 of the 85 tasks are done, and the 17 still to do all belong to Senior Design II: the database, the dashboard, the validation study, and the full audit with its write-up, which the team moved after the pilots. Ten of the fourteen epics are complete.
 
 ![Task status by epic at the end of Senior Design I.](diagrams/chart_epics.png){width=5.9 #epics_chart}
 
@@ -47,7 +47,7 @@ Table: Epics and task status at the end of Senior Design I {#epics}
 | MTLJ-2 | Core Data Model and Persistence | 9 | 5 | 0 | 4 |
 | MTLJ-3 | Dataset Acquisition and Curation | 5 | 5 | 0 | 0 |
 | MTLJ-4 | Project Infrastructure and Tooling | 8 | 8 | 0 | 0 |
-| MTLJ-5 | Empirical Audit and Findings | 4 | 4 | 0 | 0 |
+| MTLJ-5 | Empirical Audit and Findings | 4 | 2 | 0 | 2 |
 | MTLJ-6 | Dashboard | 6 | 1 | 0 | 5 |
 | MTLJ-7 | Validation Study | 6 | 0 | 0 | 6 |
 | MTLJ-8 | Degrading Operators | 6 | 6 | 0 | 0 |
@@ -57,13 +57,13 @@ Table: Epics and task status at the end of Senior Design I {#epics}
 | MTLJ-12 | Command Line Interface | 3 | 3 | 0 | 0 |
 | MTLJ-13 | Mutation Engine | 4 | 4 | 0 | 0 |
 | MTLJ-14 | Execution Engine | 8 | 8 | 0 | 0 |
-| | **Total** | **85** | **70** | **0** | **15** |
+| | **Total** | **85** | **68** | **0** | **17** |
 
 ![The MTLJ epics in Jira.](diagrams/jira_epics.png){width=5.5 #jira_epics}
 
 ## 21.5 Sprint Reviews
 
-{fig:velocity} shows the points each sprint committed to and completed. Velocity rose quickly as the infrastructure built in Sprint 1 paid off, and Sprint 4 completed everything it committed to.
+{fig:velocity} shows the points each sprint committed to and completed. Velocity rose quickly as the infrastructure built in Sprint 1 paid off, and Sprint 4 completed 21 of its 23 items, moving the other two to Senior Design II on purpose.
 
 ![Story points committed and completed in Sprints 1 to 4.](diagrams/chart_velocity.png){width=5.2 #velocity}
 
@@ -77,7 +77,7 @@ Table: Epics and task status at the end of Senior Design I {#epics}
 
 ## 21.6 Current Sprint and Senior Design II Sprints
 
-**Sprint 4 (November 10 to 24)** was the largest sprint of the semester: 23 items and 94 points, and the team completed all of them. It finished the MVP execution features (resume, rate limiting, and local models), added the validity filter and dataset sanity checks, delivered two stretch operators and the Ragas adapter, completed the design documentation, and took the system from tests to real use with pilot audits and a first full audit. It also prepared the presentation materials for the start of Senior Design II. {tab:sprint4} lists every item, and {fig:jira_sprint} shows the sprint board.
+**Sprint 4 (November 10 to 24)** was the largest sprint of the semester: 23 items and 94 points. The team completed 21 items (81 points) and deliberately moved the other two, the full audit (MTLJ-86) and its write-up (MTLJ-87), to the start of Senior Design II after the pilot audits showed three problems to fix first (Section 11.5). The sprint finished the MVP execution features (resume, rate limiting, and local models), added the validity filter and dataset sanity checks, delivered two stretch operators and the Ragas adapter, completed the design documentation, and took the system from tests to real use with pilot audits. It also prepared the presentation materials for the start of Senior Design II. {tab:sprint4} lists every item, and {fig:jira_sprint} shows the sprint board.
 
 Table: Sprint 4 backlog {#sprint4}
 | Key | Item | Assignee | Points | Status |
@@ -97,15 +97,15 @@ Table: Sprint 4 backlog {#sprint4}
 | MTLJ-75 | Prepare SD1 presentation materials | Ethan Goedelman | 5 | Done |
 | MTLJ-79 | Implement sentence reordering operator | Unassigned | 3 | Done |
 | MTLJ-80 | Implement pronoun-reference safety check | Unassigned | 3 | Done |
-| MTLJ-86 | Execute the full audit battery | Unassigned | 8 | Done |
-| MTLJ-87 | Analyze results and write up findings | Unassigned | 5 | Done |
+| MTLJ-86 | Execute the full audit battery | Unassigned | 8 | Moved to SD2 |
+| MTLJ-87 | Analyze results and write up findings | Unassigned | 5 | Moved to SD2 |
 | MTLJ-88 | Select and justify the judge population | Nathaniel Frank | 3 | Done |
 | MTLJ-89 | Run pilot audits | Ethan Goedelman | 5 | Done |
 | MTLJ-91 | Implement run resumption from partial state | Ben Duffaut | 5 | Done |
 | MTLJ-92 | Integrate Ollama for local judge serving | Nathaniel Frank | 5 | Done |
 | MTLJ-96 | Implement concurrency and rate limiting | Ben Duffaut | 3 | Done |
 | MTLJ-101 | Add operator version to mutant provenance and IDs | Gia Do | 2 | Done |
-| | **Total: 23 items** | | **94** | **All done** |
+| | **Total: 23 items** | | **94** | **21 done, 2 moved** |
 
 ![Jira Sprint 4 backlog and board.](diagrams/jira_sprint.png){width=5.5 #jira_sprint}
 
@@ -117,10 +117,10 @@ Table: Sprint plan through the end of Senior Design II {#sprints}
 | 1 | Sep 29 to Oct 13, 2026 | Setup, corpus survey, interfaces, feasibility study (done) |
 | 2 | Oct 13 to Oct 27, 2026 | Data models, loader, frozen corpus, adapters, first operators (done) |
 | 3 | Oct 27 to Nov 10, 2026 | DeepEval adapter, async runner, cache, retries, all core statistics, audit command (done) |
-| 4 | Nov 10 to Nov 24, 2026 | Validity filter, resume, rate limiting, Ollama, negation and reordering operators, Ragas adapter, pilot audits, judge selection, first full audit, final design document (done) |
-| 5 | Nov 24 to Dec 8, 2026 | Database schema design and first migration; validation study protocol; findings review |
-| 6 | Jan 12 to Jan 26, 2027 | Repository layer and async models; results API; Nuxt scaffold; stratified sampling tool; SD2 presentation |
-| 7 | Jan 26 to Feb 9, 2027 | Judge profile view; first review round |
+| 4 | Nov 10 to Nov 24, 2026 | Validity filter, resume, rate limiting, Ollama, negation and reordering operators, Ragas adapter, pilot audits, judge selection, final design document (done; full audit moved to Sprint 6) |
+| 5 | Nov 24 to Dec 8, 2026 | Pilot fixes: entity swap filtering and a hand check of 50 mutants, response cache in `mtlj audit run`, numeric perturbation repeated-dose fix; database schema; validation study protocol |
+| 6 | Jan 12 to Jan 26, 2027 | First full audit of the selected judges (MTLJ-86); repository layer and async models; results API; Nuxt scaffold; stratified sampling tool; SD2 presentation |
+| 7 | Jan 26 to Feb 9, 2027 | Findings write-up of the first full audit (MTLJ-87); judge profile view; first review round |
 | 8 | Feb 9 to Feb 23, 2027 | Comparison view; second review round; agreement statistics |
 | 9 | Feb 23 to Mar 9, 2027 | Operator validation scores; fix or drop weak operators |
 | 10 | Mar 9 to Mar 30, 2027 | Re-run the full audit with the validated operators (includes spring break) |
@@ -136,7 +136,7 @@ Table: Major milestones {#milestones}
 | Corpus v1 frozen | Oct 23, 2026 (met) | 919 records with a committed checksum |
 | First end-to-end CLI audit | Nov 9, 2026 (met) | `mtlj audit run` on the gold set with intervals |
 | Final design document | End of SD1 | This document |
-| Pilot audits and first full audit | Nov 24, 2026 (met) | Run directories and first findings (Sections 11.4 and 11.5) |
+| Pilot audits; first full audit | Nov 24, 2026 (met); Jan 26, 2027 | Pilot write-up (Section 11.4); full audit run directories and findings (Section 11.5) |
 | Dashboard MVP | Late Feb 2027 | Profile and comparison views on real results |
 | Ground truth validated | Mar 9, 2027 | Validation score and agreement for every operator |
 | Final audit with validated operators | Apr 13, 2027 | At least two published judges audited with validated operators |
@@ -153,7 +153,7 @@ Several lessons from the first three sprints changed how the team works:
 - **Check the data, not just the schema.** The corpus filter looked right but treated any hallucination field as "true" just because it existed. It was caught only by inspecting records by hand, so hand checks are now part of every data task.
 - **Test the risky dependency first.** DeepEval's async mode had been reported to hang on Windows, so the team ran a single call on each member's machine before the feasibility study instead of finding out halfway through it.
 - **Small decisions need a home.** Choices such as the verdict-count rule were first made in ticket comments and almost got lost, so decisions now get a dated entry in `docs/metrics.md` and in Confluence.
-- **Points in review are not points done.** Sprint 2 committed to more than the team could finish and review. Sprint 3 was planned against completed work and finished 18 of its 20 items, and Sprint 4 finished all 23.
+- **Points in review are not points done.** Sprint 2 committed to more than the team could finish and review. Sprint 3 was planned against completed work and finished 18 of its 20 items, and Sprint 4 finished 21 of 23, moving the last two to Senior Design II by decision rather than for lack of time.
 - **Keep Jira honest.** Tickets occasionally moved columns by accident when they were mentioned in another ticket, so status is checked at the weekly meeting instead of trusted blindly.
 
 # 22. Risks and Mitigation
@@ -199,9 +199,9 @@ Table: MVP scope and status {#mvp}
 | Interfaces | CLI run, show, and resume | Done |
 | Interfaces | Database, results API, dashboard profile and comparison views | Designed (SD2) |
 | Validation | 100 or more edits, two reviewers each, agreement measured, weak operators fixed or dropped | Planned (SD2) |
-| Result | At least two published judges audited and written up | First full audit done (Sprint 4); final audit with validated operators in SD2 |
+| Result | At least two published judges audited and written up | Pilots done (Sprint 4); first full audit early in SD2 (Sprint 6); final audit with validated operators in March 2027 |
 
-The team is well ahead of the plan made in the preliminary design document. Everything in the MVP except the dashboard and the validation study is done, and so are five stretch goals: the multiple-comparison correction, dose-response curve fitting, negation insertion, sentence reordering, and the Ragas adapter. Nothing in the MVP is expected to be cut. If the schedule tightens, the team will revisit scope together, but human validation of the ground truth stays in regardless.
+The team is well ahead of the plan made in the preliminary design document. Everything in the MVP except the dashboard, the validation study, and the audit of published judges is done, and so are five stretch goals: the multiple-comparison correction, dose-response curve fitting, negation insertion, sentence reordering, and the Ragas adapter. Nothing in the MVP is expected to be cut. If the schedule tightens, the team will revisit scope together, but human validation of the ground truth stays in regardless.
 
 ## 23.2 Is This the End of the Project?
 
@@ -237,6 +237,6 @@ This section is written in each member's own voice.
 
 # 25. Conclusion
 
-MTLJ has gone from a proposal to a working tool that has already been used. The corpus is chosen, frozen, and sanity-checked. Six operators make seeded, versioned, fully traceable edits, and a validity filter rejects edits that are garbled rather than contradictory. DeepEval and Ragas adapters, local models, the asynchronous runner with rate limiting and retries, the response cache, recorded fixtures, and resumable runs make audits practical and cheap. Every statistic the study needs is defined, ratified, implemented, and tested, and the team has run pilot audits and a first full audit of the selected judges. The feasibility study showed that the core measurement works: a widely used faithfulness judge reacts to a deliberate contradiction clearly enough to stand out from its own noise, and ignores formatting and padding at the strengths tested. It also found real blind spots, such as contradictions marked "unclear" and false alarms on answers humans verified as clean.
+MTLJ has gone from a proposal to a working tool that has already been used. The corpus is chosen, frozen, and sanity-checked. Six operators make seeded, versioned, fully traceable edits, and a validity filter rejects edits that are garbled rather than contradictory. DeepEval and Ragas adapters, local models, the asynchronous runner with rate limiting and retries, the response cache, recorded fixtures, and resumable runs make audits practical and cheap. Every statistic the study needs is defined, ratified, implemented, and tested, and the team has run pilot audits that sized the full study and found three problems to fix before it runs. The feasibility study showed that the core measurement works: a widely used faithfulness judge reacts to a deliberate contradiction clearly enough to stand out from its own noise, and ignores formatting and padding at the strengths tested. It also found real blind spots, such as contradictions marked "unclear" and false alarms on answers humans verified as clean.
 
-Senior Design II adds the database-backed results service and the dashboard, validates the ground truth with a human review, and re-runs the full audit with the validated operators to produce the project's main result. The design in this document is complete enough for that work to proceed without open architectural questions, and detailed enough that another team could continue it from this document and the repository alone.
+Senior Design II opens with the first full audit of the selected judges, adds the database-backed results service and the dashboard, validates the ground truth with a human review, and re-runs the full audit with the validated operators to produce the project's main result. The design in this document is complete enough for that work to proceed without open architectural questions, and detailed enough that another team could continue it from this document and the repository alone.

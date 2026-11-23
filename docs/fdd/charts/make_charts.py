@@ -44,7 +44,7 @@ EPICS = [
     ("Command Line Interface", 3, 0, 0),
     ("Dashboard", 1, 0, 5),
     ("Validation Study", 0, 0, 6),
-    ("Empirical Audit", 4, 0, 0),
+    ("Empirical Audit", 2, 0, 2),
     ("Documentation", 6, 0, 0),
 ]
 
@@ -68,7 +68,7 @@ def epic_status():
 
 
 # --- Sprint velocity -------------------------------------------------------------------
-SPRINTS = [("Sprint 1", 41, 26), ("Sprint 2", 89, 52), ("Sprint 3", 83, 76), ("Sprint 4", 94, 94)]
+SPRINTS = [("Sprint 1", 41, 26), ("Sprint 2", 89, 52), ("Sprint 3", 83, 76), ("Sprint 4", 94, 81)]
 
 
 def velocity():
@@ -94,10 +94,10 @@ TIMELINE = [
     ("S1", date(2026, 9, 29), date(2026, 10, 13), "done", "Setup, corpus survey, interfaces, feasibility study"),
     ("S2", date(2026, 10, 13), date(2026, 10, 27), "done", "Models, loader, corpus freeze, adapters, first operators"),
     ("S3", date(2026, 10, 27), date(2026, 11, 10), "done", "DeepEval adapter, runner, cache, retries, all core statistics, CLI"),
-    ("S4", date(2026, 11, 10), date(2026, 11, 24), "done", "Filter, resume, limits, Ollama, Ragas, first full audit, FDD"),
-    ("S5", date(2026, 11, 24), date(2026, 12, 8), "now", "Database schema, validation protocol, findings review"),
-    ("S6", date(2027, 1, 12), date(2027, 1, 26), "sd2", "Repository layer, results API, Nuxt scaffold, sampling tool"),
-    ("S7", date(2027, 1, 26), date(2027, 2, 9), "sd2", "Profile view, first review round"),
+    ("S4", date(2026, 11, 10), date(2026, 11, 24), "done", "Filter, resume, limits, Ollama, Ragas, pilots, FDD"),
+    ("S5", date(2026, 11, 24), date(2026, 12, 8), "now", "Pilot fixes, database schema, validation protocol"),
+    ("S6", date(2027, 1, 12), date(2027, 1, 26), "sd2", "First full audit, results API, Nuxt scaffold, sampling tool"),
+    ("S7", date(2027, 1, 26), date(2027, 2, 9), "sd2", "Findings write-up, profile view, first review round"),
     ("S8", date(2027, 2, 9), date(2027, 2, 23), "sd2", "Comparison view, second review round, agreement"),
     ("S9", date(2027, 2, 23), date(2027, 3, 9), "sd2", "Operator validation scores, fix or drop weak operators"),
     ("S10", date(2027, 3, 9), date(2027, 3, 30), "sd2", "Re-run the full audit with validated operators"),

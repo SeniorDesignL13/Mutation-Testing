@@ -137,7 +137,7 @@ MTLJ has no external sponsor, so every cost is paid by the team, and the design 
 Table: Project budget {#budget}
 | Item | Purpose | Cost so far | Expected for SD2 | Notes |
 |---|---|---|---|---|
-| OpenAI API (gpt-4o-mini) | Feasibility study, fixture recording, development, pilots, first full audit | About $100 (estimate) | About $150 | One full re-run after validation (about $50 per judge configuration), plus pilots and reruns of failed calls |
+| OpenAI API (gpt-4o-mini) | Feasibility study, fixture recording, development, live pilots, Ragas comparison | Under $10 (estimate) | About $150 | First full audit early in SD2 and one re-run after validation (each at most about $50 per judge configuration), plus reruns of failed calls |
 | Local inference (Ollama) | Free overnight audits | $0 | $0 | Team members' existing hardware |
 | GitHub (repository, Actions, Dependabot) | Code hosting and CI | $0 | $0 | Free for public repositories |
 | Jira and Confluence | Backlog, sprints, documentation | $0 | $0 | Free plan, up to 10 users |
@@ -146,6 +146,6 @@ Table: Project budget {#budget}
 | Hosting | Public dashboard | $0 | $0 to $120 | $0 for a static site; up to about $20 per month for six months if a server is needed |
 | **Total** | | **About $100** | **About $150 to $270** | |
 
-> NOTE: Replace the "cost so far" estimate with the actual OpenAI spend from the billing page (it now includes the pilots and the first full audit), and record who pays for API usage.
+> NOTE: Replace the "cost so far" estimate with the actual OpenAI spend from the billing page (it includes the live pilots and the Ragas comparison), and record who pays for API usage.
 
 The largest uncertainty is how many full audits the study needs. The cost scales linearly with the number of judge configurations, the number of samples per text, and the number of operators in the battery. Running both DeepEval settings on a local model instead of gpt-4o-mini would remove most of the API cost, at the price of longer runs.

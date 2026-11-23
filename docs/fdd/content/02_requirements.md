@@ -56,7 +56,7 @@ Several use cases are worth discussing beyond the diagrams, because they shaped 
 
 **Investigating a surprising result.** When a judge appears to miss most numeric changes, the engineer needs to see examples. Every mutant carries its operator name and version, intensity, seed, and a record of exactly which span changed. The engineer can regenerate the mutant from the record and confirm it is the same text, open the stored judge verdicts to see whether the judge marked the changed claim as "unclear" or did not extract it at all, and rerun only that record.
 
-**A long overnight audit.** A full corpus audit is tens of thousands of scorings. The engineer needs it to survive network failures and rate limits without supervision. Retries, streaming writes, and the cache handle transient failures; rate limiting keeps the run inside the provider's limits; and if the run still stops, `mtlj audit resume` continues it from its directory without rescoring anything already on disk. The team's own first full audit ran this way in Sprint 4.
+**A long overnight audit.** A full corpus audit is tens of thousands of scorings. The engineer needs it to survive network failures and rate limits without supervision. Retries, streaming writes, and the cache handle transient failures; rate limiting keeps the run inside the provider's limits; and if the run still stops, `mtlj audit resume` continues it from its directory without rescoring anything already on disk. The team's first full audit, early in Senior Design II, will run this way.
 
 # 6. Requirements Specification
 
@@ -147,4 +147,4 @@ Table: Traceability from epics to requirements and tests {#trace}
 | MTLJ-12 Command Line Interface | FR-15, FR-25 | tests/cli/test_cli.py, tests/engine/test_audit_config.py |
 | MTLJ-13 Mutation Engine | FR-03, FR-07, FR-08 | tests/operators/test_registry.py, tests/engine/test_generator.py, tests/engine/test_battery_config.py |
 | MTLJ-14 Execution Engine | FR-12 to FR-19 | tests/engine/test_runner.py, test_retry.py, test_cache.py, test_fixtures.py |
-| MTLJ-5 Empirical Audit and Findings | Objective 5 | Pilot and full audit run directories; findings report (Sections 11.4 and 11.5) |
+| MTLJ-5 Empirical Audit and Findings | Objective 5 | Pilot run directories and write-up (Section 11.4); full audit planned for early SD2 (Section 11.5) |

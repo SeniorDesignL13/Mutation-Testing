@@ -95,7 +95,7 @@ The measured numbers so far come from gpt-4o-mini. The README's three-record pil
 
 The pilot audits (Section 11.4) measured more precisely. Across 765 recorded DeepEval scorings, a scoring took 8.46 seconds on average (median 8.30, 90th percentile 10.89), driven mostly by how many claims the answer has. A full corpus audit is 34,885 scorings per judge configuration: at most about $46 with gpt-4o-mini, and about 20.5 hours at four concurrent calls or 10.2 at eight, if the provider does not throttle. The replay process peaked at 283 MB of memory. Once the response cache is wired into the CLI (Section 9.3), a rerun of unchanged scorings costs nothing. A local quantized 8B model costs nothing per call but is slower per call on consumer hardware, so overnight runs are the expected pattern. The Ollama integration (MTLJ-92) is complete, and the pilot audits measured local throughput and memory on the team's machines.
 
-> NOTE: Add the measured local numbers (seconds per scoring and memory used for the local model, and the hardware) and the actual run time and cost of the first full audit.
+> NOTE: Add the measured local numbers (seconds per scoring and memory used for the local model, and the hardware) and the live pilots' measured cost per scoring.
 
 ## 16.4 Prompt Shaping
 
