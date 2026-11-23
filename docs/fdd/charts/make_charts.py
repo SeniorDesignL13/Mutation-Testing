@@ -31,21 +31,21 @@ def save(fig, name):
 
 
 # --- Epic status (tasks per epic: done, active, to do) as of 2026-11-22 ---------------------
-EPICS = [
-    ("Infrastructure and Tooling", 8, 0, 0),
+EPICS = [  # (name, done by end of SD1, winter break sprint, later in SD2), Jira export 2026-11-22
+    ("Infrastructure and Tooling", 8, 1, 0),
     ("Dataset Acquisition", 5, 0, 0),
-    ("Core Data Model", 5, 0, 4),
-    ("Adapter Layer", 5, 0, 0),
-    ("Degrading Operators", 6, 0, 0),
-    ("Preserving Operators", 6, 0, 0),
-    ("Mutation Engine", 4, 0, 0),
-    ("Execution Engine", 8, 0, 0),
-    ("Analysis and Statistics", 9, 0, 0),
-    ("Command Line Interface", 3, 0, 0),
-    ("Dashboard", 1, 0, 5),
-    ("Validation Study", 0, 0, 6),
-    ("Empirical Audit", 2, 0, 2),
-    ("Documentation", 6, 0, 0),
+    ("Core Data Model", 5, 0, 5),
+    ("Adapter Layer", 5, 1, 1),
+    ("Degrading Operators", 4, 3, 0),
+    ("Preserving Operators", 5, 1, 0),
+    ("Mutation Engine", 4, 0, 1),
+    ("Execution Engine", 8, 1, 0),
+    ("Analysis and Statistics", 9, 1, 0),
+    ("Command Line Interface", 2, 1, 1),
+    ("Dashboard", 1, 0, 7),
+    ("Validation Study", 0, 2, 4),
+    ("Empirical Audit", 1, 3, 2),
+    ("Documentation", 4, 1, 0),
 ]
 
 
@@ -55,20 +55,20 @@ def epic_status():
     d, a, t = (np.array([e[i] for e in EPICS][::-1]) for i in (1, 2, 3))
     y = np.arange(len(names))
     ax.barh(y, d, color=DONE, label="Done")
-    ax.barh(y, a, left=d, color=ACTIVE, label="In progress or review")
-    ax.barh(y, t, left=d + a, color=TODO, label="To do")
+    ax.barh(y, a, left=d, color=ACTIVE, label="Winter break sprint (Sprint 5)")
+    ax.barh(y, t, left=d + a, color=TODO, label="Later in Senior Design II")
     for i in range(len(names)):
         ax.text(d[i] + a[i] + t[i] + 0.15, i, f"{d[i]}/{d[i] + a[i] + t[i]}", va="center", fontsize=10, color=MUTED)
     ax.set_yticks(y, names)
     ax.set_xlabel("Tasks")
-    ax.set_xlim(0, 11)
+    ax.set_xlim(0, 12.5)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(loc="lower right", frameon=False)
     save(fig, "chart_epics.png")
 
 
 # --- Sprint velocity -------------------------------------------------------------------
-SPRINTS = [("Sprint 1", 41, 26), ("Sprint 2", 89, 52), ("Sprint 3", 83, 76), ("Sprint 4", 94, 81)]
+SPRINTS = [("Sprint 1", 41, 26), ("Sprint 2", 89, 52), ("Sprint 3", 83, 76), ("Sprint 4", 94, 57)]
 
 
 def velocity():
@@ -94,10 +94,10 @@ TIMELINE = [
     ("S1", date(2026, 9, 29), date(2026, 10, 13), "done", "Setup, corpus survey, interfaces, feasibility study"),
     ("S2", date(2026, 10, 13), date(2026, 10, 27), "done", "Models, loader, corpus freeze, adapters, first operators"),
     ("S3", date(2026, 10, 27), date(2026, 11, 10), "done", "DeepEval adapter, runner, cache, retries, all core statistics, CLI"),
-    ("S4", date(2026, 11, 10), date(2026, 11, 24), "done", "Filter, resume, limits, Ollama, Ragas, pilots, FDD"),
-    ("S5", date(2026, 11, 24), date(2026, 12, 8), "now", "Pilot fixes, database schema, validation protocol"),
-    ("S6", date(2027, 1, 12), date(2027, 1, 26), "sd2", "First full audit, results API, Nuxt scaffold, sampling tool"),
-    ("S7", date(2027, 1, 26), date(2027, 2, 9), "sd2", "Findings write-up, profile view, first review round"),
+    ("S4", date(2026, 11, 10), date(2026, 11, 24), "done", "Ragas, pilots, negation, Ollama, resumption, rate limits, FDD"),
+    ("S5", date(2026, 12, 7), date(2027, 1, 11), "now", "Winter break: pilot fixes, first full audit, findings"),
+    ("S6", date(2027, 1, 12), date(2027, 1, 26), "sd2", "Database, results API, Nuxt scaffold, presentation"),
+    ("S7", date(2027, 1, 26), date(2027, 2, 9), "sd2", "Profile view, first review round"),
     ("S8", date(2027, 2, 9), date(2027, 2, 23), "sd2", "Comparison view, second review round, agreement"),
     ("S9", date(2027, 2, 23), date(2027, 3, 9), "sd2", "Operator validation scores, fix or drop weak operators"),
     ("S10", date(2027, 3, 9), date(2027, 3, 30), "sd2", "Re-run the full audit with validated operators"),
@@ -119,11 +119,9 @@ def timeline():
     ax.set_xlim(mdates.date2num(date(2026, 9, 20)), mdates.date2num(date(2027, 8, 15)))
     ax.axvline(mdates.date2num(date(2026, 11, 24)), color="#b3304d", lw=1.2, ls="--")
     ax.text(mdates.date2num(date(2026, 11, 24)) + 2, len(TIMELINE) - 0.4, "FDD submitted", color="#b3304d", fontsize=9.5)
-    ax.axvspan(mdates.date2num(date(2026, 12, 8)), mdates.date2num(date(2027, 1, 12)), color="#f1f2f5")
-    ax.text(mdates.date2num(date(2026, 12, 12)), 1.0, "Winter\nbreak", fontsize=9, color=MUTED)
     ax.spines[["top", "right"]].set_visible(False)
     handles = [plt.Rectangle((0, 0), 1, 1, color=COLORS[k]) for k in ("done", "now", "sd2")]
-    ax.legend(handles, ["Done", "Last SD1 sprint", "Planned, SD2"], frameon=False,
+    ax.legend(handles, ["Done", "Winter break sprint", "Planned, SD2"], frameon=False,
               loc="upper right", fontsize=9.5)
     plt.setp(ax.get_xticklabels(), fontsize=9.5)
     save(fig, "chart_timeline.png")
