@@ -97,6 +97,28 @@ def test_answer_with_no_statements_is_an_error_not_a_score():
         judge_with(FakeLLM([], statements=[]))("q", "a", CONTEXT)
 
 
+def test_on_usage_gets_the_estimated_tokens_once_per_call_even_when_it_fails():
+    usage = []
+
+    measure_faithfulness(
+        "q", "a", ["passage"], model="fake", llm=FakeLLM([1]), on_usage=lambda *u: usage.append(u)
+    )
+
+    class DownLLM(FakeLLM):
+        async def agenerate(self, prompt, response_model):
+            raise ConnectionError("backend is down")
+
+    with pytest.raises(ConnectionError):
+        measure_faithfulness(
+            "q", "a", ["p"], model="fake", llm=DownLLM([1]), on_usage=lambda *u: usage.append(u)
+        )
+
+    assert len(usage) == 2
+    assert all(prompt > 0 for prompt, _ in usage)
+    assert usage[0][1] > 0  # The answered call has completion tokens.
+    assert usage[1][1] == 0  # The failed one was billed for its prompt only.
+
+
 def test_every_passage_reaches_the_metric_in_order():
     llm = FakeLLM([1])
 
@@ -178,6 +200,14 @@ def test_reports_name_model_and_installed_ragas_version():
 
     result = judge("q", "a", CONTEXT)
     assert (result.model, result.version) == (DEFAULT_MODEL, version("ragas"))
+
+
+def test_defaults_are_the_ones_ragas_ships_with():
+    from ragas.llms.base import InstructorModelArgs
+
+    shipped = InstructorModelArgs()
+
+    assert shipped.temperature == DEFAULT_TEMPERATURE
 
 
 def test_cache_settings_cover_every_setting_that_changes_the_score():
