@@ -97,7 +97,18 @@ def test_answer_with_no_statements_is_an_error_not_a_score():
         judge_with(FakeLLM([], statements=[]))("q", "a", CONTEXT)
 
 
-def test_on_usage_gets_the_estimated_tokens_once_per_call_even_when_it_fails():
+class _WordEncoding:
+    """Stands in for tiktoken's encoding, which downloads its tables on first use and so can't
+    run with the network blocked. One token per word is enough to test the counting."""
+
+    def encode(self, text):
+        return text.split()
+
+
+def test_on_usage_gets_the_estimated_tokens_once_per_call_even_when_it_fails(monkeypatch):
+    import tiktoken
+
+    monkeypatch.setattr(tiktoken, "get_encoding", lambda name: _WordEncoding())
     usage = []
 
     measure_faithfulness(
