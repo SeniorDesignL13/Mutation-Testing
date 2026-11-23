@@ -91,6 +91,14 @@ The script prints how many calls it will make and asks before spending. Then it:
 Then run `uv run pytest tests/judges/deepeval/test_faithfulness_replay.py` and commit the
 scores file together with `tests/fixtures/gold-set/`.
 
+## Recording the Ragas judge
+
+`uv run python scripts/record_fixtures.py --judge ragas-faithfulness` records
+`tests/fixtures/judge/ragas-faithfulness.jsonl` on the same saved texts, with the same options.
+Ragas doesn't report what a call cost, so the cap (`--max-cost`) counts an estimate from token
+counts (tiktoken) at gpt-4o-mini's prices, and refuses any other model. The full gold set is
+765 scorings, about $0.60. `tests/judges/ragas/test_faithfulness_replay.py` replays it.
+
 ## Recording in your own code
 
 ```python
