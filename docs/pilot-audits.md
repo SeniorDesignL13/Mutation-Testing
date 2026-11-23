@@ -6,11 +6,16 @@ How long will the full audit take and cost, is N = 5 the right sample count, and
 broken that we would rather find now than after hours of compute?
 
 **Short answer.** One full corpus-v1 audit of one judge configuration is **34,885 scorings**.
-At the latency recorded in the gold-set run that is about **20 hours at 4 concurrent calls or 10
-hours at 8**, and at most **$46**. DeepEval has two configurations on main, so the study is twice
-that. N = 5 still looks right. **Do not start the full run yet**: the entity-swap operator
-makes invalid mutants, `numeric_perturbation` loses two thirds of its intensities, and the
-runner can't resume or reuse paid-for scores, so one failure at hour 15 costs the whole run.
+Measured live (20 records, 785 scorings per configuration), that is about **21 hours at 4
+concurrent calls or 11 hours at 8, and $21**, per configuration. DeepEval has two
+configurations on main, so the study is twice that: about **42 hours at 4 concurrent, or 21 at 8,
+and $42**. The live pilots confirmed the offline estimate of time (replay 20.5 h, live 21.5 h) and
+found cost half the offline ceiling ($0.0006 a scoring, not $0.0013). Going from 4 to 8 concurrent
+calls halved the wall clock with no errors or retries. N = 5 still looks right. **Do not start the
+full run yet**: the entity-swap operator makes invalid mutants, `numeric_perturbation` loses two
+thirds of its intensities, the runner can't resume or reuse paid-for scores, so one failure at
+hour 15 costs the whole run, and about 0.5% of live scorings fail on a DeepEval verdict-count
+check.
 
 ## What was run
 
@@ -18,10 +23,11 @@ runner can't resume or reuse paid-for scores, so one failure at hour 15 costs th
 |---|---|---|
 | A. Replay of the recorded gold-set pilot through the real engine | **Recorded** (`tests/fixtures/judge/deepeval-faithfulness.jsonl`, 765 scorings, gpt-4o-mini, DeepEval 4.2.8, default config) | Done |
 | A. Planned scorings for corpus-v1 | **Generated locally** (no judge, no network) | Done |
-| B. Live pilots, `--dataset corpus-v1 --limit 20`, both DeepEval configs | **Live** | **Not run.** There is no `.env`, so no `OPENAI_API_KEY`, in the main checkout. Nothing was spent |
+| B. Live pilots, `--dataset corpus-v1 --limit 20`, N = 5, seed 0, 4 concurrent, both DeepEval configs | **Live** (gpt-4o-mini) | Done, 2 × 785 scorings. Total spend **$1.05** (cap $3) |
+| B. Concurrency 8, 4 records, default config | **Live** | Done, 165 scorings |
 | Ragas pilot | Live | Pending MTLJ-65 |
 
-Everything in Part A is reproducible with no key:
+Part A is reproducible with no key:
 
 ```bash
 uv run python scripts/pilot_analysis.py all
@@ -29,7 +35,8 @@ uv run python scripts/pilot_analysis.py all
 
 `scripts/pilot_analysis.py` writes `runs/pilot-gold-replay/` (git-ignored) and the summary data
 in [`docs/pilot/`](pilot/): `corpus_v1_generation.json`, `replay_run.json`, `summary.json`,
-`per_text.csv`.
+`per_text.csv`. Part B needs a key and spends money (see "Part B: live pilots" for the commands);
+its summary is `live_summary.json`, written by `scripts/pilot_analysis.py live`.
 
 ## Method
 
@@ -48,9 +55,12 @@ is the only latency data offline, so everything below is only as good as one rec
 separately with `numeric_perturbation` at 0.2 / 0.6 / 1.0. Generation is deterministic (seed 0)
 and took 149 s on 4 processes. A scoring is one judge call; every text is scored N = 5 times.
 
-**Cost** is an estimate, not a measurement. The README says 115 scorings cost under $0.15
-with gpt-4o-mini, so the figure used is **at most $0.0013 per scoring**, as a ceiling. Tokens
-aren't recorded in the fixtures, so no better number is possible offline.
+**Cost, offline,** is an estimate. The README says 115 scorings cost under $0.15 with
+gpt-4o-mini, so the offline figure is **at most $0.0013 per scoring**, as a ceiling. Tokens
+aren't recorded in the fixtures. **Cost, live,** is measured: `scripts/pilot_live.py` runs the same
+`run_audit` as the CLI and adds up DeepEval's `evaluation_cost` for every scoring (priced from
+the response's token usage). It tallies tokens where DeepEval turns usage into a cost. Both are
+DeepEval's own pricing for gpt-4o-mini, not an OpenAI invoice.
 
 ## Results
 
@@ -116,21 +126,27 @@ gives on the day, the times halve.
 ### Extrapolation for the full study
 
 Time = Σ (planned scorings × mean latency of that operator) ÷ concurrency. It assumes calls
-overlap perfectly and that OpenAI doesn't throttle at 8. Neither is tested (see Anomalies, 5).
-`numeric_perturbation` uses `entity_swap`'s latency, because the gold set has none. Cost is the
-ceiling of $0.0013 per scoring.
+overlap perfectly. The live concurrency-8 run supports that (Part B: 165 scorings in 182 s, no
+errors or retries), though only over 3 minutes. The **replay** rows use the recorded latency,
+`numeric_perturbation` takes `entity_swap`'s latency, and cost is the README ceiling of $0.0013 a
+scoring. The **live** rows use the mean latency and measured cost of each live pilot (default
+config 8.89 s and $0.00060; penalized 8.52 s and $0.00060).
 
-| Setup | Scorings | Hours, 4 concurrent | Hours, 8 concurrent | Cost (ceiling) |
+| Setup | Scorings | Hours, 4 concurrent | Hours, 8 concurrent | Cost |
 |---|---|---|---|---|
-| One config, default battery | 34,885 | 20.5 | 10.2 | $45.5 |
-| One config, + `numeric_perturbation` | 36,880 | 21.7 | 10.9 | $48.1 |
-| **Both DeepEval configs, default battery** | 69,770 | 41.0 | 20.5 | $91 |
-| **Both DeepEval configs, + `numeric_perturbation`** | 73,760 | 43.4 | 21.7 | $96 |
-| Same one-config default run at the spike's speed | 34,885 | 9.7 | 4.9 | $45.5 |
+| **Live**: default config, default battery | 34,885 | 21.5 | 10.8 | $21.0 |
+| **Live**: penalized config, default battery | 34,885 | 20.6 | 10.3 | $21.0 |
+| **Live: both configs, default battery** | 69,770 | **42.2** | **21.1** | **$42.0** |
+| **Live: both configs, + `numeric_perturbation`** | 73,760 | 44.6 | 22.3 | $44.4 |
+| Replay: one config, default battery | 34,885 | 20.5 | 10.2 | $45.5 (ceiling) |
+| Replay: one config, + `numeric_perturbation` | 36,880 | 21.7 | 10.9 | $48.1 (ceiling) |
+| Replay: both configs, default battery | 69,770 | 41.0 | 20.5 | $91 (ceiling) |
+| One config at the spike's speed (1.0 s a scoring at 4 concurrent) | 34,885 | 9.7 | 4.9 | |
 
-`penalize_ambiguous_claims` makes the same calls as the default config (the spike scored both
-from the same verdicts), so it is assumed to cost the same. It has no recording, so that is an
-assumption. A Ragas judge is not included.
+The live time is 5% above the replay's (mean latency 8.89 s against 8.46 s), so the offline
+estimate held. The live cost is 46% of the ceiling. The two DeepEval configs cost and take the
+same (the penalized pilot cost $0.4721 against $0.4727, and ran 4% faster). A Ragas judge is not
+included.
 
 ### Disk and memory
 
@@ -225,7 +241,7 @@ doesn't overturn that and doesn't strongly defend it either:
   makes N unequal and biases σ low, so it would need a new decision in
   [metrics.md](metrics.md). Not recommended for the first full run.
 
-If the budget forces a cut, N = 3 is the fallback.
+If the budget forces a cut, N = 3 is the fallback. The live pilots support keeping N = 5: on fresh records the judge is noisier than in the gold set (σ 0.085 and 0.072 against 0.030, 45% and 65% of originals varying against 25%), so fewer samples lose more, and at $0.0006 a scoring the extra samples cost about $8 per configuration over N = 3.
 
 ## Anomalies
 
@@ -305,7 +321,7 @@ intensity isn't a count (or let an operator say so), then re-count. Adding it is
 - `run_audit` doesn't take a cache, so `mtlj audit run` never uses the response cache that the
   runner supports (`cache=` in `run_judge_sync`). Re-running after fixing entity swap would pay
   for every original and every unchanged padding and reformat mutant again: about 32,000 scorings
-  already paid for, up to $42 and 19 hours at 4 concurrent.
+  already paid for, about $19 live and 19 hours at 4 concurrent (10 at 8).
 - Resuming a run (MTLJ-91) and rate limiting (MTLJ-96) are listed in `runner.py` as not built.
   A run that aborts at hour 15 writes `results.json` with status `aborted` and no rates, and the
   next run starts at zero. The retry logic handles a 429, but at 8 concurrent calls nothing keeps
@@ -322,19 +338,31 @@ in 37 of them, up to 6 fewer. They are concentrated in long, padded answers (29 
 scorings) and in 8 records, 27 of them in three (17622, 17388, 17592). The score always equals (yes + borderline) ÷ verdicts, never ÷
 `n_claims`, so no score is wrong. The consequence is for analysis: `n_claims` isn't the
 denominator, and a number of verdicts should not be read off it. Worth a line in
-[results.md](results.md); nothing to fix.
+[results.md](results.md).
 
-### 5. The runtime can't be trusted yet (medium)
+**Live, the opposite case fails.** In the live pilots **7 of 1,570 scorings (0.45%)** failed
+with a permanent `ValueError: verdict_counts must not sum to more than n_claims` (2 of 785 for the
+default config, 5 of 785 for penalized): DeepEval returned more verdicts than claims. All 7 are
+mutants with long answers (4 padded, 3 bulleted); the same mutant, `mut_e5767dc337e04ac5`,
+failed in both configs, on different samples. Failed scorings are never recorded as fixtures,
+which is why the replay can't show them. They aren't retried (permanent), so each leaves its
+text with 4 of 5 scores, which the metrics tolerate. At corpus scale that is about 160 lost
+scorings per config, and no run is blocked by them. **Recommendation.** Not a blocker, but
+decide whether the adapter should keep such a scoring (with the verdict count capped) instead of
+failing it, and list the failures in the study's write-up.
 
-All latency comes from one recording at 4 concurrent calls. The spike was twice as fast. The
-runner has no rate limit and has never run at 8. Both configs plus `numeric_perturbation` is 74,000
-scorings: between 22 and 43 hours on the recorded figures. **Recommendation.** The live pilot
-(Part B, below) must report mean latency and 429s at 4 concurrent before anyone books a
-machine for the full run.
+### 5. The runtime is now measured (resolved, one open question)
+
+The offline latency held up live: 8.89 s mean (default) and 8.52 s (penalized) against 8.46 s in
+the replay, and the wall clock followed concurrency (Part B). No scoring needed a retry, at 4
+or 8 concurrent calls. The open question is a longer run at 8: the concurrency-8 run was 3
+minutes and 165 scorings, and the OpenAI client retries a 429 by itself and shows it only as
+extra latency, which was not seen (max 12.9 s). **Recommendation.** Use 8 concurrent calls, and
+watch the first hour of the full run for retries and latency.
 
 ### 6. Other numbers that look odd and aren't
 
-- **No errors, no retries, no `no_scores` or `no_headroom` exclusions**, in 765 scorings.
+- **No errors, no retries, no `no_scores` or `no_headroom` exclusions**, in the 765 replayed scorings. Live there were 7 failures in 1,735 (Anomaly 4), and still no retries.
 - **`reformat_to_prose` makes 6 mutants** in 919 records (913 no_change): the corpus is
   nearly all prose, as docs/operators.md says. It adds nothing to the study but costs 30 scorings.
 - **Saturation at 1.0** (13 of 20 originals) is real, not a bug: those are faithful answers, and
@@ -355,28 +383,105 @@ Bullets 25%, markdown 35%, padding 19% against 5%. The rate rises, not falls, wi
 which fits the spike's note that bullets change how claims are cut up. At 75% of texts constant
 across samples, a different constant is a real reaction. Expect "the judge reacts to reformatting"
 as a headline in the full study, and don't read it as a pilot failure. The spike's 2/20 and 3/20
-came from a larger σ (0.054, τ = 0.066, against τ = 0.037 here).
+came from a larger σ (0.054, τ = 0.066, against τ = 0.037 here). **The live pilot shows how
+much this depends on σ**: with σ = 0.085 the live default config flagged bullets 10%, markdown 0%
+and padding 6% (Part B), close to the 5% of chance. The judge's reaction to formatting is real
+but small enough that a σ estimate decides whether it is called significant. Report both σ and
+the rate.
 
 ## Part B: live pilots
 
-**Not run.** `C:\Repos\Mutation-Testing\.env` doesn't exist, so there was no key. When one is
-available:
+**Live data**, gpt-4o-mini, DeepEval 4.2.8, `--dataset corpus-v1 --limit 20`, default battery,
+N = 5, seed 0. `--limit 20` is the first 20 records by id; one of them, 11868, is in the gold
+set. Each run planned 20 originals and 137 mutants, **785 scorings**. They ran one after the
+other, through `scripts/pilot_live.py` (same `run_audit` as the CLI, plus cost):
 
 ```bash
-uv run mtlj audit run --dataset corpus-v1 --limit 20 --seed 0 --samples 5 \
-    --output runs/pilot-default
-uv run mtlj audit run --dataset corpus-v1 --limit 20 --seed 0 --samples 5 \
-    --judge deepeval-faithfulness-penalized --output runs/pilot-penalized
+uv run python scripts/pilot_live.py --judge deepeval-faithfulness --limit 20 \
+    --output runs/pilot-default --expect-scorings 785 --max-cost 1.3
+uv run python scripts/pilot_live.py --judge deepeval-faithfulness-penalized --limit 20 \
+    --output runs/pilot-penalized --expect-scorings 785 --max-cost 1.3
+uv run python scripts/pilot_live.py --judge deepeval-faithfulness --limit 4 --concurrency 8 \
+    --output runs/pilot-c8 --max-cost 0.4
+uv run python scripts/pilot_analysis.py live
 ```
 
-(`--limit 20` is the first 20 records by id; one of them, 11868, is in the gold set.) Each plans
-**137 mutants and 785 scorings**: about 28 minutes at 4 concurrent calls and at most $1.02, so
-both fit under a $3 cap with room for a rerun. They should report, and be compared with the
-replay above:
+Total spend **$1.05** against the $3 cap ($0.0096 for a 1-record trial, $0.4727, $0.4721 and
+$0.0991 for the three runs), by DeepEval's pricing.
 
-- real mean latency and p90 (replay: 8.46 s and 10.89 s), and 429s and retries from the summary
-- σ and saturation (replay: 0.030, 15 of 20 originals identical)
-- tokens per scoring, to replace the $0.0013 ceiling
+### Measured, next to the replay
+
+| | Live default | Live penalized | Live default, 8 concurrent, 4 records | Replay (gold set) |
+|---|---|---|---|---|
+| Scorings | 785 | 785 | 165 | 765 |
+| Concurrency | 4 | 4 | 8 | 4 (recorded) |
+| Wall clock | 1,752 s (29.2 min) | 1,679 s (28.0 min) | 182 s | n/a |
+| Wall clock per scoring | 2.23 s | 2.14 s | 1.11 s | 2.1 s (README, 4 min per 115) |
+| Latency, mean | 8.89 s | 8.52 s | 8.62 s | 8.46 s |
+| Latency, median | 8.56 s | 8.20 s | 8.33 s | 8.30 s |
+| Latency, p90 | 11.30 s | 10.66 s | 10.73 s | 10.89 s |
+| Latency, max | 19.07 s | 15.26 s | 12.88 s | 16.86 s |
+| Failed scorings | 2 | 5 | 0 | 0 |
+| Scorings retried | 0 | 0 | 0 | 0 |
+| 429s seen | 0 | 0 | 0 | n/a |
+| Cost per scoring | $0.00060 | $0.00060 | $0.00060 | $0.0013 (ceiling) |
+| Cost, whole run | $0.4727 | $0.4721 | $0.0991 | n/a |
+| LLM calls per scoring | 3.0 | 3.0 | 3.0 | n/a |
+| Tokens per scoring, in / out | 1,959 / 514 | 1,959 / 512 | 1,923 / 521 | n/a |
+| σ | 0.085 | 0.072 | 0.036 | 0.030 |
+| Originals scored identically on all 5 samples | 11 of 20 (10 at 1.0) | 7 of 20 (3 at 1.0) | 2 of 4 | 15 of 20 (13 at 1.0) |
+| Mutants scored identically on all 5 samples | 85 of 137 (62%) | 50 of 137 (36%) | 17 of 29 | 100 of 133 (75%) |
+| Mean score of the originals | 0.929 | 0.778 | 0.940 | 0.970 |
+
+Concurrency 8 halved the wall clock per scoring (2.23 s to 1.11 s) at an unchanged mean latency.
+Wall clock per scoring is mean latency divided by concurrency in all three runs (2.22, 2.13,
+1.08), so the extrapolation formula holds. Retries and 429s: no scoring was retried in the run
+summary, and none of the 1,735 scorings failed with a rate-limit or timeout error. The OpenAI client
+retries a 429 on its own (two times by default) and that doesn't appear as a retry: it would
+show as latency, and the tail is no longer than the replay's. So "no 429s" means none were
+visible, not that none occurred. Cost and tokens are the totals DeepEval reports over every LLM
+call of the scoring (3 calls: claims, truths, verdicts), including the 7 scorings that later
+failed. Peak memory and run directory size were not measured live.
+
+The cost is 46% of the README ceiling ($0.0013), which was only "under 15 cents for 115
+scorings". The full study at this price is about $21 per configuration.
+
+### Headline results, live and replay
+
+Detection rate (`entity_swap`) and spurious sensitivity (the rest), as hits / testable.
+
+| Operator | Live default (σ 0.085) | Live penalized (σ 0.072) | Replay default (σ 0.030) |
+|---|---|---|---|
+| `entity_swap` | 62.5% (10/16) | 53.3% (8/15) | 46.2% (6/13) |
+| `reformat_to_bullets` | 10.0% (2/20) | 20.0% (4/20) | 25.0% (5/20) |
+| `reformat_to_markdown` | 0.0% (0/20) | 20.0% (4/20) | 35.0% (7/20) |
+| `verbosity_padding` | 6.2% (5/80) | 26.3% (21/80) | 18.8% (15/80) |
+| `reformat_to_prose` | 0/1 testable | 0/1 testable | 0 testable |
+
+Read these as a check of the pipeline, not as findings: 20 records, the entity-swap mutants are
+the ones Anomaly 1 describes, and the intervals are wide (the Wilson interval for 2 of 20 is
+2.8% to 30.1%).
+
+### What the live pilots add
+
+- **σ is not a property of the judge.** Three runs of one judge gave 0.085, 0.036 and (replay)
+  0.030, on different 4 to 20 records, and the penalized config gave 0.072. It is re-estimated
+  in every run, so the study is safe, but compare rates only with their σ.
+- **Saturation is lower on fresh records.** 55% of live originals are constant across samples
+  (11 of 20, default) against 75% in the gold set, and only 35% under the penalized config. The
+  gold set was picked for answers with several sentences and an entity, and the judge may be
+  steadier on them; or the replay's 5 samples were simply quiet. The full study will have more
+  noise than the replay suggests, which favours N = 5.
+- **The penalized config is noisier and harsher**: original mean 0.78 against 0.93, more
+  variation per text, and it flags padding 26% of the time against 6%. The spike's
+  "default as baseline, penalized as second view" holds.
+- **Entity swap detection is higher live (62% and 53% against 46%)**, on 15 to 16 mutants, with
+  the same kind of swap Anomaly 1 describes. With these counts the difference is within
+  noise, and it is no evidence the operator improved.
+
+The `live` stage of `scripts/pilot_analysis.py` reads `runs/pilot-*` and writes
+`docs/pilot/live_summary.json`. The run directories are git-ignored and `live_summary.json`
+is the record kept. Cost and token counts per scoring are in each run's `cost.json`.
 
 ## Ragas pilot: pending MTLJ-65
 
@@ -384,27 +489,33 @@ Not started. When the adapter lands, repeat the corpus-v1 `--limit 20` run for i
 latency and cost per scoring (Ragas makes different calls from DeepEval, so neither carries
 over), and add its rows to the extrapolation table.
 
-## Recommendation: no-go for the full run today, go once three things are done
+## Recommendation: no-go for the full run today, go once two things are done
 
-The pipeline works: the replay is clean, the maths reproduces, and the cost is modest, about
-$91 for both DeepEval configs at the ceiling and roughly a day of wall clock at 8 concurrent
-calls. But a full run today would spend that on a degrading operator that mostly makes invalid
-mutants, and, if it fails part way, would start again from zero.
+The pipeline works end to end live: 1,735 scorings, 7 failures, no retries, and a cost of $0.0006
+a scoring. The study is about **$42 and 21 hours at 8 concurrent calls (42 hours at 4)** for both
+DeepEval configs. The live pilots did what they were for: the time estimate held, the cost came in
+at half the ceiling, and 8 concurrent calls worked. They changed one thing in the list:
+the live pilot is done, so it is off the to-do list. But a full run today would spend that on a
+degrading operator that mostly makes invalid mutants, and, if it fails part way, would start
+again from zero.
 
 1. **Fix or filter entity swap** and have a person check 50 mutants (Anomaly 1).
 2. **Wire the response cache into `audit run`** so a stopped or repeated run only pays for
-   what's missing (Anomaly 3).
-3. **Run the live pilot** (Part B) and confirm latency, errors and 429s at 4 concurrent, and
-   try 8 for a short run before committing to it.
+   what's missing (Anomaly 3). Cost is no longer the argument for this ($21 a config); the
+   hours are.
 
-Do these and the full run (default battery, N = 5, seed 0, 4 concurrent, both DeepEval
-configs, about 40 hours or 20 at 8) can go ahead. Add `numeric_perturbation` only after its
-intensity handling is fixed (Anomaly 2), and run Ragas when MTLJ-65 is merged.
+Do these and the full run (default battery, N = 5, seed 0, 8 concurrent, both DeepEval
+configs, about 21 hours and $42) can go ahead, watching the first hour for retries. Decide
+about the 0.5% verdict-count failures (Anomaly 4) and add `numeric_perturbation` only after its
+intensity handling is fixed (Anomaly 2). Run Ragas when MTLJ-65 is merged.
 
 ## Limitations
 
-- Latency and σ come from one recording of 20 records. Cost is a ceiling from the README, not a
-  measurement.
+- Offline latency and σ come from one recording of 20 records. The live runs add two 785-scoring
+  pilots and one 165-scoring run, on the first 20 (and 4) records by id, not a random sample.
+- Cost is DeepEval's pricing of the token usage OpenAI reports, not an invoice.
+- The 8-concurrent run lasted 3 minutes. A rate limit that only bites after tens of thousands
+  of calls would not show.
 - The invalid-swap reading is one person's, on 13 mutants, and has no second reader.
 - The extrapolation assumes no throttling, no retries, and the same latency for
   `numeric_perturbation` and the penalized config as for the recorded ones.

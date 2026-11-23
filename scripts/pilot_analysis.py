@@ -6,6 +6,7 @@ Reproduce every number in docs/pilot-audits.md (no network, no API key), from th
     python -m uv run python scripts/pilot_analysis.py replay    # ~15 s: gold-set run dir, offline
     python -m uv run python scripts/pilot_analysis.py analyze   # seconds: latency, N, anomalies
     python -m uv run python scripts/pilot_analysis.py all
+    python -m uv run python scripts/pilot_analysis.py live      # needs runs/pilot-* (below)
 
 Stages:
 
@@ -21,6 +22,9 @@ Stages:
   anomaly evidence.
 
 Latency is the ``latency_ms`` of the original recorded call, which a replayed evaluation keeps.
+
+``live`` summarizes the live pilots made with scripts/pilot_live.py (needs OPENAI_API_KEY and
+spends money; see docs/pilot-audits.md for the commands) into docs/pilot/live_summary.json.
 """
 
 from __future__ import annotations
@@ -628,10 +632,110 @@ def stage_analyze() -> None:
     )
 
 
+LIVE_RUNS = {
+    "default": "pilot-default",
+    "penalized": "pilot-penalized",
+    "c8": "pilot-c8",
+}
+
+
+def stage_live() -> None:
+    """Summarize the live pilots in runs/ (made by scripts/pilot_live.py) next to the replay."""
+    gen = json.loads((DOCS / "corpus_v1_generation.json").read_text())
+    out: dict = {}
+    for label, name in LIVE_RUNS.items():
+        directory = ROOT / "runs" / name
+        if not (directory / "cost.json").exists():
+            continue
+        evals = _load(directory / "evaluations.jsonl")
+        cost = json.loads((directory / "cost.json").read_text())
+        results = json.loads((directory / "results.json").read_text(encoding="utf-8"))
+        ok = [e for e in evals if e["status"] == "ok"]
+        scores = defaultdict(list)
+        for e in ok:
+            scores[e["target_id"] if e["kind"] == "mutant" else e["record_id"]].append(e["score"])
+        orig_ids = {e["record_id"] for e in evals if e["kind"] == "original"}
+        orig = {r: scores[r] for r in orig_ids}
+        mut = {t: s for t, s in scores.items() if t not in orig_ids}
+        retries = Counter()
+        for e in evals:
+            for r in e["retry_errors"]:
+                retries[r] += 1
+        row = {
+            "scorings": len(evals),
+            "ok": len(ok),
+            "errors": results["run"]["scorings"]["errors"],
+            "errors_by_type": results["run"]["scorings"]["errors_by_type"],
+            "scorings_with_retry": sum(e["attempts"] > 1 for e in evals),
+            "retries_by_error": dict(retries),
+            "latency": {
+                "all": _latency([e["latency_ms"] for e in ok]),
+                "originals": _latency([e["latency_ms"] for e in ok if e["kind"] == "original"]),
+                "mutants": _latency([e["latency_ms"] for e in ok if e["kind"] == "mutant"]),
+            },
+            "wall_seconds": cost["wall_seconds"],
+            "wall_seconds_per_scoring": cost["wall_seconds"] / len(evals),
+            "concurrency": cost["concurrency"],
+            "spent_usd": cost["spent_usd"],
+            "priced_scorings": cost["priced_scorings"],
+            "unpriced_scorings": cost["unpriced_scorings"],
+            "usd_per_scoring": cost["spent_usd"] / max(cost["priced_scorings"], 1),
+            "llm_calls": cost["llm_calls"],
+            "llm_calls_per_scoring": cost["llm_calls"] / len(evals),
+            "input_tokens_per_scoring": cost["input_tokens"] / len(evals),
+            "output_tokens_per_scoring": cost["output_tokens"] / len(evals),
+            "sigma": results["noise"]["sigma"] if results["noise"] else None,
+            "originals": len(orig),
+            "originals_identical": sum(len(set(s)) == 1 for s in orig.values()),
+            "originals_identical_at_1": sum(
+                len(set(s)) == 1 and s[0] == 1.0 for s in orig.values()
+            ),
+            "mutants_identical": sum(len(set(s)) == 1 for s in mut.values()),
+            "mutants": len(mut),
+            "orig_mean_score": statistics.fmean(s for v in orig.values() for s in v),
+            "operators": {
+                o["operator"]: {
+                    "family": o["family"],
+                    "rate": o["overall"]["rate"],
+                    "testable": o["overall"]["testable"],
+                    "hits": o["overall"].get("detected", o["overall"].get("flagged")),
+                    "excluded": o["overall"]["excluded"],
+                    "repeated_doses": o["repeated_doses"],
+                    "above_chance_corrected": [
+                        b["result"].get("above_chance_corrected") for b in o["by_intensity"]
+                    ],
+                }
+                for o in results["operators"]
+            },
+        }
+        out[label] = row
+    # Full-study extrapolation from the measured mean latency and cost (default battery).
+    full = gen["default"]["scorings_with_originals"]
+    plus = gen["default_plus_numeric_scorings"]
+    for label in ("default", "penalized"):
+        if label in out:
+            r = out[label]
+            mean = r["latency"]["all"]["mean_s"]
+            r["extrapolation"] = {
+                "scorings": full,
+                "hours_c4": full * mean / 4 / 3600,
+                "hours_c8": full * mean / 8 / 3600,
+                "usd": full * r["usd_per_scoring"],
+                "scorings_plus_numeric": plus,
+                "usd_plus_numeric": plus * r["usd_per_scoring"],
+                "hours_c4_plus_numeric": plus * mean / 4 / 3600,
+                "hours_c8_plus_numeric": plus * mean / 8 / 3600,
+            }
+    (DOCS / "live_summary.json").write_text(json.dumps(out, indent=2) + "\n")
+    print(json.dumps(out, indent=1))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("stage", choices=["plan", "replay", "analyze", "all"])
+    parser.add_argument("stage", choices=["plan", "replay", "analyze", "live", "all"])
     stage = parser.parse_args().stage
+    if stage == "live":
+        stage_live()
     if stage in ("plan", "all"):
         stage_plan()
     if stage in ("replay", "all"):
