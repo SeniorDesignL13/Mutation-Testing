@@ -412,5 +412,145 @@
         ]
       }
     }
+  },
+  "ragas": {
+    "scorings": 785,
+    "ok": 785,
+    "errors": 0,
+    "errors_by_type": {},
+    "scorings_with_retry": 0,
+    "retries_by_error": {},
+    "latency": {
+      "all": {
+        "n": 785,
+        "mean_s": 14.88,
+        "median_s": 13.06,
+        "p90_s": 23.78,
+        "p99_s": 35.72,
+        "max_s": 46.09
+      },
+      "originals": {
+        "n": 100,
+        "mean_s": 12.33,
+        "median_s": 11.71,
+        "p90_s": 16.99,
+        "p99_s": 25.9,
+        "max_s": 26.49
+      },
+      "mutants": {
+        "n": 685,
+        "mean_s": 15.25,
+        "median_s": 13.26,
+        "p90_s": 24.24,
+        "p99_s": 35.83,
+        "max_s": 46.09
+      }
+    },
+    "wall_seconds": 2926.100954500027,
+    "wall_seconds_per_scoring": 3.7275171394904802,
+    "concurrency": 4,
+    "spent_usd": 0.6144721499999999,
+    "priced_scorings": 785,
+    "unpriced_scorings": 0,
+    "usd_per_scoring": 0.0007827670700636941,
+    "llm_calls": 0,
+    "llm_calls_per_scoring": 0.0,
+    "input_tokens_per_scoring": 2091.807643312102,
+    "output_tokens_per_scoring": 781.659872611465,
+    "sigma": 0.012332439845530077,
+    "originals": 20,
+    "originals_identical": 18,
+    "originals_identical_at_1": 15,
+    "mutants_identical": 72,
+    "mutants": 137,
+    "orig_mean_score": 0.9674968434343434,
+    "operators": {
+      "entity_swap": {
+        "family": "degrading",
+        "rate": 0.8125,
+        "testable": 16,
+        "hits": 13,
+        "excluded": {
+          "no_change": 24,
+          "no_headroom": 0,
+          "no_scores": 0
+        },
+        "repeated_doses": 20,
+        "above_chance_corrected": [
+          true,
+          true,
+          null
+        ]
+      },
+      "reformat_to_bullets": {
+        "family": "preserving",
+        "rate": 0.05,
+        "testable": 20,
+        "hits": 1,
+        "excluded": {
+          "no_change": 0,
+          "no_scores": 0
+        },
+        "repeated_doses": 0,
+        "above_chance_corrected": [
+          false
+        ]
+      },
+      "reformat_to_markdown": {
+        "family": "preserving",
+        "rate": 0.25,
+        "testable": 20,
+        "hits": 5,
+        "excluded": {
+          "no_change": 0,
+          "no_scores": 0
+        },
+        "repeated_doses": 0,
+        "above_chance_corrected": [
+          true
+        ]
+      },
+      "reformat_to_prose": {
+        "family": "preserving",
+        "rate": 0.0,
+        "testable": 1,
+        "hits": 0,
+        "excluded": {
+          "no_change": 19,
+          "no_scores": 0
+        },
+        "repeated_doses": 0,
+        "above_chance_corrected": [
+          false
+        ]
+      },
+      "verbosity_padding": {
+        "family": "preserving",
+        "rate": 0.775,
+        "testable": 80,
+        "hits": 62,
+        "excluded": {
+          "no_change": 0,
+          "no_scores": 0
+        },
+        "repeated_doses": 0,
+        "above_chance_corrected": [
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    },
+    "extrapolation": {
+      "scorings": 34885,
+      "hours_c4": 36.04783333333334,
+      "hours_c8": 18.02391666666667,
+      "usd": 27.306829239171968,
+      "scorings_plus_numeric": 36880,
+      "usd_plus_numeric": 28.868449543949037,
+      "hours_c4_plus_numeric": 38.10933333333333,
+      "hours_c8_plus_numeric": 19.054666666666666
+    }
   }
 }

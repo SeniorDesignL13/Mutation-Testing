@@ -15,7 +15,7 @@ calls halved the wall clock with no errors or retries. N = 5 still looks right. 
 full run yet**: the entity-swap operator makes invalid mutants, `numeric_perturbation` loses two
 thirds of its intensities, the runner can't resume or reuse paid-for scores, so one failure at
 hour 15 costs the whole run, and about 0.5% of live scorings fail on a DeepEval verdict-count
-check.
+check. Ragas, also piloted live, takes 36 hours at 4 concurrent calls (18 at 8) and about $27 an audit (estimated), and penalized 77.5% of the padded answers, which DeepEval does not.
 
 ## What was run
 
@@ -25,7 +25,7 @@ check.
 | A. Planned scorings for corpus-v1 | **Generated locally** (no judge, no network) | Done |
 | B. Live pilots, `--dataset corpus-v1 --limit 20`, N = 5, seed 0, 4 concurrent, both DeepEval configs | **Live** (gpt-4o-mini) | Done, 2 × 785 scorings. Total spend **$1.05** (cap $3) |
 | B. Concurrency 8, 4 records, default config | **Live** | Done, 165 scorings |
-| Ragas pilot | Live | Pending MTLJ-65 |
+| Ragas pilot (adapter from PR #83, not merged here), same slice, 4 concurrent | **Live** (gpt-4o-mini, cost estimated from tokens) | Done, 785 scorings, $0.61 |
 
 Part A is reproducible with no key:
 
@@ -138,6 +138,10 @@ config 8.89 s and $0.00060; penalized 8.52 s and $0.00060).
 | **Live**: penalized config, default battery | 34,885 | 20.6 | 10.3 | $21.0 |
 | **Live: both configs, default battery** | 69,770 | **42.2** | **21.1** | **$42.0** |
 | **Live: both configs, + `numeric_perturbation`** | 73,760 | 44.6 | 22.3 | $44.4 |
+| **Live**: Ragas, default battery | 34,885 | 36.0 | 18.0 | $27.3 (estimate) |
+| **Live**: Ragas, + `numeric_perturbation` | 36,880 | 38.1 | 19.1 | $28.9 (estimate) |
+| **Live: all three judges, default battery** | 104,655 | **78.2** | **39.1** | **$69.3** |
+| **Live: all three judges, + `numeric_perturbation`** | 110,640 | 82.7 | 41.4 | $73.3 |
 | Replay: one config, default battery | 34,885 | 20.5 | 10.2 | $45.5 (ceiling) |
 | Replay: one config, + `numeric_perturbation` | 36,880 | 21.7 | 10.9 | $48.1 (ceiling) |
 | Replay: both configs, default battery | 69,770 | 41.0 | 20.5 | $91 (ceiling) |
@@ -145,8 +149,8 @@ config 8.89 s and $0.00060; penalized 8.52 s and $0.00060).
 
 The live time is 5% above the replay's (mean latency 8.89 s against 8.46 s), so the offline
 estimate held. The live cost is 46% of the ceiling. The two DeepEval configs cost and take the
-same (the penalized pilot cost $0.4721 against $0.4727, and ran 4% faster). A Ragas judge is not
-included.
+same (the penalized pilot cost $0.4721 against $0.4727, and ran 4% faster). Ragas, measured
+in the Ragas pilot section below, takes 1.7 times as long as DeepEval at a cost 30% higher (estimated).
 
 ### Disk and memory
 
@@ -483,15 +487,95 @@ The `live` stage of `scripts/pilot_analysis.py` reads `runs/pilot-*` and writes
 `docs/pilot/live_summary.json`. The run directories are git-ignored and `live_summary.json`
 is the record kept. Cost and token counts per scoring are in each run's `cost.json`.
 
-## Ragas pilot: pending MTLJ-65
+## Ragas pilot
 
-Not started. When the adapter lands, repeat the corpus-v1 `--limit 20` run for it, record its
-latency and cost per scoring (Ragas makes different calls from DeepEval, so neither carries
-over), and add its rows to the extrapolation table.
+**Live data**, `ragas-faithfulness` (Ragas 0.4.3, gpt-4o-mini), same slice and settings as the
+DeepEval pilots: `--dataset corpus-v1 --limit 20`, N = 5, seed 0, 4 concurrent, 785 scorings.
+The adapter (MTLJ-65, PR #83, head e527d0d) is not merged into this branch. The run was made
+from a separate detached worktree of that branch with `scripts/pilot_live.py --judge
+ragas-faithfulness` (copied there; the script imports the adapter only for that judge), cap
+$1.50, and the summary was made here by `scripts/pilot_analysis.py live`.
+
+**Cost is an estimate.** Ragas reports no cost or usage for its structured-output calls. The
+adapter's `on_usage` counts the prompt, the response schema and the answer with tiktoken, and
+the tokens are priced at gpt-4o-mini's list prices ($0.15 in, $0.60 out per million), as
+`scripts/record_fixtures.py` does on that branch. DeepEval's figures come from OpenAI's usage
+data, so the two aren't equally firm. The gold-set recording's estimate was about $0.0008 a
+scoring; this run's is the same.
+
+### Ragas next to both DeepEval configs (corpus-v1, first 20 records, 785 scorings each)
+
+| | Ragas | DeepEval default | DeepEval penalized |
+|---|---|---|---|
+| Wall clock | 2,926 s (48.8 min) | 1,752 s | 1,679 s |
+| Wall clock per scoring | 3.73 s | 2.23 s | 2.14 s |
+| Latency, mean | **14.88 s** | 8.89 s | 8.52 s |
+| Latency, median | 13.06 s | 8.56 s | 8.20 s |
+| Latency, p90 | 23.78 s | 11.30 s | 10.66 s |
+| Latency, max | 46.09 s | 19.07 s | 15.26 s |
+| Latency, originals / mutants (mean) | 12.33 s / 15.25 s | 9.15 s / 8.85 s | 8.71 s / 8.50 s |
+| Failed scorings | **0** | 2 | 5 |
+| Scorings retried | 0 | 0 | 0 |
+| Cost per scoring | $0.00078 (estimate) | $0.00060 | $0.00060 |
+| Cost, whole run | $0.6145 (estimate) | $0.4727 | $0.4721 |
+| Tokens per scoring, in / out | 2,092 / 782 (tiktoken estimate) | 1,959 / 514 | 1,959 / 512 |
+| σ | **0.012** | 0.085 | 0.072 |
+| Originals identical on all 5 samples | 18 of 20 (15 at 1.0) | 11 of 20 | 7 of 20 |
+| Mutants identical on all 5 samples | 72 of 137 (53%) | 85 of 137 (62%) | 50 of 137 (36%) |
+| Mean score of the originals | 0.967 | 0.929 | 0.778 |
+
+| Operator | Ragas | DeepEval default | DeepEval penalized |
+|---|---|---|---|
+| `entity_swap` (detection) | **81.2% (13/16)** | 62.5% (10/16) | 53.3% (8/15) |
+| `reformat_to_bullets` (spurious) | 5.0% (1/20) | 10.0% (2/20) | 20.0% (4/20) |
+| `reformat_to_markdown` | 25.0% (5/20), above chance | 0.0% (0/20) | 20.0% (4/20) |
+| `verbosity_padding` | **77.5% (62/80), all 62 penalized** | 6.2% (5/80) | 26.3% (21/80) |
+
+Spend: **$0.61** (estimate), against the $1.50 cap. Total across every live run in this
+document: about **$1.67** (DeepEval's $1.05 plus Ragas's $0.61), against the $3 cap.
+
+### Where Ragas diverges
+
+- **Padding is penalized almost every time.** 62 of 80 padded mutants (77.5%) were flagged and
+  every one lost score (mean drop 0.24, the largest 0.33 at 200 words). The rate holds at every
+  intensity: 75% at 50 words, 80% at 100, 85% at 200, 70% at 400, and the dose-response onset is
+  0.011, below the tested range. DeepEval default flagged 6%, penalized 26%. This confirms the
+  gold-set comparison. Filler restating the context adds no claim and shouldn't change a
+  faithfulness score; Ragas's does, which is a length bias, and the study's headline
+  preserving-operator finding. Because Ragas's σ is so small (0.012), τ is 0.015 at N = 5, and
+  a one-claim shift in one sample is already enough to flag.
+- **Ragas is the quietest judge.** σ = 0.012 against 0.085, and 18 of 20 originals never vary.
+  That makes it sensitive to any consistent change: it detects 81% of the entity swaps, and it
+  also flags bullets as little as DeepEval does (5%) but markdown at 25% (above chance).
+  A low σ is good for detection power and bad for the 5% spurious baseline: the preserving
+  rates aren't comparable across judges without it.
+- **Entity swap detection is the highest of the three (81%)**, which is also the judge that
+  penalizes padding, so a higher detection rate here isn't evidence that Ragas catches wrong
+  facts better. The swaps are Anomaly 1's.
+- **Padding makes Ragas slower, DeepEval not.** Mean latency by padding intensity is 14.4 s (50
+  words), 16.1 s, 19.5 s and 21.5 s (400 words) against 12.3 s for an original; DeepEval's
+  latency doesn't move. Padded mutants are 51% of the scorings, which is why the mutant mean is
+  15.25 s against 12.33 s for originals.
+- **No failures.** DeepEval's `verdict_counts must not sum to more than n_claims` error
+  (Anomaly 4) has no Ragas counterpart in 785 scorings.
+
+### Extrapolation, one full audit per configuration
+
+At the measured mean latency, as for the DeepEval rows (34,885 scorings, default battery):
+36.0 hours at 4 concurrent calls, 18.0 at 8, about **$27** (estimate). With
+`numeric_perturbation`: 38.1 and 19.1 hours, about $29. Ragas is the slowest and most
+expensive judge, and its time depends on padding, so the figure is for this battery.
+
+The whole study across **three judge configurations** (DeepEval default, DeepEval penalized,
+Ragas, default battery): about **78 hours at 4 concurrent or 39 at 8, and $69** (of which $27 is
+an estimate). The rows are in the extrapolation table above.
+
+**Not measured for Ragas:** concurrency 8 (the 4-concurrent run is the only one), rate limits
+(none visible), and real token usage (the adapter's counts are estimates).
 
 ## Recommendation: no-go for the full run today, go once two things are done
 
-The pipeline works end to end live: 1,735 scorings, 7 failures, no retries, and a cost of $0.0006
+The pipeline works end to end live: 2,520 scorings across the three judges, 7 failures (all DeepEval), no retries, and a cost of $0.0006
 a scoring. The study is about **$42 and 21 hours at 8 concurrent calls (42 hours at 4)** for both
 DeepEval configs. The live pilots did what they were for: the time estimate held, the cost came in
 at half the ceiling, and 8 concurrent calls worked. They changed one thing in the list:
@@ -504,10 +588,10 @@ again from zero.
    what's missing (Anomaly 3). Cost is no longer the argument for this ($21 a config); the
    hours are.
 
-Do these and the full run (default battery, N = 5, seed 0, 8 concurrent, both DeepEval
-configs, about 21 hours and $42) can go ahead, watching the first hour for retries. Decide
+Do these and the full run (default battery, N = 5, seed 0, 8 concurrent, all three judge
+configurations, about 39 hours and $69; 21 hours and $42 without Ragas) can go ahead, watching the first hour for retries. Decide
 about the 0.5% verdict-count failures (Anomaly 4) and add `numeric_perturbation` only after its
-intensity handling is fixed (Anomaly 2). Run Ragas when MTLJ-65 is merged.
+intensity handling is fixed (Anomaly 2). Include Ragas once MTLJ-65 is merged: its pilot found no problem with the pipeline (785 scorings, 0 failures), but it adds about 18 hours at 8 concurrent calls and $27. Its padding result (77.5% penalized) is a finding for the write-up, not a blocker.
 
 ## Limitations
 

@@ -58,6 +58,13 @@ class Budget:
                 raise RuntimeError(f"spending cap of ${self.cap:.2f} reached")
 
 
+JUDGES = ("deepeval-faithfulness", "deepeval-faithfulness-penalized", "ragas-faithfulness")
+
+
+class Priced(float):
+    """A cost that is an estimate (Ragas), as a float with no token attributes."""
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--judge", default="deepeval-faithfulness")
@@ -75,47 +82,70 @@ def main() -> None:
     from mtlj.engine.audit import check_can_start, run_audit
     from mtlj.engine.generator import generate_mutants
     from mtlj.engine.results import format_summary
-    from mtlj.judges.deepeval.faithfulness import (
-        DEFAULT_MODEL,
-        DeepEvalFaithfulnessJudge,
-        measure_faithfulness,
-    )
 
-    penalized = args.judge == "deepeval-faithfulness-penalized"
-    if args.judge not in ("deepeval-faithfulness", "deepeval-faithfulness-penalized"):
-        sys.exit(f"unknown judge {args.judge}")
+    if args.judge not in JUDGES:
+        sys.exit(f"unknown judge {args.judge}; choose from {JUDGES}")
     budget = Budget(args.max_cost)
-
-    # DeepEval's evaluation_cost is a plain float, so the token counts are tallied where the
-    # response's usage is turned into a cost. Each call of a scoring passes through here.
-    from deepeval.models import OpenAIModel
-
-    original_calculate_cost = OpenAIModel.calculate_cost
     calls = {"n": 0, "input": 0, "output": 0}
 
-    def counting_calculate_cost(self, input_tokens, output_tokens):
-        with budget._lock:
-            calls["n"] += 1
-            calls["input"] += int(input_tokens)
-            calls["output"] += int(output_tokens)
-        return original_calculate_cost(self, input_tokens, output_tokens)
+    if args.judge == "ragas-faithfulness":
+        # Needs a checkout with the Ragas adapter (MTLJ-65). Ragas reports no cost, so the
+        # adapter's ``on_usage`` gives tiktoken estimates of each scoring's tokens, priced here
+        # at gpt-4o-mini's list prices ($0.15 in, $0.60 out per million), as record_fixtures.py
+        # does. One call to ``on_usage`` per scoring: its cost and tokens are estimates.
+        from mtlj.judges.ragas import faithfulness as ragas
+        from mtlj.judges.ragas.faithfulness import RagasFaithfulnessJudge
 
-    OpenAIModel.calculate_cost = counting_calculate_cost
+        def on_usage(prompt_tokens, completion_tokens):
+            with budget._lock:
+                calls["input"] += prompt_tokens
+                calls["output"] += completion_tokens
+            budget.add(Priced((prompt_tokens * 0.15 + completion_tokens * 0.60) / 1_000_000))
 
-    def measure(input, output, passages):
-        budget.check()
-        return measure_faithfulness(
-            input,
-            output,
-            passages,
-            model=DEFAULT_MODEL,
-            penalize_ambiguous_claims=penalized,
-            on_cost=budget.add,
+        def measure(input, output, passages):
+            budget.check()
+            return ragas.measure_faithfulness(
+                input, output, passages, model=ragas.DEFAULT_MODEL, on_usage=on_usage
+            )
+
+        judge = RagasFaithfulnessJudge(ragas.DEFAULT_MODEL, measure=measure)
+    else:
+        from mtlj.judges.deepeval.faithfulness import (
+            DEFAULT_MODEL,
+            DeepEvalFaithfulnessJudge,
+            measure_faithfulness,
         )
 
-    judge = DeepEvalFaithfulnessJudge(
-        DEFAULT_MODEL, penalize_ambiguous_claims=penalized, measure=measure
-    )
+        penalized = args.judge == "deepeval-faithfulness-penalized"
+        # DeepEval's evaluation_cost is a plain float, so the token counts are tallied where the
+        # response's usage is turned into a cost. Each call of a scoring passes through here.
+        from deepeval.models import OpenAIModel
+
+        original_calculate_cost = OpenAIModel.calculate_cost
+
+        def counting_calculate_cost(self, input_tokens, output_tokens):
+            with budget._lock:
+                calls["n"] += 1
+                calls["input"] += int(input_tokens)
+                calls["output"] += int(output_tokens)
+            return original_calculate_cost(self, input_tokens, output_tokens)
+
+        OpenAIModel.calculate_cost = counting_calculate_cost
+
+        def measure(input, output, passages):
+            budget.check()
+            return measure_faithfulness(
+                input,
+                output,
+                passages,
+                model=DEFAULT_MODEL,
+                penalize_ambiguous_claims=penalized,
+                on_cost=budget.add,
+            )
+
+        judge = DeepEvalFaithfulnessJudge(
+            DEFAULT_MODEL, penalize_ambiguous_claims=penalized, measure=measure
+        )
     records = _load_dataset(args.dataset, args.limit)
     generation = generate_mutants(records, _select_battery("default"), base_seed=args.seed)
     plan = check_can_start(

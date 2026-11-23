@@ -636,6 +636,7 @@ LIVE_RUNS = {
     "default": "pilot-default",
     "penalized": "pilot-penalized",
     "c8": "pilot-c8",
+    "ragas": "pilot-ragas",
 }
 
 
@@ -712,7 +713,7 @@ def stage_live() -> None:
     # Full-study extrapolation from the measured mean latency and cost (default battery).
     full = gen["default"]["scorings_with_originals"]
     plus = gen["default_plus_numeric_scorings"]
-    for label in ("default", "penalized"):
+    for label in ("default", "penalized", "ragas"):
         if label in out:
             r = out[label]
             mean = r["latency"]["all"]["mean_s"]
