@@ -97,6 +97,37 @@ are changed, compared by value, so `1,200` in the answer matches `1200` in the c
 Each change is recorded in `details["substitutions"]`. It isn't in `default_battery()` yet:
 adding it changes what an audit runs and costs, so that's a separate decision.
 
+### `negation_insertion`
+
+Negates claims the context supports, so the answer says the opposite of its source. spaCy's
+dependency parse finds each sentence's main verb, and "not" goes where English puts it:
+
+| Verb | Example |
+|---|---|
+| A helper verb (the first one takes "not") | `was built` → `was not built`, `has been` → `has not been`, `can` → `cannot` |
+| "be" as the main verb | `is 324 metres tall` → `is not 324 metres tall` |
+| Any other verb, with "do" in its tense | `opened` → `did not open`, `runs` → `does not run` |
+| A contracted helper | `you'll need` → `you will not need`, `they've` → `they have not` |
+
+| Intensity | Claims negated |
+|---|---|
+| 0.2 | 1 |
+| 0.6 | 3 |
+| 1.0 | 5 |
+
+- **Never stacks.** A sentence that already has a negation (`not`, `n't`, `never`, `no`,
+  `nothing`, `without`, `cannot`, ...) is left alone, so a double negative can't turn a claim
+  back into a true one.
+- **Claims only.** A sentence needs a subject and a finite verb. Questions, commands ("Pat the
+  salmon dry") and fragments are skipped, and so are `may` and `might`: "may not cause" doesn't
+  contradict "may cause". So is `'d`, which could be "had" or "would".
+- **Supported claims only.** At least 60% of the sentence's content words must appear in the
+  context, so the negation really contradicts the source.
+- **One negation per sentence**, chosen by the seed.
+
+Each negation is recorded in `details["substitutions"]` with its `form` (`helper`, `be` or
+`do`). Like `numeric_perturbation`, it isn't in `default_battery()` yet.
+
 ## Versions
 
 Every operator declares a `version` in its metadata, a whole number from 1. Each mutant saves
