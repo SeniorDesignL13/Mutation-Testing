@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import threading
@@ -78,6 +79,59 @@ def test_audit_run_prints_a_summary_and_saves_results(stub_judge, tmp_path: Path
     assert saved.run.dataset == str(RAGTRUTH_SAMPLE)
     assert saved.run.n_records == 4
     assert saved.run.judge.name == "stub"
+
+
+def test_audit_run_reports_and_saves_excluded_records(stub_judge, tmp_path: Path) -> None:
+    lines = RAGTRUTH_SAMPLE.read_text(encoding="utf-8").splitlines()
+    refusal = json.loads(lines[0])
+    refusal.update(id="refused", answer="Unable to answer based on given passages.")
+    dataset = tmp_path / "data.jsonl"
+    dataset.write_text("\n".join([*lines, json.dumps(refusal)]) + "\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "audit",
+            "run",
+            "--dataset",
+            str(dataset),
+            "--judge",
+            "stub",
+            "--output",
+            str(tmp_path / "run"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Excluded 1 of 5 records (20.0%): unsupported_answer 1" in result.stdout
+    assert read_results(tmp_path / "run").run.n_records == 4
+    [excluded] = (tmp_path / "run" / "excluded.jsonl").read_text(encoding="utf-8").splitlines()
+    assert json.loads(excluded)["record_id"] == "ragtruth_refused"
+
+
+def test_audit_run_stops_when_every_record_is_excluded(stub_judge, tmp_path: Path) -> None:
+    refusal = json.loads(RAGTRUTH_SAMPLE.read_text(encoding="utf-8").splitlines()[0])
+    refusal["answer"] = "Unable to answer based on given passages."
+    dataset = tmp_path / "data.jsonl"
+    dataset.write_text(json.dumps(refusal) + "\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "audit",
+            "run",
+            "--dataset",
+            str(dataset),
+            "--judge",
+            "stub",
+            "--output",
+            str(tmp_path / "run"),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "every record was excluded" in result.output
+    assert not (tmp_path / "run").exists()
 
 
 def test_audit_show_prints_the_same_summary_from_the_file(stub_judge, tmp_path: Path) -> None:

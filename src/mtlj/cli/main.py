@@ -191,7 +191,8 @@ def audit_run(
     Exits 0 when the run completes, even if some scorings failed, and 1 when it stops early or
     can't measure the judge's noise.
     """
-    # Imported here because they load scipy, which no other command should wait for.
+    # Imported here because they load scipy and spaCy, which no other command should wait for.
+    from mtlj.data.sanity import EXCLUDED_FILE, check_dataset
     from mtlj.engine.audit import check_can_start, check_run_dir, run_audit
     from mtlj.engine.results import COMPLETE, format_summary
 
@@ -220,9 +221,16 @@ def audit_run(
     except FileExistsError as exc:
         raise typer.BadParameter(str(exc), param_hint=hint("output")) from exc
     records = _load_dataset(settings.dataset, settings.limit, hint("dataset"))
+    # Records that would only give meaningless mutants are left out before any are made.
+    sanity = check_dataset(records)
+    typer.echo(sanity.summary())
+    if not sanity.kept:
+        typer.echo("Error: every record was excluded, so there's nothing to audit.", err=True)
+        raise typer.Exit(code=2)
+    records = sanity.kept
     items = _select_battery(settings.battery, hint("battery"))
     # The battery as loaded and the judge's actual model, so a rerun matches this run.
-    saved = settings.saved_files(items, chosen.model)
+    saved = {**settings.saved_files(items, chosen.model), EXCLUDED_FILE: sanity.to_jsonl()}
     samples, concurrency = settings.samples, settings.concurrency
 
     generation = generate_mutants(records, items, base_seed=settings.seed)
