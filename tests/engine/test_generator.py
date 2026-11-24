@@ -10,6 +10,7 @@ import pytest
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
 from mtlj.engine.generator import (
+    INVALID,
     NO_CHANGE,
     OPERATOR_ERROR,
     REPEATED_DOSE,
@@ -92,6 +93,35 @@ class FixedDose(MutationOperator):
         count = self.DOSES[intensity]
         subs = [{"original": f"x{i}", "replacement": f"y{i}"} for i in range(count)]
         return MutationResult(text, f"{text} [{seed}]", True, {"substitutions": subs})
+
+
+class SwapsParis(MutationOperator):
+    """Swaps "Paris" like entity swap does: badly at 0.2 ("in in Rome"), cleanly above it."""
+
+    metadata = _meta("swaps_paris")
+
+    def apply(self, text, context, intensity=1.0, seed=None) -> MutationResult:
+        replacement = "in Rome" if intensity == 0.2 else "Rome"
+        start = text.index("Paris")
+        sub = {
+            "original": "Paris",
+            "replacement": replacement,
+            "start": start,
+            "end": start + len("Paris"),
+            "label": "GPE",
+        }
+        mutated = text[:start] + replacement + text[start + len("Paris") :]
+        return MutationResult(text, mutated, True, {"substitutions": [sub]})
+
+
+class PreservingSwapsParis(SwapsParis):
+    metadata = OperatorMetadata(
+        name="preserving_swaps_paris",
+        family=OperatorFamily.PRESERVING,
+        expected_direction=ExpectedDirection.UNCHANGED,
+        description="test operator",
+        version=1,
+    )
 
 
 def test_one_mutant_per_record_operator_and_intensity() -> None:
@@ -263,6 +293,45 @@ def test_repeated_doses_can_be_kept() -> None:
     assert len(result.mutants) == len(RECORDS) * 3
     assert not result.skipped
     assert result.drop_repeated_doses is False
+
+
+def test_broken_degrading_mutant_is_rejected_with_its_reason_and_logged(caplog) -> None:
+    with caplog.at_level(logging.INFO, logger="mtlj.engine.generator"):
+        result = generate_mutants(RECORDS, [BatteryItem(SwapsParis(), (0.2, 1.0))])
+    assert {(m.record_id, m.intensity) for m in result.mutants} == {
+        (r.record_id, 1.0) for r in RECORDS
+    }
+    assert len(result.skipped) == len(RECORDS)
+    skip = result.skipped[0]
+    assert (skip.record_id, skip.intensity, skip.reason) == ("t_0", 0.2, INVALID)
+    [problem] = skip.detail["problems"]
+    assert problem["check"] == "grammar"
+    assert "in in" in problem["explanation"]
+    assert problem["sentence"] == "The conference number 0 was held in in Rome last spring."
+    assert result.summary()["skipped_by_reason"] == {INVALID: len(RECORDS)}
+    assert "rejected swaps_paris on t_0 at 0.2: grammar" in caplog.text
+
+
+def test_a_rejected_mutant_does_not_take_its_dose() -> None:
+    # 0.2 and 1.0 both make one substitution. 0.2's is broken, so 1.0's isn't a repeat.
+    result = generate_mutants(RECORDS, [BatteryItem(SwapsParis(), (0.2, 1.0))])
+    assert REPEATED_DOSE not in result.summary()["skipped_by_reason"]
+
+
+def test_preserving_mutants_are_not_checked() -> None:
+    result = generate_mutants(RECORDS, [BatteryItem(PreservingSwapsParis(), (0.2,))])
+    assert len(result.mutants) == len(RECORDS)
+    assert not result.skipped
+
+
+def test_rejected_mutants_are_written_to_skipped_jsonl(tmp_path: Path) -> None:
+    result = generate_mutants(RECORDS[:1], [BatteryItem(SwapsParis(), (0.2,))])
+    write_generation(result, tmp_path)
+    [line] = (tmp_path / "skipped.jsonl").read_text(encoding="utf-8").splitlines()
+    skipped = json.loads(line)
+    assert skipped["reason"] == INVALID
+    assert skipped["detail"]["problems"][0]["check"] == "grammar"
+    assert (tmp_path / "mutants.jsonl").read_text(encoding="utf-8") == ""
 
 
 def test_operators_without_a_dose_are_never_deduplicated() -> None:

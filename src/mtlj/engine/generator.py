@@ -8,6 +8,9 @@ For every record and every (operator, intensity) in the battery, this makes one 
   logged, and the run carries on. Every skip is returned with its reason.
 * Seeds are derived from the run's base seed, the record, the operator and the intensity, so a
   run is reproducible, and records don't all share the same random choices.
+* A degrading mutant that's broken rather than merely wrong ("Mix in the James sauce") is
+  skipped with reason ``invalid`` and the problems found, so it never reaches an audit (see
+  ``mtlj.engine.validity``).
 * An operator whose "dose" is countable (entity swap reports its substitutions) can land on the
   same dose at several intensities. Only the first mutant at each dose is kept, so a higher
   intensity always means a bigger change. The rest are skipped with reason ``repeated_dose``.
@@ -27,6 +30,7 @@ from typing import Any
 
 from mtlj.data.mutants import Mutant
 from mtlj.data.records import DatasetRecord
+from mtlj.engine.validity import check_mutant
 from mtlj.operators.base import MutationOperator, OperatorFamily
 from mtlj.operators.registry import get_operator
 
@@ -35,6 +39,7 @@ logger = logging.getLogger(__name__)
 # Why a mutant was skipped.
 NO_CHANGE = "no_change"
 OPERATOR_ERROR = "operator_error"
+INVALID = "invalid"
 REPEATED_DOSE = "repeated_dose"
 
 
@@ -148,6 +153,10 @@ def generate_mutants(
     An operator that changes nothing, or raises, is skipped and logged (see
     ``GenerationResult.skipped``). Other records and operators still run.
 
+    A degrading mutant that fails the validity checks (``mtlj.engine.validity``) is skipped
+    with reason ``invalid``, its detail listing each problem: the check, why, and the sentence.
+    It's checked before the dose, so a broken mutant never takes a dose a valid one could have.
+
     With ``drop_repeated_doses`` (the default), a mutant whose dose (see ``_dose``) matches one
     already kept for the same record and operator is skipped with reason ``repeated_dose``. The
     lowest intensity that reaches a dose is the one kept, as long as the battery lists
@@ -205,6 +214,21 @@ def generate_mutants(
                     why = dict(mutant.details.get("skipped", {}))
                     skipped.append(
                         SkippedMutant(record.record_id, name, intensity, seed, NO_CHANGE, why)
+                    )
+                    continue
+
+                problems = check_mutant(mutant)
+                if problems:
+                    logger.info(
+                        "rejected %s on %s at %s: %s",
+                        name,
+                        record.record_id,
+                        intensity,
+                        "; ".join(f"{p.check}: {p.explanation}" for p in problems),
+                    )
+                    why = {"problems": [p.as_dict() for p in problems]}
+                    skipped.append(
+                        SkippedMutant(record.record_id, name, intensity, seed, INVALID, why)
                     )
                     continue
 
