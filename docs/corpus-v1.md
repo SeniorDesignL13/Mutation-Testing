@@ -105,6 +105,34 @@ and a note on what changed and why. Results reference the corpus version they
 were produced against, so a result from October and one from March are never
 silently comparing different data.
 
+## Sanity checks
+
+`mtlj audit run` leaves out records that would only produce meaningless mutants, before any
+mutant is made (`mtlj.data.sanity`). A degrading mutant makes an answer contradict its
+source, which only means something if the answer agreed with the source to begin with:
+
+| Check | Excludes a record when |
+|---|---|
+| `short_context` | Its passages hold fewer than 50 words in all |
+| `unsupported_answer` | At least half of its answer sentences are mostly absent from the context: under half of a sentence's content words appear in the passages. Matching ignores case and common endings ("powered" matches "power"); sentences with fewer than 3 content words aren't counted |
+
+**On corpus v1: 44 of 919 records excluded (4.8%), all `unsupported_answer`.** No record has
+short context (the shortest has 72 words). In 39 of the 44 the answer says, in whole or in
+part, that the passages don't answer the question ("Unable to answer based on given
+passages.", "The passages do not provide information on how much force an apple applies."):
+there's no claim from the source to make false. The other 5 reword their passages heavily
+("Interact with supportive online communities for motivation."), so word matching misses the
+support: they're likely false alarms, a cost of 0.5% of the corpus.
+**None of the 20 gold-set records is excluded**, so the recorded judge fixtures still apply.
+
+Each run writes the records it left out to `excluded.jsonl`, one per line with every reason
+(`check`, `explanation`, and `detail` quoting up to three unsupported sentences), and prints
+a line like `Excluded 44 of 919 records (4.8%): unsupported_answer 44`. `--limit` picks its
+records first, so `--limit 10` can run fewer than 10.
+
+The checks are plain word matching. They catch answers that left their source behind, not
+answers that reuse the source's words to say something it doesn't.
+
 ## Known limitations
 
 **Single domain.** MS MARCO questions are everyday web-search queries — cooking,
