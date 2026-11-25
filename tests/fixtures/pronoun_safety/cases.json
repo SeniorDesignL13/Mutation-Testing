@@ -1,5 +1,5 @@
 [
-  {"name": "pronoun_it", "text": "Preheat the oven to 200C. It should be hot before you start.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
+  {"name": "pronoun_it", "text": "Preheat the oven for ten minutes. It should be hot before you start.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
   {"name": "possessive_its", "text": "The bridge opened in 1932. Its arch spans 503 metres.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
   {"name": "pronoun_they", "text": "Doctors recommend eight hours of sleep. They say it helps memory.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
   {"name": "pronoun_with_also", "text": "The rice cooker steams vegetables. It also keeps food warm.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
@@ -13,7 +13,7 @@
   {"name": "linking_for_example", "text": "Chop two onions. For example, a red onion works well.", "refers_back": [1], "independent": [0], "kind": "linking"},
   {"name": "anaphoric_again", "text": "Mix the dry ingredients. Add the eggs and mix again.", "refers_back": [1], "independent": [0], "kind": "anaphoric"},
   {"name": "anaphoric_too", "text": "Some banks charge a monthly fee. Credit unions charge fees too.", "refers_back": [1], "independent": [0], "kind": "anaphoric"},
-  {"name": "chain", "text": "Preheat the oven. It should reach 200C. Then add the fish. Serve the fish with lemon.", "refers_back": [1, 2], "independent": [0, 3], "kind": "pronoun", "movable": [3], "blocks": [[0, 1, 2], [3]]},
+  {"name": "chain", "text": "Preheat the oven. It should get very hot. Then add the fish. Serve the fish with lemon.", "refers_back": [1, 2], "independent": [0, 3], "kind": "pronoun", "movable": [3], "blocks": [[0, 1, 2], [3]]},
   {"name": "pronoun_resolved_in_sentence", "text": "If the fish sticks, turn it gently. Serve the fish with lemon.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
   {"name": "that_as_conjunction", "text": "Make sure the pan is hot so that the fish does not stick. Season the fish with salt.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
   {"name": "that_as_relative_pronoun", "text": "Use a pan that is wide. Add two tablespoons of oil.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
