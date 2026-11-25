@@ -59,6 +59,9 @@ def test_is_registered() -> None:
         ("Most cats sleep during the day.", "Most cats do not sleep during the day."),
         ("The company has three offices.", "The company does not have three offices."),
         ("He went to Paris in 1990.", "He did not go to Paris in 1990."),
+        # a "get" passive takes "do" too, not "got not married"
+        ("They got married in 2001.", "They did not get married in 2001."),
+        ("The roads get closed every winter.", "The roads do not get closed every winter."),
         # contracted helpers are spelled out
         ("You'll need an adapter cable.", "You will not need an adapter cable."),
         ("They've finished the bridge.", "They have not finished the bridge."),

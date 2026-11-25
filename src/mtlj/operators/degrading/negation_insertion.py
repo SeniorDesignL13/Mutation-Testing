@@ -109,8 +109,12 @@ def _negation(sent) -> dict | None:
         anchor = helpers[0]
         if anchor.tag_ not in FINITE_TAGS or anchor.lower_ in UNCERTAIN_MODALS:
             return None  # "to be built" has no finite verb; "may not" doesn't contradict "may"
-        joiner = "" if anchor.lower_ == "can" else " "  # "cannot" is one word
-        replacement, form = anchor.text + joiner + "not", "helper"
+        if anchor.lemma_.lower() == "get" and anchor.tag_ in DO_FORMS:
+            # "got married" -> "did not get married", not "got not married".
+            replacement, form = f"{DO_FORMS[anchor.tag_]} not get", "do"
+        else:
+            joiner = "" if anchor.lower_ == "can" else " "  # "cannot" is one word
+            replacement, form = anchor.text + joiner + "not", "helper"
     elif root.lemma_ == "be" and root.tag_ in FINITE_TAGS:
         anchor, replacement, form = root, root.text + " not", "be"
     elif root.pos_ == "VERB" and root.tag_ in DO_FORMS:
