@@ -97,6 +97,31 @@ are changed, compared by value, so `1,200` in the answer matches `1200` in the c
 Each change is recorded in `details["substitutions"]`. It isn't in `default_battery()` yet:
 adding it changes what an audit runs and costs, so that's a separate decision.
 
+### Validity filter
+
+A degrading mutant should read like a normal answer with one wrong fact. When a swap breaks
+the sentence instead, a judge can lower its score because the text is odd rather than because
+it checked the source, and that would count as a detection. `generate_mutants` runs every
+degrading mutant through `mtlj.engine.validity.check_mutant` and skips broken ones with reason
+`invalid` in `skipped.jsonl`. The detail lists each problem as `{"check", "explanation",
+"sentence"}`, and every rejection is logged at INFO.
+
+Each check looks only at what the substitution changed, so an answer that was already untidy
+isn't blamed on the operator:
+
+| Check | Rejects |
+|---|---|
+| `grammar` | A doubled word at the edge of the swap ("the the"); unbalanced brackets or quotes, or stray spaces, in the replacement; a count that no longer agrees with its noun ("2 cat", "1 days"); a word replaced inside a quoted title |
+| `duplicate` | The new name or number appears twice in the mutated sentence ("Berlin and Berlin", "between 10 and 10"). Two swaps that trade values ("from London to Paris") aren't duplicates |
+| `nonsensical_entity` | A person or company put where the original described a noun ("James sauce", "Windex screen"); a person's name where an instruction's verb was ("Thomas the salmon dry"); a company or place with relatives ("Alder Partners's nephew") or an epithet ("Rome the dragon") |
+| `self_contradiction` | A reversed range ("from 1946 to 1945") or percentages that added up to 100% now adding up to more. The judge could catch these without reading the source |
+
+The rules lean towards keeping a mutant: rejecting good ones skews results too. On the gold
+set they catch 10 of the 12 broken entity swaps and keep all the good ones. The two misses:
+"File and Folder Tasks" → "File and Vista", which spaCy reads as two names just like "Paris
+and London", and "representation in the Red Coats", which is odd but readable. Preserving
+operators are never checked, since reformatting breaks sentences on purpose.
+
 ## Versions
 
 Every operator declares a `version` in its metadata, a whole number from 1. Each mutant saves
