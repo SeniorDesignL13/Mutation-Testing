@@ -112,7 +112,7 @@ isn't blamed on the operator:
 | Check | Rejects |
 |---|---|
 | `grammar` | A doubled word at the edge of the swap ("the the"); unbalanced brackets or quotes, or stray spaces, in the replacement; a count that no longer agrees with its noun ("2 cat", "1 days"); a word replaced inside a quoted title |
-| `duplicate` | The new name or number already in the same sentence ("Berlin and Berlin", "between 10 and 10") |
+| `duplicate` | The new name or number appears twice in the mutated sentence ("Berlin and Berlin", "between 10 and 10"). Two swaps that trade values ("from London to Paris") aren't duplicates |
 | `nonsensical_entity` | A person or company put where the original described a noun ("James sauce", "Windex screen"); a person's name where an instruction's verb was ("Thomas the salmon dry"); a company or place with relatives ("Alder Partners's nephew") or an epithet ("Rome the dragon") |
 | `self_contradiction` | A reversed range ("from 1946 to 1945") or percentages that added up to 100% now adding up to more. The judge could catch these without reading the source |
 

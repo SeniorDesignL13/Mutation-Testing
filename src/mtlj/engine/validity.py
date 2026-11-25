@@ -302,14 +302,18 @@ def _nonsensical(doc, swap: _Swap, original_text: str) -> str | None:
 # -- duplicates and contradictions -----------------------------------------------------------
 
 
-def _duplicate(swap: _Swap, sentence: str) -> str | None:
-    """The new name or number was already in the sentence."""
+def _duplicate(swap: _Swap, mutated_sentence: str) -> str | None:
+    """The new name or number appears more than once in the mutated sentence.
+
+    Counted in the mutated sentence, not the original, so two swaps that trade values
+    ("from Paris to London" -> "from London to Paris") aren't mistaken for a duplicate.
+    """
     if swap.kind is not None:
         new = _value(swap.replacement)
-        if new is not None and new in {n.value for n in find_numbers(sentence)}:
+        if new is not None and [n.value for n in find_numbers(mutated_sentence)].count(new) >= 2:
             return f"{swap.replacement} now appears twice in the sentence"
         return None
-    if swap.label is not None and _word_in(swap.replacement, sentence):
+    if swap.label is not None and len(_word_in(swap.replacement, mutated_sentence)) >= 2:
         return f"'{swap.replacement}' now appears twice in the sentence"
     return None
 
@@ -372,7 +376,7 @@ def check_text(
             (GRAMMAR, _punctuation(swap)),
             (GRAMMAR, _number_agreement(doc, swap)),
             (GRAMMAR, _quoted_title(swap, original_text)),
-            (DUPLICATE, _duplicate(swap, sentence)),
+            (DUPLICATE, _duplicate(swap, mutated_sentence)),
             (NONSENSICAL_ENTITY, _nonsensical(doc, swap, original_text)),
             (SELF_CONTRADICTION, _contradiction(swap, sentence, mutated_sentence)),
         ]

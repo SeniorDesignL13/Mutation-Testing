@@ -166,6 +166,37 @@ def test_every_swap_in_a_mutant_is_checked() -> None:
     assert problem.sentence == "Mix in the James sauce."
 
 
+def _subs(text: str, *swaps: tuple[str, str, dict]) -> list[dict]:
+    """Substitutions for several swaps in ``text``, each at the first match of its original."""
+    subs = []
+    for original, replacement, kw in swaps:
+        start = text.index(original)
+        subs.append(
+            {
+                "original": original,
+                "replacement": replacement,
+                "start": start,
+                "end": start + len(original),
+                **kw,
+            }
+        )
+    return subs
+
+
+def test_two_swaps_that_trade_names_are_not_duplicates() -> None:
+    text = "She flew from Paris to London in May."
+    gpe = {"label": "GPE"}
+    subs = _subs(text, ("Paris", "London", gpe), ("London", "Paris", gpe))
+    assert check_text(text, "She flew from London to Paris in May.", subs) == []
+
+
+def test_two_swaps_that_shift_numbers_are_not_duplicates() -> None:
+    text = "Prices rose from 10 to 20 dollars."
+    num = {"kind": "integer"}
+    subs = _subs(text, ("10", "20", num), ("20", "30", num))
+    assert check_text(text, "Prices rose from 20 to 30 dollars.", subs) == []
+
+
 def test_substitutions_that_dont_say_where_they_are_are_ignored() -> None:
     text = "Mix in the Worcestershire sauce."
     mutated = "Mix in the James sauce."
