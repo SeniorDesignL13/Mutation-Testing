@@ -12,7 +12,8 @@
 dataset = "gold"
 
 # The judge to audit, and the model it uses. Without `model`, the judge's default
-# (gpt-4o-mini for DeepEval).
+# (gpt-4o-mini for DeepEval and Ragas). Judges: deepeval-faithfulness,
+# deepeval-faithfulness-penalized, ragas-faithfulness.
 judge = "deepeval-faithfulness"
 # model = "gpt-4o-mini"
 

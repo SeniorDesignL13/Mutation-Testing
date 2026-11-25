@@ -34,6 +34,7 @@ import mtlj.judges
 from mtlj.judges.base import Context, Judge, JudgeResult, RawScore, VerdictCounts
 from mtlj.judges.callable import CallableJudge
 from mtlj.judges.deepeval.faithfulness import DeepEvalFaithfulnessJudge
+from mtlj.judges.ragas.faithfulness import RagasFaithfulnessJudge
 
 
 class BackendError(RuntimeError):
@@ -86,10 +87,17 @@ def make_deepeval_faithfulness() -> Harness:
     return harness
 
 
+def make_ragas_faithfulness() -> Harness:
+    harness = Harness(reports_verdicts=True, errors=(BackendError,))
+    harness.judge = RagasFaithfulnessJudge(measure=harness.respond)
+    return harness
+
+
 # One entry per concrete Judge subclass in mtlj.judges.
 ADAPTERS: dict[type[Judge], Make] = {
     CallableJudge: make_callable,
     DeepEvalFaithfulnessJudge: make_deepeval_faithfulness,
+    RagasFaithfulnessJudge: make_ragas_faithfulness,
 }
 
 

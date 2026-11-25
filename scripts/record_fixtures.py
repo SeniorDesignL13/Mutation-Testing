@@ -1,14 +1,17 @@
-"""Record the DeepEval faithfulness judge's scores on the gold set, for replay in tests and CI.
+"""Record a faithfulness judge's scores on the gold set, for replay in tests and CI.
 
 This calls OpenAI and costs money. It needs OPENAI_API_KEY (in the environment or .env) and
-stops itself once DeepEval reports ``--max-cost`` dollars spent, keeping every score recorded so
-far. Running it again only pays for the scores still missing, so a stopped run can be finished
-later (raise ``--max-cost`` if needed).
+stops itself once ``--max-cost`` dollars are spent, keeping every score recorded so far. The
+cost is what DeepEval reports for ``--judge deepeval-faithfulness`` (the default), and an
+estimate from token counts and gpt-4o-mini's prices for ``--judge ragas-faithfulness``.
+Running it again only pays for the scores still missing, so a stopped run can be finished later
+(raise ``--max-cost`` if needed).
 
     uv run python scripts/record_fixtures.py               # shows the plan, asks before spending
     uv run python scripts/record_fixtures.py --limit 1     # a cheap trial on one record
     uv run python scripts/record_fixtures.py --regenerate  # new mutants from today's operators
     uv run python scripts/record_fixtures.py --refresh     # re-record every score
+    uv run python scripts/record_fixtures.py --judge ragas-faithfulness
 
 The texts scored are the gold set's records and the default battery's mutants of them (base seed
 0), saved in tests/fixtures/gold-set/ the first time and reused after that, so finishing or
@@ -45,11 +48,51 @@ from mtlj.judges.deepeval.faithfulness import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = ROOT / "tests" / "fixtures" / "judge" / "deepeval-faithfulness.jsonl"
+JUDGES = ("deepeval-faithfulness", "ragas-faithfulness")
+FIXTURES = ROOT / "tests" / "fixtures" / "judge"
 DEFAULT_INPUTS = ROOT / "tests" / "fixtures" / "gold-set"
 DEFAULT_MAX_COST = 3.00
 # The base seed the saved mutants are generated with.
 BASE_SEED = 0
+
+
+# US dollars per million tokens (input, output), for the judges that can't report a cost.
+PRICES = {"gpt-4o-mini": (0.15, 0.60)}
+
+
+def estimated_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+    """What a call cost from its token counts, or None for a model without a known price."""
+    if model not in PRICES:
+        return None
+    price_in, price_out = PRICES[model]
+    return (prompt_tokens * price_in + completion_tokens * price_out) / 1_000_000
+
+
+def build_judge(name: str, budget: Budget):
+    """The judge ``name`` with its backend wired to ``budget``, and its library's name."""
+    if name == "ragas-faithfulness":
+        from mtlj.judges.ragas import faithfulness as ragas
+        from mtlj.judges.ragas.faithfulness import RagasFaithfulnessJudge
+
+        def measure_ragas(input, output, passages):
+            budget.check()
+            return ragas.measure_faithfulness(
+                input,
+                output,
+                passages,
+                model=ragas.DEFAULT_MODEL,
+                on_usage=lambda p, c: budget.add(estimated_cost(ragas.DEFAULT_MODEL, p, c)),
+            )
+
+        return RagasFaithfulnessJudge(ragas.DEFAULT_MODEL, measure=measure_ragas), "Ragas"
+
+    def measure(input, output, passages):
+        budget.check()
+        return measure_faithfulness(
+            input, output, passages, model=DEFAULT_MODEL, on_cost=budget.add
+        )
+
+    return DeepEvalFaithfulnessJudge(DEFAULT_MODEL, measure=measure), "DeepEval"
 
 
 class BudgetExceededError(RuntimeError):
@@ -67,7 +110,7 @@ class Budget:
         self.cap = cap
         self.spent = 0.0
         self.calls = 0
-        self.unknown = 0  # calls DeepEval couldn't price
+        self.unknown = 0  # calls the judge's library couldn't price
         self.refused = 0  # calls refused because of the cap
         self.reason = ""
         self._lock = threading.Lock()
@@ -79,7 +122,7 @@ class Budget:
                 reason = f"spending cap of ${self.cap:.2f} reached"
             elif self.unknown:
                 # Without prices the cap can't be enforced, so stop rather than spend blind.
-                reason = "DeepEval didn't report what a call cost"
+                reason = "a call's cost couldn't be worked out"
             if reason is not None:
                 self.refused += 1
                 self.reason = reason
@@ -111,7 +154,8 @@ def plan_keys(keys: CacheKeys, tasks) -> set[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="fixture file")
+    parser.add_argument("--judge", choices=JUDGES, default=JUDGES[0], help="the judge to record")
+    parser.add_argument("--out", type=Path, help="fixture file (default: one per judge)")
     parser.add_argument(
         "--inputs", type=Path, default=DEFAULT_INPUTS, help="folder of the saved records/mutants"
     )
@@ -125,9 +169,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--refresh", action="store_true", help="re-record every score")
     parser.add_argument("--yes", action="store_true", help="don't ask before spending")
     args = parser.parse_args(argv)
+    if args.out is None:
+        args.out = FIXTURES / f"{args.judge}.jsonl"
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
-    import deepeval  # noqa: F401  (loads OPENAI_API_KEY from .env)
+    if args.judge == "ragas-faithfulness":
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    else:
+        import deepeval  # noqa: F401  (loads OPENAI_API_KEY from .env)
 
     if not os.environ.get("OPENAI_API_KEY"):
         print("OPENAI_API_KEY is not set (put it in .env). Nothing was spent.", file=sys.stderr)
@@ -143,13 +194,7 @@ def main(argv: list[str] | None = None) -> int:
 
     budget = Budget(args.max_cost)
 
-    def measure(input, output, passages):
-        budget.check()
-        return measure_faithfulness(
-            input, output, passages, model=DEFAULT_MODEL, on_cost=budget.add
-        )
-
-    judge = DeepEvalFaithfulnessJudge(DEFAULT_MODEL, measure=measure)
+    judge, library = build_judge(args.judge, budget)
     keys = CacheKeys(judge)
     tasks = build_tasks(records, mutants, args.samples)
     # Everything the replay test needs: all saved records and mutants, DEFAULT_SAMPLES each.
@@ -163,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         todo = sum(1 for key in plan_keys(keys, tasks) if key not in store)
         print(
             f"{len(records)} records + {len(mutants)} mutants x {args.samples} samples = "
-            f"{len(tasks)} scorings with {judge.name} ({judge.model}, deepeval {judge.version})"
+            f"{len(tasks)} scorings with {judge.name} ({judge.model}, {library} {judge.version})"
         )
         print(f"{len(tasks) - todo} already recorded in {args.out}; {todo} to call.")
         print(f"Spending cap: ${args.max_cost:.2f}")
@@ -200,7 +245,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if summary is not None:
         print()
-        print(f"Called the judge {budget.calls} times; DeepEval reports ${budget.spent:.4f} spent.")
+        print(
+            f"Called the judge {budget.calls} times; {library} reports ${budget.spent:.4f} spent."
+        )
         print(f"{summary.errors} scorings failed.")
         if budget.calls:
             print(f"Average ${budget.spent / budget.calls:.5f} per scoring.")

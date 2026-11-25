@@ -50,10 +50,17 @@ def _deepeval_judge(model: str | None, *, penalized: bool) -> Judge:
     return DeepEvalFaithfulnessJudge(model or DEFAULT_MODEL, penalize_ambiguous_claims=penalized)
 
 
+def _ragas_judge(model: str | None) -> Judge:
+    from mtlj.judges.ragas.faithfulness import DEFAULT_MODEL, RagasFaithfulnessJudge
+
+    return RagasFaithfulnessJudge(model or DEFAULT_MODEL)
+
+
 # Judge name -> what builds it from --model.
 JUDGES: dict[str, Callable[[str | None], Judge]] = {
     "deepeval-faithfulness": lambda model: _deepeval_judge(model, penalized=False),
     "deepeval-faithfulness-penalized": lambda model: _deepeval_judge(model, penalized=True),
+    "ragas-faithfulness": _ragas_judge,
 }
 
 
