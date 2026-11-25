@@ -54,6 +54,32 @@ above 0 converts the whole answer, and 0 changes nothing. Prose sent to `reforma
 any answer already in the target layout, comes back unchanged. Most corpus answers are prose,
 so `reformat_to_prose` only applies to the few that are lists.
 
+### Pronoun-reference safety check (for sentence reordering)
+
+Not an operator itself: `mtlj.operators.preserving.pronoun_safety` decides which sentences the
+sentence-reordering operator (MTLJ-79) may move. Moving "It should reach 200C." away from
+"Preheat the oven." changes what "It" means, which would turn a preserving edit into a
+degrading one. `check_backward_references(text)` flags a sentence that refers back when it has:
+
+| Reference | Examples | Not counted |
+|---|---|---|
+| A third-person pronoun with no noun before it in the same sentence | It, Its, They, them | "If the fish sticks, turn it" (resolved in its sentence), expletive "It is raining", I / you / we |
+| A demonstrative | This, These, That, Those, Such | "so that", "a pan that is wide" |
+| A linking word or phrase at the start | However, Then, Next, Finally, For example (see `LINKING_STARTS`) | |
+| An anaphoric word anywhere | also, too, again, another, former, latter | |
+
+A flagged sentence is grouped with the sentence before it (`blocks`), so a chain like "Preheat
+the oven. It should reach 200C. Then add the fish." only moves as one unit. `movable` lists the
+sentences that can move on their own. A first sentence that refers back points at the question,
+so it stays where it is. The rules lean towards flagging: a false alarm only keeps a sentence in
+place, while a miss would corrupt the ground truth.
+
+**Exclusion rate** is the share of an answer's sentences that can't move on their own
+(`ReorderSafety.exclusion_rate`). `summary()` gives the counts, groups and reasons for a
+mutant's `details`, and `exclusion_report(...)` pools the rate over a corpus, including how many
+answers have fewer than two movable sentences and so can't be reordered at all. The known-unsafe
+and known-safe cases it's tested against are in `tests/fixtures/pronoun_safety/cases.json`.
+
 ## Degrading
 
 ### `entity_swap`

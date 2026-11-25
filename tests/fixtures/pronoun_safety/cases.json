@@ -1,0 +1,22 @@
+[
+  {"name": "pronoun_it", "text": "Preheat the oven to 200C. It should be hot before you start.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
+  {"name": "possessive_its", "text": "The bridge opened in 1932. Its arch spans 503 metres.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
+  {"name": "pronoun_they", "text": "Doctors recommend eight hours of sleep. They say it helps memory.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
+  {"name": "pronoun_with_also", "text": "The rice cooker steams vegetables. It also keeps food warm.", "refers_back": [1], "independent": [0], "kind": "pronoun"},
+  {"name": "pronoun_in_first_sentence", "text": "It is made from rye flour. Bake the loaf for 40 minutes.", "refers_back": [0], "independent": [1], "kind": "pronoun", "movable": [1]},
+  {"name": "demonstrative_this", "text": "The bridge opened in 1932. This made travel across the harbour faster.", "refers_back": [1], "independent": [0], "kind": "demonstrative"},
+  {"name": "demonstrative_these", "text": "Rinse the rice twice. These steps remove extra starch.", "refers_back": [1], "independent": [0], "kind": "demonstrative"},
+  {"name": "demonstrative_such", "text": "Weigh the flour on a kitchen scale. Such scales are cheap and accurate.", "refers_back": [1], "independent": [0], "kind": "demonstrative"},
+  {"name": "linking_however", "text": "Pat the salmon dry. However, the skin should stay dry while it cooks.", "refers_back": [1], "independent": [0], "kind": "linking"},
+  {"name": "linking_then", "text": "Turn off the water supply. Then remove the old faucet.", "refers_back": [1], "independent": [0], "kind": "linking"},
+  {"name": "linking_next", "text": "Turn off the water supply. Next, remove the old faucet.", "refers_back": [1], "independent": [0], "kind": "linking"},
+  {"name": "linking_for_example", "text": "Chop two onions. For example, a red onion works well.", "refers_back": [1], "independent": [0], "kind": "linking"},
+  {"name": "anaphoric_again", "text": "Mix the dry ingredients. Add the eggs and mix again.", "refers_back": [1], "independent": [0], "kind": "anaphoric"},
+  {"name": "anaphoric_too", "text": "Some banks charge a monthly fee. Credit unions charge fees too.", "refers_back": [1], "independent": [0], "kind": "anaphoric"},
+  {"name": "chain", "text": "Preheat the oven. It should reach 200C. Then add the fish. Serve the fish with lemon.", "refers_back": [1, 2], "independent": [0, 3], "kind": "pronoun", "movable": [3], "blocks": [[0, 1, 2], [3]]},
+  {"name": "pronoun_resolved_in_sentence", "text": "If the fish sticks, turn it gently. Serve the fish with lemon.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
+  {"name": "that_as_conjunction", "text": "Make sure the pan is hot so that the fish does not stick. Season the fish with salt.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
+  {"name": "that_as_relative_pronoun", "text": "Use a pan that is wide. Add two tablespoons of oil.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
+  {"name": "independent_facts", "text": "Water boils at 100 degrees Celsius. Salt raises the boiling point slightly.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]},
+  {"name": "second_person", "text": "You can freeze cooked rice for a month. Thaw frozen rice in the fridge overnight.", "refers_back": [], "independent": [0, 1], "movable": [0, 1]}
+]
