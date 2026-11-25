@@ -1,0 +1,107 @@
+{
+  "n_records": 919,
+  "samples": 5,
+  "default": {
+    "generation_seconds": 149.3,
+    "mutants": {
+      "entity_swap@0.2": 364,
+      "entity_swap@0.6": 151,
+      "entity_swap@1.0": 23,
+      "reformat_to_bullets@1.0": 919,
+      "reformat_to_markdown@1.0": 919,
+      "reformat_to_prose@1.0": 6,
+      "verbosity_padding@0.125": 919,
+      "verbosity_padding@0.25": 919,
+      "verbosity_padding@0.5": 919,
+      "verbosity_padding@1.0": 919
+    },
+    "mutants_total": 6058,
+    "skips": {
+      "entity_swap@0.2:no_change": 555,
+      "entity_swap@0.6:no_change": 555,
+      "entity_swap@0.6:repeated_dose": 213,
+      "entity_swap@1.0:no_change": 555,
+      "entity_swap@1.0:repeated_dose": 341,
+      "reformat_to_prose@1.0:no_change": 913
+    },
+    "no_change_why": {
+      "entity_swap:no_context_support": 153,
+      "entity_swap:no_valid_replacement": 360,
+      "entity_swap:not_a_proper_noun": 219
+    },
+    "records_with_a_mutant": {
+      "entity_swap": 364,
+      "reformat_to_bullets": 919,
+      "reformat_to_markdown": 919,
+      "reformat_to_prose": 6,
+      "verbosity_padding": 919
+    },
+    "substitutions_by_op_label_source": {
+      "entity_swap|DATE|date_shift": 88,
+      "entity_swap|GPE|context": 42,
+      "entity_swap|GPE|pool": 72,
+      "entity_swap|ORG|context": 297,
+      "entity_swap|ORG|pool": 132,
+      "entity_swap|PERSON|context": 102,
+      "entity_swap|PERSON|pool": 100
+    },
+    "most_replaced_tokens": {
+      "Fahrenheit": 10,
+      "Bake": 8,
+      "Select": 7,
+      "July": 7,
+      "Download": 6,
+      "Windows": 6,
+      "Apple": 5,
+      "August": 5,
+      "January": 5,
+      "Control Panel": 5,
+      "Android": 4,
+      "Social Security": 4,
+      "IRS": 4,
+      "New York City": 4,
+      "Pat": 4,
+      "Worcestershire": 4,
+      "BBQ": 4,
+      "U.S.": 3,
+      "Delete": 3,
+      "Northwest": 3,
+      "India": 3,
+      "NitoTV": 3,
+      "Click Options": 3,
+      "Roth": 3,
+      "2014": 3
+    },
+    "answers_with_replacement_char": 0,
+    "scorings_with_originals": 34885
+  },
+  "answer_words_mean": 99.43090315560391,
+  "answer_words_median": 99,
+  "numeric": {
+    "generation_seconds": 2.6,
+    "mutants": {
+      "numeric_perturbation@0.2": 399
+    },
+    "mutants_total": 399,
+    "skips": {
+      "numeric_perturbation@0.2:no_change": 520,
+      "numeric_perturbation@0.6:no_change": 520,
+      "numeric_perturbation@0.6:repeated_dose": 399,
+      "numeric_perturbation@1.0:no_change": 520,
+      "numeric_perturbation@1.0:repeated_dose": 399
+    },
+    "no_change_why": {
+      "numeric_perturbation:no_context_support": 45
+    },
+    "records_with_a_mutant": {
+      "numeric_perturbation": 399
+    },
+    "substitutions_by_op_label_source": {
+      "numeric_perturbation|number|-": 399
+    },
+    "most_replaced_tokens": {},
+    "answers_with_replacement_char": 0,
+    "scorings_with_originals": 6590
+  },
+  "default_plus_numeric_scorings": 36880
+}

@@ -1,0 +1,18 @@
+{
+  "scorings": 765,
+  "ok": 765,
+  "errors": 0,
+  "cache_hits": 765,
+  "replay_wall_seconds": 0.04,
+  "peak_working_set_mb": 283.213824,
+  "run_dir_bytes": {
+    "evaluations.jsonl": 356508,
+    "mutants.jsonl": 335658,
+    "originals.jsonl": 50625,
+    "results.json": 25478,
+    "run.json": 765,
+    "skipped.jsonl": 12303
+  },
+  "run_dir_total_bytes": 781337,
+  "evaluations_bytes_per_scoring": 466.0235294117647
+}
